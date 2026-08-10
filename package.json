@@ -1,0 +1,29 @@
+{
+  "name": "veriarfy",
+  "private": true,
+  "version": "0.1.0",
+  "description": "VeriArfy — FHE tabanli biyoinformatik veri paylasim agi. ZK ile kimlik, FHE ile veri.",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "packages/circuits",
+    "packages/study",
+    "packages/contracts",
+    "packages/curator",
+    "packages/web"
+  ],
+  "scripts": {
+    "circuits:build": "npm run build --workspace packages/circuits",
+    "contracts:compile": "npm run compile --workspace packages/contracts",
+    "contracts:test": "npm run test --workspace packages/contracts",
+    "study:verify": "npm run verify --workspace packages/contracts",
+    "contracts:deploy:sepolia": "npm run deploy:sepolia --workspace packages/contracts",
+    "web:dev": "npm run dev --workspace packages/web",
+    "web:build": "npm run build --workspace packages/web",
+    "curator": "npm run start --workspace packages/curator",
+    "curator:push-root": "npm run push-root --workspace packages/curator",
+    "study:test": "npm run test --workspace packages/study",
+    "web:prepare": "npm run prepare-circuits --workspace packages/web"
+  }
+}

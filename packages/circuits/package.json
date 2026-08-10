@@ -1,0 +1,28 @@
+{
+  "name": "@veriarfy/circuits",
+  "version": "0.1.0",
+  "private": true,
+  "description": "VeriArfy arastirmaci kimlik devresi (Circom + Groth16)",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "circuits",
+    "build/researcher_identity_js",
+    "build/researcher_identity_final.zkey",
+    "build/verification_key.json"
+  ],
+  "scripts": {
+    "setup": "node scripts/fetch-circom.js",
+    "build": "node scripts/build.js",
+    "test": "node scripts/smoke-test.js"
+  },
+  "dependencies": {
+    "circomlib": "^2.0.5",
+    "poseidon-lite": "^0.3.0",
+    "snarkjs": "^0.7.6"
+  }
+}

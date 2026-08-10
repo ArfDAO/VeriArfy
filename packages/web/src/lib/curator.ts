@@ -1,0 +1,46 @@
+/**
+ * Kurator servisi istemcisi.
+ *
+ * Kurator, akredite katilimci taahhutlerinin Merkle agacini tutar ve
+ * kanit uretmek icin gereken yolu (siblings + pathIndices) verir.
+ * Gizli anahtarlari ASLA gormez — yalnizca acik taahhudu (commitment) bilir.
+ */
+import { CURATOR_URL } from "../config";
+
+export interface MerklePath {
+  siblings: string[];
+  pathIndices: number[];
+  root: string;
+  index: number;
+}
+
+async function call(path: string, init?: RequestInit) {
+  const res = await fetch(`${CURATOR_URL}${path}`, {
+    headers: { "content-type": "application/json" },
+    ...init,
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Kurator hatasi (${res.status}): ${body || res.statusText}`);
+  }
+  return res.json();
+}
+
+/** Taahhudu akredite agaca eklet. */
+export async function enroll(commitment: bigint): Promise<{ index: number }> {
+  return call("/enroll", {
+    method: "POST",
+    body: JSON.stringify({ commitment: commitment.toString() }),
+  });
+}
+
+/** Kanit icin Merkle yolunu al. */
+export async function getMerklePath(commitment: bigint): Promise<MerklePath> {
+  return call(`/path/${commitment.toString()}`);
+}
+
+/** Kuratorun bildirdigi guncel kok. */
+export async function getRoot(): Promise<string> {
+  const { root } = await call("/root");
+  return root;
+}

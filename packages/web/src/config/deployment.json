@@ -1,0 +1,12 @@
+{
+  "network": "sepolia",
+  "chainId": 11155111,
+  "deployer": "0x0000000000000000000000000000000000000000",
+  "contracts": {
+    "Groth16Verifier": "0x0000000000000000000000000000000000000000",
+    "VeriArfyRegistry": "0x0000000000000000000000000000000000000000",
+    "AnxietyStudy": "0x0000000000000000000000000000000000000000"
+  },
+  "initialRoot": "0",
+  "deployedAt": null
+}

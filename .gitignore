@@ -1,0 +1,40 @@
+node_modules/
+.DS_Store
+
+# hardhat
+artifacts/
+cache/
+types/
+typechain-types/
+fhevmTemp/
+deployments/
+coverage/
+coverage.json
+
+# circuits — uretilebilir ciktilar (npm run circuits:build)
+packages/circuits/build/
+packages/circuits/ptau/
+packages/circuits/bin/
+*.zkey
+*.r1cs
+*.sym
+*.wtns
+
+# web — devre ciktilari build sirasinda kopyalanir (npm run web:prepare)
+packages/web/public/circuits/
+
+# kurator calisma durumu (katilimci agaci)
+packages/curator/data/
+
+# derleme ciktilari
+dist/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# env
+.env
+.env.local
+.env*.local
+!.env.example

@@ -1,0 +1,16 @@
+{
+  "name": "@veriarfy/curator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Akredite katilimci agacini tutan kurator servisi (Merkle yolu saglar)",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "push-root": "node src/push-root.js"
+  },
+  "dependencies": {
+    "@veriarfy/circuits": "*",
+    "ethers": "^6.13.4"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "@veriarfy/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "VeriArfy kontratlari — ZK kayit defteri + FHE veri kasasi (Sepolia)",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "verify": "hardhat test test/StudyVerification.test.ts",
+    "deploy:sepolia": "hardhat run scripts/deploy.ts --network sepolia",
+    "node": "hardhat node"
+  },
+  "devDependencies": {
+    "@fhevm/hardhat-plugin": "^0.1.0",
+    "@fhevm/solidity": "^0.8.0",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "dotenv": "^16.4.5",
+    "hardhat": "^2.22.17",
+    "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "@veriarfy/circuits": "*",
+    "@veriarfy/study": "*"
+  }
+}
