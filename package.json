@@ -2,16 +2,19 @@
   "name": "veriarfy",
   "private": true,
   "version": "0.1.0",
-  "description": "VeriArfy — FHE tabanli biyoinformatik veri paylasim agi. ZK ile kimlik, FHE ile veri.",
+  "description": "VeriArfy \u2014 FHE tabanli biyoinformatik veri paylasim agi. ZK ile kimlik, FHE ile veri.",
   "engines": {
     "node": ">=20"
   },
   "workspaces": [
+    "packages/client-side-rust",
+    "packages/client-fhe-rust",
     "packages/circuits",
     "packages/study",
     "packages/contracts",
     "packages/curator",
-    "packages/web"
+    "packages/web",
+    "packages/ml"
   ],
   "scripts": {
     "circuits:build": "npm run build --workspace packages/circuits",
@@ -24,6 +27,20 @@
     "curator": "npm run start --workspace packages/curator",
     "curator:push-root": "npm run push-root --workspace packages/curator",
     "study:test": "npm run test --workspace packages/study",
-    "web:prepare": "npm run prepare-circuits --workspace packages/web"
+    "web:prepare": "npm run prepare-circuits --workspace packages/web",
+    "ml:setup": "npm run setup --workspace packages/ml",
+    "ml:test": "npm run test --workspace packages/ml",
+    "ml:poc": "npm run start --workspace packages/ml",
+    "ml:server": "npm run server --workspace packages/ml",
+    "wasm:build": "npm run build --workspace packages/client-side-rust",
+    "wasm:test": "npm run test --workspace packages/client-side-rust",
+    "fhe:build": "npm run build --workspace packages/client-fhe-rust",
+    "fhe:test": "npm run test --workspace packages/client-fhe-rust",
+    "chain:preflight": "npm run preflight:sepolia --workspace packages/contracts",
+    "chain:live-check": "npm run live-check:sepolia --workspace packages/contracts",
+    "storage:e2e": "node scripts/e2e-storage.mjs"
+  },
+  "devDependencies": {
+    "multiformats": "^13.4.2"
   }
 }
