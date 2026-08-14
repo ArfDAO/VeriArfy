@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <title>VeriArfy — VCF Parser Kanit Sayfasi</title>
+    <style>
+      :root { color-scheme: dark; }
+      body {
+        margin: 0; padding: 40px;
+        background: #12100e; color: #ede8e0;
+        font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.02em; }
+      .sub { color: #8d857a; margin: 0 0 28px; }
+      section { border: 1px solid #2c2823; border-radius: 10px; padding: 18px 20px; margin-bottom: 16px; }
+      h2 { font-size: 11px; letter-spacing: 0.12em; color: #8d857a; margin: 0 0 14px; font-weight: 600; }
+      .case { display: flex; gap: 12px; align-items: baseline; padding: 5px 0; border-bottom: 1px dashed #232019; }
+      .case:last-child { border-bottom: 0; }
+      .badge { flex: none; width: 62px; font-weight: 700; }
+      .ok { color: #57c99a; }
+      .fail { color: #e8654f; }
+      .name { flex: 1; }
+      .val { color: #8d857a; }
+      #log { white-space: pre-wrap; color: #8d857a; }
+      table { border-collapse: collapse; width: 100%; }
+      td { padding: 6px 0; border-bottom: 1px dashed #232019; }
+      td:last-child { text-align: right; color: #ede8e0; font-weight: 600; }
+      td:first-child { color: #8d857a; }
+      progress { width: 100%; height: 6px; }
+      #verdict { font-size: 16px; font-weight: 700; padding: 14px 20px; border-radius: 10px; }
+    </style>
+  </head>
+  <body>
+    <h1>VeriArfy · client-side-rust</h1>
+    <p class="sub">
+      Yayinlanan <code>pkg/</code> wasm artefakti, bundler olmadan, bir Web Worker
+      icinde gercek tarayicida calisiyor.
+    </p>
+
+    <section>
+      <h2>DOGRULAMALAR</h2>
+      <div id="cases"></div>
+    </section>
+
+    <section>
+      <h2>BUYUK DOSYA · AKIS</h2>
+      <progress id="bar" value="0" max="100"></progress>
+      <table id="stats"></table>
+    </section>
+
+    <section>
+      <h2>GUNLUK</h2>
+      <div id="log"></div>
+    </section>
+
+    <div id="verdict"></div>
+
+    <script type="module">
+      const cases = document.getElementById("cases");
+      const logEl = document.getElementById("log");
+      const bar = document.getElementById("bar");
+      const stats = document.getElementById("stats");
+      const verdict = document.getElementById("verdict");
+
+      let pass = 0;
+      let fail = 0;
+
+      const row = (label, value) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${label}</td><td>${value}</td>`;
+        stats.append(tr);
+      };
+
+      const worker = new Worker(new URL("./demo-worker.js", import.meta.url), { type: "module" });
+
+      worker.onmessage = ({ data }) => {
+        if (data.type === "case") {
+          data.ok ? pass++ : fail++;
+          const el = document.createElement("div");
+          el.className = "case";
+          el.innerHTML =
+            `<span class="badge ${data.ok ? "ok" : "fail"}">${data.ok ? "GECTI" : "KALDI"}</span>` +
+            `<span class="name">${data.name}</span>` +
+            `<span class="val">${data.ok ? data.actual : `beklenen ${data.expected}, gelen ${data.actual}`}</span>`;
+          cases.append(el);
+        } else if (data.type === "log") {
+          logEl.textContent += data.line + "\n";
+        } else if (data.type === "progress") {
+          bar.value = data.percent;
+          bar.title = `${data.variants} varyant · wasm heap ${data.heapMB} MB`;
+        } else if (data.type === "big") {
+          bar.value = 100;
+          row("dosya boyutu", `${data.sizeMB} MB`);
+          row("islenen varyant", Number(data.variants).toLocaleString("tr-TR"));
+          row("sure", `${data.secs} sn`);
+          row("hiz", `${data.mbPerSec} MB/sn`);
+          row("wasm heap · once → sonra", `${data.heapBeforeMB} MB → ${data.heapAfterMB} MB`);
+          row("uretilen dozaj vektoru", `${data.dosageMB} MB`);
+          row("ilk 15 dozaj", data.head);
+        } else if (data.type === "done") {
+          verdict.textContent = fail === 0
+            ? `TUM DOGRULAMALAR GECTI — ${pass}/${pass + fail}`
+            : `${fail} DOGRULAMA BASARISIZ — ${pass}/${pass + fail}`;
+          verdict.style.background = fail === 0 ? "#16301f" : "#3a1a16";
+          verdict.style.color = fail === 0 ? "#57c99a" : "#e8654f";
+        } else if (data.type === "fatal") {
+          verdict.textContent = "HATA";
+          verdict.style.background = "#3a1a16";
+          verdict.style.color = "#e8654f";
+          logEl.textContent += data.message + "\n";
+        }
+      };
+
+      worker.postMessage("start");
+    </script>
+  </body>
+</html>
