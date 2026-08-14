@@ -1,0 +1,38 @@
+[package]
+name = "veriarfy-vcf-parser"
+version = "0.1.0"
+edition = "2024"
+description = "VeriArfy — tarayici icinde (client-side) calisan, bellek dostu VCF stream parser. Genotipleri FHE'ye uygun 0/1/2 dozaj vektorune cevirir."
+license = "MIT"
+publish = false
+
+[lib]
+# wasm-pack icin zorunlu: dinamik sistem kutuphanesi olarak derlenir.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+
+# Biyoinformatik standardi: VCF 4.x ayristirma motoru.
+# Varsayilan ozellikler yeterli; "async" ozelligi tokio getirdigi icin KAPALI birakilir.
+noodles-vcf = { version = "0.92", default-features = false }
+
+[dependencies.web-sys]
+version = "0.3"
+features = [
+  "Blob",
+  "File",
+  "ReadableStream",
+  "ReadableStreamDefaultReader",
+  "ReadableStreamReadResult",
+  "console",
+]
+
+[profile.release]
+# Wasm ciktisini kucult: 1-5 GB'lik dosyalari isleyecek modulun kendisi kucuk olmali.
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
