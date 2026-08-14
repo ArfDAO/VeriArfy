@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {FHE, euint32, externalEuint32, ebool} from "@fhevm/solidity/lib/FHE.sol";
-import {SepoliaConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
+import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 
 import {IVeriArfyRegistry} from "./interfaces/IVeriArfyRegistry.sol";
 
@@ -24,7 +24,7 @@ import {IVeriArfyRegistry} from "./interfaces/IVeriArfyRegistry.sol";
  *      Duz metin, veri turu (DatasetKind) ve ciphertext'in IPFS/Arweave
  *      referansi disinda hicbir sey aciga cikmaz.
  */
-contract VeriArfyVault is SepoliaConfig {
+contract VeriArfyVault is ZamaEthereumConfig {
     /// @notice Pastel kategori setiyle birebir eslesen veri turleri.
     enum DatasetKind {
         Genomics, // violet
