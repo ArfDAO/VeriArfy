@@ -52,16 +52,105 @@ async function main() {
   const studyAddress = await study.getAddress();
   console.log(`AnxietyStudy: ${studyAddress}`);
 
+  // Veri kokeni dogrulayicisi — `data_provenance` devresi icin.
+  const ProvenanceVerifier = await ethers.getContractFactory("DataProvenanceVerifier");
+  const provenanceVerifier = await ProvenanceVerifier.deploy();
+  await provenanceVerifier.waitForDeployment();
+  const provenanceVerifierAddress = await provenanceVerifier.getAddress();
+  console.log(`DataProvenanceVerifier: ${provenanceVerifierAddress}`);
+
+  // Akredite kurumlar agaci.
+  //
+  // URETIMDE: kurumlarin ACIK anahtarlari toplanir, agac zincir disinda
+  // kurulur ve yalnizca koku buraya yazilir. Burada kullanilan gelistirme
+  // kurumu sabit bir tohumdan turetilir ve GIZLI DEGILDIR —
+  // bkz. packages/circuits/src/provenance.js, `developmentInstitution`.
+  const { developmentRegistry } = await import("@veriarfy/circuits/provenance");
+  const { registry: institutionRegistry } = await developmentRegistry();
+  console.log(`Akredite kurum agaci: 1 kurum (GELISTIRME anahtari)`);
+
+  // VeriarfyProtocol — sifreli havuz + IPFS indeksi + esikli cozum.
+  // Sahip olarak deployer atanir; URETIMDE bu adres cok imzali bir cuzdan olmali.
+  // Esik ve k-anonimlik siniri ortam degiskenleriyle verilebilir.
+  const threshold = Number(process.env.DISCLOSURE_THRESHOLD ?? 2);
+  const minParticipants = Number(process.env.MIN_PARTICIPANTS ?? 10);
+
+  const Protocol = await ethers.getContractFactory("VeriarfyProtocol");
+  const protocol = await Protocol.deploy(
+    deployer.address,
+    threshold,
+    minParticipants,
+    provenanceVerifierAddress,
+    institutionRegistry.root,
+  );
+  await protocol.waitForDeployment();
+  const protocolAddress = await protocol.getAddress();
+  console.log(`VeriarfyProtocol: ${protocolAddress} (esik ${threshold}, min ${minParticipants} katilimci)`);
+
+  // --- Odeme katmani -------------------------------------------------------
+  //
+  // Odeme token'i: URETIMDE gercek USDC adresi `PAYMENT_TOKEN` ile verilir.
+  // Verilmezse test aglari icin gercek bir OZ ERC-20 dagitilir (mock degil —
+  // yalnizca Circle'in bastigi USDC yerine bizim bastigimiz token).
+  let paymentTokenAddress = process.env.PAYMENT_TOKEN ?? "";
+  let deployedTestToken = false;
+
+  if (!paymentTokenAddress) {
+    const Token = await ethers.getContractFactory("StableTestToken");
+    const token = await Token.deploy(deployer.address);
+    await token.waitForDeployment();
+    paymentTokenAddress = await token.getAddress();
+    deployedTestToken = true;
+    console.log(`StableTestToken: ${paymentTokenAddress}  (PAYMENT_TOKEN verilmedi)`);
+  } else {
+    console.log(`Odeme token'i (disaridan): ${paymentTokenAddress}`);
+  }
+
+  // Fiyatlandirma: 6 ondalikli token varsayilir (USDC ile ayni).
+  const baseFee = BigInt(process.env.QUERY_BASE_FEE ?? 10_000_000); // 10 USDC
+  const perParticipantFee = BigInt(process.env.QUERY_PER_PARTICIPANT_FEE ?? 1_000_000); // 1 USDC
+  const liquidityShareBps = Number(process.env.LIQUIDITY_SHARE_BPS ?? 8_000); // %80
+
+  const Payments = await ethers.getContractFactory("VeriarfyPayments");
+  const payments = await Payments.deploy(
+    deployer.address,
+    paymentTokenAddress,
+    protocolAddress,
+    registryAddress,
+    liquidityShareBps,
+    baseFee,
+    perParticipantFee,
+  );
+  await payments.waitForDeployment();
+  const paymentsAddress = await payments.getAddress();
+  console.log(
+    `VeriarfyPayments: ${paymentsAddress} ` +
+      `(katilimci payi %${liquidityShareBps / 100}, taban ${baseFee}, kisi basi ${perParticipantFee})`,
+  );
+
+  // Sorgu kapisi: acilim talebini yalnizca odeme sozlesmesi acabilir.
+  // Rapor §2.5.2'deki "Gateway" rolu — arastirmacinin yetkisini dogrulayan ve
+  // talebi ileten bilesen. Bu satir olmadan hicbir sorgu acilamaz.
+  await (await protocol.setQueryGateway(paymentsAddress)).wait();
+  console.log("  sorgu kapisi baglandi (protocol -> payments)");
+
   const out = {
     network: network.name,
     chainId: Number((await ethers.provider.getNetwork()).chainId),
     deployer: deployer.address,
     contracts: {
       Groth16Verifier: verifierAddress,
+      DataProvenanceVerifier: provenanceVerifierAddress,
+      VeriarfyProtocol: protocolAddress,
+      VeriarfyPayments: paymentsAddress,
+      PaymentToken: paymentTokenAddress,
       VeriArfyRegistry: registryAddress,
       AnxietyStudy: studyAddress,
     },
+    paymentTokenIsTestToken: deployedTestToken,
+    liquidityShareBps,
     initialRoot: initialRoot.toString(),
+    accreditedRoot: institutionRegistry.root.toString(),
     deployedAt: new Date().toISOString(),
   };
 
