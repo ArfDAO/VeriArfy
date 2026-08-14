@@ -1,0 +1,235 @@
+# VeriArfy — surekli entegrasyon.
+#
+# NEDEN BES AYRI IS
+#
+# Depoda bes farkli calisma zamani var (Rust/Wasm, Solidity, Circom, Node,
+# Python) ve bunlarin kurulum maliyetleri cok farkli. Tek bir ise toplamak,
+# bir satirlik bir TypeScript hatasi icin 2 GB'lik concrete-ml kurulumunu
+# beklemek demekti. Ayri isler paralel kosar ve hangi katmanin kirildigi
+# dogrudan gorunur.
+#
+# BU DOSYA NEDEN VAR
+#
+# `PublicEncryptor` mimari pivotta kaldirildi ama ona bagimli entegrasyon
+# testi geride kaldi ve haftalarca fark edilmedi: `cargo test --lib` yesil
+# goruyordu, `cargo test` ise derlenmiyordu. Boyle bir seyin bir daha sessizce
+# birikmemesi icin her katman her itmede kosar.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Ayni dal uzerinde yeni bir itme gelirse eskisini iptal et: CI kuyrugu
+# tutmasin.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Rust — iki Wasm crate'i: VCF ayristirici ve FHE sifreleyici
+  # ---------------------------------------------------------------------------
+  rust:
+    name: Rust ve Wasm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          # Tarayici hedefi: derlenmezse kullanici tarafinda hicbir sey calismaz.
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            packages/client-side-rust
+            packages/client-fhe-rust
+
+      - name: VCF ayristirici — testler
+        working-directory: packages/client-side-rust
+        run: cargo test --release
+
+      - name: VCF ayristirici — wasm hedefi derleniyor mu
+        working-directory: packages/client-side-rust
+        run: cargo check --release --target wasm32-unknown-unknown
+
+      # `--release` zorunlu: FHE testleri debug profilinde dakikalarca surer.
+      - name: FHE sifreleyici — testler (lib + entegrasyon)
+        working-directory: packages/client-fhe-rust
+        run: cargo test --release
+
+      - name: FHE sifreleyici — wasm hedefi derleniyor mu
+        working-directory: packages/client-fhe-rust
+        run: cargo check --release --target wasm32-unknown-unknown
+
+  # ---------------------------------------------------------------------------
+  # Solidity — fhEVM sozlesmeleri
+  # ---------------------------------------------------------------------------
+  contracts:
+    name: Akilli sozlesmeler
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Derle
+        run: npm run contracts:compile
+
+      - name: Testler
+        run: npm run contracts:test
+
+  # ---------------------------------------------------------------------------
+  # ZK — Circom devresi bastan kuruluyor
+  # ---------------------------------------------------------------------------
+  #
+  # `bin/`, `ptau/` ve `build/` gitignore'da; yani bu is devreyi sifirdan
+  # derleyip anahtar toreni yapiyor ve ancak ondan sonra kaniti dogruluyor.
+  # Yerelde islenmis bir artefakta guvenmiyoruz.
+  zk:
+    name: ZK devresi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # circom ikilisi ve ~38 MB'lik ptau her kosuda yeniden indirilmesin.
+      # ANAHTAR ptau surumunu icermeli: dosya 14'ten 15'e cikarildiginda eski
+      # onbellek sessizce kucuk dosyayi servis eder ve setup bozuk zkey uretir.
+      - name: circom ve ptau onbellegi
+        uses: actions/cache@v4
+        with:
+          path: |
+            packages/circuits/bin
+            packages/circuits/ptau
+          key: circom2.2.3-ptau15-${{ runner.os }}
+
+      - name: circom derleyicisini getir
+        run: npm run setup --workspace packages/circuits
+
+      # Iki devre: researcher_identity (kimlik) ve data_provenance (veri kokeni).
+      - name: Devreleri derle ve anahtarlari uret
+        run: npm run circuits:build
+
+      # Testlerin cogu OLUMSUZ: degistirilmis panel, akredite olmayan kurum,
+      # bicim disi dozaj, nullifier atlatma denemesi. Bir devrenin degeri
+      # neyi kabul ettiginde degil, neyi reddettigindedir.
+      - name: Kanit uretimi ve reddetme senaryolari
+        run: npm run test --workspace packages/circuits
+
+  # ---------------------------------------------------------------------------
+  # Node ve TypeScript — istatistik motoru ve arayuz
+  # ---------------------------------------------------------------------------
+  js:
+    name: Arayuz ve istatistik
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Istatistik motoru — oz test
+        run: npm run study:test
+
+      # `web:build` zaten `tsc -b` calistirir; tip hatasi burada yakalanir.
+      - name: Arayuz — tip denetimi ve derleme
+        run: npm run web:build
+
+  # ---------------------------------------------------------------------------
+  # Python — Concrete kopru kaniti
+  # ---------------------------------------------------------------------------
+  #
+  # Bu isin kanitladigi sey projenin en zor esigi: tarayicinin kendi gizli
+  # anahtariyla urettigi sifreli metni Concrete devresinin kabul etmesi ve
+  # sifreli hesabin duz metinle birebir esitlenmesi.
+  ml:
+    name: Sifreli cikarim koprusu
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # concrete-ml 1.9 yalnizca 3.11'e kadar tekerlek yayinliyor.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: packages/ml/requirements.txt
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/client-fhe-rust
+
+      - name: Python bagimliliklari
+        working-directory: packages/ml
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r requirements.txt
+          .venv/bin/pip install pytest
+
+      # Test, tarayici rolunu bu ornegi calistirarak oynar. Onceden derliyoruz:
+      # aksi halde derleme hatasi testte "skip" olarak gorunur ve CI yesil kalir.
+      - name: Tarayici sifreleyicisini derle
+        working-directory: packages/client-fhe-rust
+        run: cargo build --release --example sk_encrypt
+
+      - name: Kopru testleri
+        working-directory: packages/ml
+        env:
+          # concrete-cpu ve scikit-learn iki ayri OpenMP calisma zamani
+          # yukluyor; teardown'da cift-init cakismasi olusuyor. Bu gecici bir
+          # susturmadir, cozum degil — bkz. docs/mimari (acik madde).
+          KMP_DUPLICATE_LIB_OK: "TRUE"
+        run: .venv/bin/python -m pytest tests/test_client_key_import.py -v
+
+  # ---------------------------------------------------------------------------
+  # Guvenlik taramasi — su an DANISMA niteliginde
+  # ---------------------------------------------------------------------------
+  #
+  # Slither, standart Solidity zafiyet kaliplarini (reentrancy, erisim
+  # kontrolu, overflow) tarar. FHE'ye ozgu islemler (euint8, FHE.add) kapsam
+  # disidir; o katmanin guvenligi Zama'nin kendi denetimine dayanir.
+  #
+  # `continue-on-error` bilincli: fhEVM import yollari Slither'in solc
+  # cozumlemesini henuz tam gecmiyor. Bulgular rapor edilir ama yesil/kirmizi
+  # kararini bloke etmez. Bu gevsetme, import sorunu cozulunce kaldirilmalidir.
+  slither:
+    name: Slither (danisma)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - uses: crytic/slither-action@v0.4.0
+        with:
+          target: packages/contracts
+          fail-on: none
