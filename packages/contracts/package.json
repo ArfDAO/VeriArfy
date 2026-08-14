@@ -2,19 +2,27 @@
   "name": "@veriarfy/contracts",
   "version": "0.1.0",
   "private": true,
-  "description": "VeriArfy kontratlari — ZK kayit defteri + FHE veri kasasi (Sepolia)",
+  "description": "VeriArfy kontratlari \u2014 ZK kayit defteri + FHE veri kasasi (Sepolia)",
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test",
     "verify": "hardhat test test/StudyVerification.test.ts",
     "deploy:sepolia": "hardhat run scripts/deploy.ts --network sepolia",
-    "node": "hardhat node"
+    "node": "hardhat node",
+    "preflight:sepolia": "hardhat run scripts/preflight.ts --network sepolia",
+    "live-check:sepolia": "hardhat run scripts/live-check.ts --network sepolia"
   },
   "devDependencies": {
-    "@fhevm/hardhat-plugin": "^0.1.0",
-    "@fhevm/solidity": "^0.8.0",
+    "@fhevm/hardhat-plugin": "^0.4.2",
+    "@fhevm/mock-utils": "^0.4.2",
+    "@fhevm/solidity": "^0.11.1",
+    "@nomicfoundation/hardhat-ethers": "^3.1.3",
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts": "^5.6.1",
+    "@zama-fhe/relayer-sdk": "0.4.1",
     "dotenv": "^16.4.5",
+    "encrypted-types": "^0.0.4",
+    "ethers": "^6.16.0",
     "hardhat": "^2.22.17",
     "typescript": "^5.6.3"
   },
