@@ -16,7 +16,7 @@ const BUILD = join(__dirname, "..", "build");
 
 const WASM = join(BUILD, "researcher_identity_js", "researcher_identity.wasm");
 const ZKEY = join(BUILD, "researcher_identity_final.zkey");
-const VKEY = join(BUILD, "verification_key.json");
+const VKEY = join(BUILD, "researcher_identity_verification_key.json");
 
 const EXTERNAL_NULLIFIER = 1n;
 const SIGNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
