@@ -1,0 +1,13 @@
+{
+  "name": "veriarfy-ml",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "setup": "python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt",
+    "test": "KMP_DUPLICATE_LIB_OK=TRUE .venv/bin/python -m pytest tests/test_client_key_import.py -v",
+    "start": ".venv/bin/python src/fhe_poc.py",
+    "server": ".venv/bin/uvicorn src.server:app --reload --host 0.0.0.0 --port 8000",
+    "genomic:train": ".venv/bin/python -m src.genomic.model",
+    "genomic:server": ".venv/bin/uvicorn src.genomic.server:app --host 0.0.0.0 --port 8010"
+  }
+}
