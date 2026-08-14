@@ -1,9 +1,10 @@
 /**
- * Devreyi derler, Groth16 anahtarlarini uretir ve Solidity verifier'i yazar.
+ * Devreleri derler, Groth16 anahtarlarini uretir ve Solidity verifier'lari yazar.
  *
- *   1. researcher_identity.circom  -> r1cs + wasm
- *   2. powersOfTau (indirilir)     -> researcher_identity_final.zkey
- *   3. zkey                        -> verification_key.json + Groth16Verifier.sol
+ * Her devre icin:
+ *   1. <ad>.circom              -> r1cs + wasm
+ *   2. powersOfTau (indirilir)  -> <ad>_final.zkey
+ *   3. zkey                     -> <ad>_verification_key.json + <Ad>Verifier.sol
  *
  * NOT: Uretilen zkey tek katilimcili bir "development ceremony" ciktisidir.
  * Mainnet icin cok katilimcili bir toren (MPC) sarttir.
@@ -25,13 +26,34 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 const BUILD = join(ROOT, "build");
 const PTAU_DIR = join(ROOT, "ptau");
-const CIRCUIT = "researcher_identity";
+const VERIFIER_DIR = join(ROOT, "..", "contracts", "contracts", "verifiers");
 
-// 2^14 kisit, 20 seviyeli agac icin fazlasiyla yeterli.
-const PTAU_FILE = "powersOfTau28_hez_final_14.ptau";
+/**
+ * Uretilen devreler.
+ *
+ * `solidityName` kasitli olarak devre adindan turetilmiyor: uretilen dosya
+ * zincire deploy edilen kontratin adidir ve deploy betikleriyle testler bu
+ * ada gore arar. Devre adi degisirse bile kontrat adi sabit kalmalidir.
+ */
+const CIRCUITS = [
+  { name: "researcher_identity", solidityName: "Groth16Verifier" },
+  { name: "data_provenance", solidityName: "DataProvenanceVerifier" },
+];
+
+/**
+ * 2^15 = 32.768 kisit kapasitesi.
+ *
+ * OLCULEN kullanim (`snarkjs r1cs info`):
+ *   researcher_identity :  11.435
+ *   data_provenance     :  20.088   <- EdDSA dogrulamasi + 20 seviyeli Merkle
+ *
+ * 2^14 (16.384) ile baslanmisti ve data_provenance sigmadi. Belirti yaniltici:
+ * `newZKey` acik bir "devre cok buyuk" hatasi vermiyor, bozuk bir zkey yazip
+ * geciyor; hata bir sonraki adimda "Invalid File format" olarak cikiyor.
+ * Devre buyudugunde once buraya bakin.
+ */
+const PTAU_FILE = "powersOfTau28_hez_final_15.ptau";
 const PTAU_URL = `https://storage.googleapis.com/zkevm/ptau/${PTAU_FILE}`;
-
-const VERIFIER_OUT = join(ROOT, "..", "contracts", "contracts", "verifiers", "Groth16Verifier.sol");
 
 async function downloadPtau() {
   const target = join(PTAU_DIR, PTAU_FILE);
@@ -53,16 +75,19 @@ async function downloadPtau() {
   return target;
 }
 
-async function compileCircuit(circomPath) {
+async function compileCircuit(circomPath, name) {
   mkdirSync(BUILD, { recursive: true });
 
   const args = [
-    join(ROOT, "circuits", `${CIRCUIT}.circom`),
+    join(ROOT, "circuits", `${name}.circom`),
     "--r1cs",
     "--wasm",
     "--sym",
     "-o",
     BUILD,
+    // Devrelerin kendi `lib/` dosyalarini bulabilmesi icin.
+    "-l",
+    join(ROOT, "circuits"),
     "-l",
     join(ROOT, "node_modules"),
     // npm workspaces bagimliligi koke kaldirabilir
@@ -70,38 +95,37 @@ async function compileCircuit(circomPath) {
     join(ROOT, "..", "..", "node_modules"),
   ];
 
-  console.log("devre derleniyor...");
+  console.log(`\n[${name}] derleniyor...`);
   execFileSync(circomPath, args, { stdio: "inherit" });
 }
 
-async function generateKeys(ptauPath) {
-  const r1cs = join(BUILD, `${CIRCUIT}.r1cs`);
-  const zkey0 = join(BUILD, `${CIRCUIT}_0000.zkey`);
-  const zkeyFinal = join(BUILD, `${CIRCUIT}_final.zkey`);
-  const vkeyPath = join(BUILD, "verification_key.json");
+async function generateKeys(ptauPath, name) {
+  const r1cs = join(BUILD, `${name}.r1cs`);
+  const zkey0 = join(BUILD, `${name}_0000.zkey`);
+  const zkeyFinal = join(BUILD, `${name}_final.zkey`);
+  const vkeyPath = join(BUILD, `${name}_verification_key.json`);
 
   // Anahtarlar pahali; varsa yeniden uretme (FORCE_SETUP=1 ile zorlanabilir).
   if (existsSync(zkeyFinal) && existsSync(vkeyPath) && !process.env.FORCE_SETUP) {
-    console.log(`anahtarlar mevcut: ${zkeyFinal} (yeniden uretmek icin FORCE_SETUP=1)`);
+    console.log(`[${name}] anahtarlar mevcut (yeniden uretmek icin FORCE_SETUP=1)`);
     return zkeyFinal;
   }
 
-  console.log("groth16 setup...");
+  console.log(`[${name}] groth16 setup...`);
   await snarkjs.zKey.newZKey(r1cs, ptauPath, zkey0);
 
-  console.log("katkı (development ceremony)...");
+  console.log(`[${name}] katki (development ceremony)...`);
   await snarkjs.zKey.contribute(zkey0, zkeyFinal, "veriarfy-dev", `veriarfy-${Date.now()}`);
 
   const vkey = await snarkjs.zKey.exportVerificationKey(zkeyFinal);
   await writeFile(vkeyPath, JSON.stringify(vkey, null, 2));
 
-  console.log(`anahtarlar hazir: ${zkeyFinal}`);
+  console.log(`[${name}] anahtarlar hazir`);
   return zkeyFinal;
 }
 
-async function exportVerifier(zkeyPath) {
-  // npm workspaces snarkjs'i koke hoist edebilir; paket kokunu giris
-  // dosyasindan turet ("./package.json" exports ile disari acilmiyor).
+/** snarkjs sablonunu bulur; npm workspaces paketi koke kaldirabiliyor. */
+function verifierTemplatePath() {
   const require = createRequire(import.meta.url);
   const snarkjsRoot = dirname(require.resolve("snarkjs"));
   const candidates = [
@@ -109,11 +133,14 @@ async function exportVerifier(zkeyPath) {
     join(snarkjsRoot, "..", "templates", "verifier_groth16.sol.ejs"),
   ];
 
-  const templatePath = candidates.find((candidate) => existsSync(candidate));
-  if (!templatePath) {
+  const found = candidates.find((candidate) => existsSync(candidate));
+  if (!found) {
     throw new Error(`snarkjs verifier sablonu bulunamadi. Bakilan yollar:\n${candidates.join("\n")}`);
   }
+  return found;
+}
 
+async function exportVerifier(zkeyPath, { name, solidityName }, templatePath) {
   const templates = { groth16: await readFile(templatePath, "utf8") };
 
   let solidity = await snarkjs.zKey.exportSolidityVerifier(zkeyPath, templates);
@@ -121,19 +148,30 @@ async function exportVerifier(zkeyPath) {
   // snarkjs sablonu eski pragma ile geliyor; hardhat surumumuze hizala.
   solidity = solidity.replace(/pragma solidity .*;/, "pragma solidity ^0.8.24;");
 
-  mkdirSync(dirname(VERIFIER_OUT), { recursive: true });
-  await writeFile(VERIFIER_OUT, solidity);
+  // Sablon kontrati her zaman "Groth16Verifier" olarak adlandirir. Iki devre
+  // ayni ada sahip olamaz; aksi halde hardhat "birden fazla artefakt" hatasi
+  // verir ve deploy betigi hangisini istedigini soyleyemez.
+  if (solidityName !== "Groth16Verifier") {
+    solidity = solidity.replace(/contract Groth16Verifier\b/, `contract ${solidityName}`);
+  }
 
-  console.log(`verifier yazildi: ${VERIFIER_OUT}`);
+  const out = join(VERIFIER_DIR, `${solidityName}.sol`);
+  mkdirSync(VERIFIER_DIR, { recursive: true });
+  await writeFile(out, solidity);
+
+  console.log(`[${name}] verifier yazildi: ${solidityName}.sol`);
 }
 
 async function main() {
   const circomPath = await ensureCircom();
-  await compileCircuit(circomPath);
-
   const ptauPath = await downloadPtau();
-  const zkeyPath = await generateKeys(ptauPath);
-  await exportVerifier(zkeyPath);
+  const templatePath = verifierTemplatePath();
+
+  for (const circuit of CIRCUITS) {
+    await compileCircuit(circomPath, circuit.name);
+    const zkeyPath = await generateKeys(ptauPath, circuit.name);
+    await exportVerifier(zkeyPath, circuit, templatePath);
+  }
 
   console.log("\nbuild tamam.");
 }
