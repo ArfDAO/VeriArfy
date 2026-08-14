@@ -1,21 +1,70 @@
-import { useMemo, useState } from "react";
-
-import {
-  ANXIETY_ITEMS,
-  ANXIETY_CHOICES,
-  PANIC_ITEMS,
-  PANIC_CHOICES,
-  USAGE_GROUPS,
-  USAGE_QUESTION,
-  scoreAnxiety,
-  scorePanic,
-} from "@veriarfy/study";
+import { useState } from "react";
 
 export interface SurveyResult {
+  social_media_hours: number;
+  comparison: number;
+  phone_before_bed: number;
+  fomo: number;
+  notification_stress: number;
+  nomophobia: number;
+  validation_seeking: number;
+  phubbing: number;
+  doomscrolling: number;
+  self_esteem_impact: number;
+  distraction: number;
+  anxiety_level: number;
+}
+
+/**
+ * Anketin on-chain (FHE) yolu icin puanlari.
+ *
+ * `AnxietyStudy.submit` tek bir grup + iki tamsayi puani bekler; anket ise 12
+ * maddelik. Cevirim burada, sorularin yanibasinda durur ki bir madde
+ * eklendiginde/olceginin degistiginde puanlama da guncellensin.
+ */
+export interface StudyScores {
+  /** Maruziyet grubu: 0 = DUSUK, 1 = ORTA, 2 = YUKSEK kullanim. */
   group: number;
+  /** Genel kaygi / etki yuku puani (0–15). */
   anxiety: number;
+  /** Akut huzursuzluk-panik puani (0–6). */
   panic: number;
-  anxietyBand: string;
+}
+
+/** Puanlarin ust sinirlari — arayuzde yuzde gostermek icin. */
+export const STUDY_SCORE_MAX = { anxiety: 15, panic: 6 } as const;
+
+/**
+ * 12 maddelik anketi calismanin `{group, anxiety, panic}` semasina cevirir.
+ *
+ * - **group**: 1. sorudaki gunluk kullanim suresi. Anketin kovalari (<1 / 1-3 /
+ *   3-5 / 5+ saat) ile `@veriarfy/study`'deki USAGE_GROUPS kovalari (0-5 / 5-10 /
+ *   10+ saat) birebir ortusmuyor; burada birincil karsilastirma (DUSUK vs YUKSEK)
+ *   korunacak sekilde daraltiliyor.
+ * - **anxiety** ve **panic** maddeleri **ayrik**: hicbir soru iki puana birden
+ *   girmez, aksi halde iki olcek yapay olarak korele olurdu.
+ */
+export function toStudyScores(r: SurveyResult): StudyScores {
+  const group = r.social_media_hours <= 1 ? 0 : r.social_media_hours === 2 ? 1 : 2;
+
+  // Genel kaygi / islevsellik yuku.
+  const anxiety =
+    r.comparison + // 0–3
+    r.phone_before_bed + // 0–1
+    r.validation_seeking + // 0–2
+    r.phubbing + // 0–2
+    r.doomscrolling + // 0–2
+    r.self_esteem_impact + // 0–2
+    r.distraction + // 0–2
+    r.anxiety_level; // 0–1  => toplam max 15
+
+  // Akut huzursuzluk / panik belirtileri.
+  const panic =
+    r.fomo + // 0–2
+    r.notification_stress + // 0–2
+    r.nomophobia; // 0–2  => toplam max 6
+
+  return { group, anxiety, panic };
 }
 
 interface SurveyProps {
@@ -23,240 +72,326 @@ interface SurveyProps {
   disabled?: boolean;
 }
 
-type Step = "usage" | "anxiety" | "panic" | "review";
-
 export function Survey({ onComplete, disabled }: SurveyProps) {
-  const [step, setStep] = useState<Step>("usage");
-  const [group, setGroup] = useState<number | null>(null);
-  const [anxiety, setAnxiety] = useState<(number | null)[]>(
-    () => ANXIETY_ITEMS.map(() => null),
-  );
-  const [panic, setPanic] = useState<(number | null)[]>(
-    () => PANIC_ITEMS.map(() => null),
-  );
+  const [answers, setAnswers] = useState<Partial<SurveyResult>>({});
 
-  const anxietyDone = anxiety.every((v) => v !== null);
-  const panicDone = panic.every((v) => v !== null);
+  const isComplete = 
+    answers.social_media_hours !== undefined &&
+    answers.comparison !== undefined &&
+    answers.phone_before_bed !== undefined &&
+    answers.fomo !== undefined &&
+    answers.notification_stress !== undefined &&
+    answers.nomophobia !== undefined &&
+    answers.validation_seeking !== undefined &&
+    answers.phubbing !== undefined &&
+    answers.doomscrolling !== undefined &&
+    answers.self_esteem_impact !== undefined &&
+    answers.distraction !== undefined &&
+    answers.anxiety_level !== undefined;
 
-  const scores = useMemo(() => {
-    if (!anxietyDone || !panicDone || group === null) return null;
-    const a = scoreAnxiety(anxiety as number[]);
-    const p = scorePanic(panic as number[]);
-    return { anxiety: a, panic: p };
-  }, [anxiety, panic, group, anxietyDone, panicDone]);
+  const handleSubmit = () => {
+    if (isComplete) {
+      onComplete(answers as SurveyResult);
+    }
+  };
 
-  const answeredAnx = anxiety.filter((v) => v !== null).length;
-  const answeredPan = panic.filter((v) => v !== null).length;
+  const setAnswer = (key: keyof SurveyResult, value: number) => {
+    setAnswers(prev => ({ ...prev, [key]: value }));
+  };
 
   return (
-    <div className="survey">
-      <StepBar step={step} />
-
-      {step === "usage" && (
-        <section className="card card--bone">
-          <span className="eyebrow eyebrow--12">ADIM 1 · MARUZIYET</span>
-          <h3 style={{ marginTop: 12 }}>{USAGE_QUESTION}</h3>
-          <p className="card__body" style={{ marginTop: 8 }}>
-            Bu yanit da sifrelenir. Hangi grupta oldugunuz zincirde acik olarak
-            yer almaz.
-          </p>
-          <div className="choice-grid" style={{ marginTop: 20 }}>
-            {USAGE_GROUPS.map((g) => (
-              <button
-                key={g.id}
-                className={`choice choice--wide ${group === g.id ? "choice--on" : ""}`}
-                onClick={() => setGroup(g.id)}
-              >
-                <span className="bar-dot" style={{ background: g.color }} />
-                <span>{g.label}</span>
-                <span className="eyebrow">{g.short}</span>
-              </button>
-            ))}
-          </div>
-          <div className="survey__nav">
+    <div className="card card--bone" style={{ padding: "32px" }}>
+      <div className="survey-question">
+        <div className="survey-question__header">
+          <span className="survey-question__num">01</span>
+          <span className="survey-question__text">Günde ortalama kaç saat sosyal medya kullanıyorsunuz?</span>
+        </div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {[
+            { label: "<1 saat", value: 0 },
+            { label: "1-3 saat", value: 1 },
+            { label: "3-5 saat", value: 2 },
+            { label: "5+ saat", value: 3 },
+          ].map((opt) => (
             <button
-              className="pill pill--primary"
-              disabled={group === null}
-              onClick={() => setStep("anxiety")}
-            >
-              Devam →
-            </button>
-          </div>
-        </section>
-      )}
-
-      {step === "anxiety" && (
-        <section className="card card--bone">
-          <div className="card__head">
-            <span className="eyebrow eyebrow--12">ADIM 2 · ANKSIYETE (33 MADDE)</span>
-            <span className="eyebrow">{answeredAnx}/33</span>
-          </div>
-          <p className="card__body">
-            Son bir haftada asagidakiler sizi ne kadar rahatsiz etti?
-          </p>
-
-          <ItemList
-            items={ANXIETY_ITEMS}
-            choices={ANXIETY_CHOICES}
-            values={anxiety}
-            onChange={(i, v) =>
-              setAnxiety((prev) => prev.map((old, idx) => (idx === i ? v : old)))
-            }
-          />
-
-          <div className="survey__nav">
-            <button className="pill pill--ghost" onClick={() => setStep("usage")}>
-              ← Geri
-            </button>
-            <button
-              className="pill pill--primary"
-              disabled={!anxietyDone}
-              onClick={() => setStep("panic")}
-            >
-              Devam →
-            </button>
-          </div>
-        </section>
-      )}
-
-      {step === "panic" && (
-        <section className="card card--bone">
-          <div className="card__head">
-            <span className="eyebrow eyebrow--12">ADIM 3 · PANIK (7 MADDE)</span>
-            <span className="eyebrow">{answeredPan}/7</span>
-          </div>
-          <p className="card__body">Son bir haftayi dusunerek yanitlayin.</p>
-
-          <ItemList
-            items={PANIC_ITEMS}
-            choices={PANIC_CHOICES}
-            values={panic}
-            onChange={(i, v) =>
-              setPanic((prev) => prev.map((old, idx) => (idx === i ? v : old)))
-            }
-          />
-
-          <div className="survey__nav">
-            <button className="pill pill--ghost" onClick={() => setStep("anxiety")}>
-              ← Geri
-            </button>
-            <button
-              className="pill pill--primary"
-              disabled={!panicDone}
-              onClick={() => setStep("review")}
-            >
-              Ozete git →
-            </button>
-          </div>
-        </section>
-      )}
-
-      {step === "review" && scores && (
-        <section className="card card--bone">
-          <span className="eyebrow eyebrow--12">ADIM 4 · GONDER</span>
-          <h3 style={{ marginTop: 12 }}>Yanitlariniz sifrelenmeye hazir</h3>
-
-          <div className="card__row" style={{ marginTop: 16 }}>
-            <span className="eyebrow">KULLANIM GRUBU</span>
-            <span className="mono" style={{ fontSize: 13 }}>
-              {USAGE_GROUPS[group!].label}
-            </span>
-          </div>
-          <div className="card__row">
-            <span className="eyebrow">ANKSIYETE (0–99)</span>
-            <span className="mono" style={{ fontSize: 13 }}>
-              {scores.anxiety.total} · {scores.anxiety.band}
-            </span>
-          </div>
-          <div className="card__row">
-            <span className="eyebrow">PANIK (0–28)</span>
-            <span className="mono" style={{ fontSize: 13 }}>
-              {scores.panic.total}
-            </span>
-          </div>
-
-          <div className="notice notice--info">
-            Bu puanlar <strong>yalnizca sizin cihazinizda</strong> gorunur. Zincire
-            yalnizca sifreli hali gider; arastirmaci dahil kimse bireysel puani
-            cozemez.
-          </div>
-
-          <div className="survey__nav">
-            <button className="pill pill--ghost" onClick={() => setStep("panic")}>
-              ← Geri
-            </button>
-            <button
-              className="pill pill--primary"
+              key={opt.value}
+              className={`choice ${answers.social_media_hours === opt.value ? "choice--on" : ""}`}
+              onClick={() => setAnswer("social_media_hours", opt.value)}
               disabled={disabled}
-              onClick={() =>
-                onComplete({
-                  group: group!,
-                  anxiety: scores.anxiety.total,
-                  panic: scores.panic.total,
-                  anxietyBand: scores.anxiety.band,
-                })
-              }
             >
-              Sifrele ve gonder
+              {opt.label}
             </button>
-          </div>
-        </section>
-      )}
-    </div>
-  );
-}
+          ))}
+        </div>
+      </div>
 
-function ItemList({
-  items,
-  choices,
-  values,
-  onChange,
-}: {
-  items: { id: number; text: string }[];
-  choices: { value: number; label: string }[];
-  values: (number | null)[];
-  onChange: (index: number, value: number) => void;
-}) {
-  return (
-    <ol className="item-list">
-      {items.map((item, i) => (
-        <li className="item" key={item.id}>
-          <div className="item__text">
-            <span className="item__num mono">{String(item.id).padStart(2, "0")}</span>
-            {item.text}
-          </div>
-          <div className="choice-grid">
-            {choices.map((c) => (
-              <button
-                key={c.value}
-                className={`choice ${values[i] === c.value ? "choice--on" : ""}`}
-                onClick={() => onChange(i, c.value)}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
-        </li>
-      ))}
-    </ol>
-  );
-}
+      <div className="survey-question">
+        <div className="survey-question__header">
+          <span className="survey-question__num">02</span>
+          <span className="survey-question__text">Sosyal medyada başkalarının hayatlarını kendinizle kıyaslar mısınız?</span>
+        </div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {[
+            { label: "Hiç", value: 0 },
+            { label: "Bazen", value: 1 },
+            { label: "Sık Sık", value: 2 },
+            { label: "Her zaman", value: 3 },
+          ].map((opt) => (
+            <button
+              key={opt.value}
+              className={`choice ${answers.comparison === opt.value ? "choice--on" : ""}`}
+              onClick={() => setAnswer("comparison", opt.value)}
+              disabled={disabled}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-function StepBar({ step }: { step: Step }) {
-  const steps: { key: Step; label: string }[] = [
-    { key: "usage", label: "MARUZIYET" },
-    { key: "anxiety", label: "ANKSIYETE" },
-    { key: "panic", label: "PANIK" },
-    { key: "review", label: "GONDER" },
-  ];
-  const activeIndex = steps.findIndex((s) => s.key === step);
-  return (
-    <div className="tabs" style={{ marginBottom: 24 }}>
-      {steps.map((s, i) => (
-        <span key={s.key} className={`tab ${i === activeIndex ? "active" : ""}`}>
-          {s.label}
+      <div className="survey-question">
+        <div className="survey-question__header">
+          <span className="survey-question__num">03</span>
+          <span className="survey-question__text">Uyumadan hemen önce yatakta sosyal medyaya bakar mısınız?</span>
+        </div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {[
+            { label: "Hayır", value: 0 },
+            { label: "Evet", value: 1 },
+          ].map((opt) => (
+            <button
+              key={opt.value}
+              className={`choice ${answers.phone_before_bed === opt.value ? "choice--on" : ""}`}
+              onClick={() => setAnswer("phone_before_bed", opt.value)}
+              disabled={disabled}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="survey-question">
+        <div className="survey-question__header">
+          <span className="survey-question__num">04</span>
+          <span className="survey-question__text">Sosyal medyaya bakmadığınızda bir şeyleri kaçırıyor (FOMO) hissine kapılır mısınız?</span>
+        </div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {[
+            { label: "Hiç", value: 0 },
+            { label: "Biraz", value: 1 },
+            { label: "Çok fazla", value: 2 },
+          ].map((opt) => (
+            <button
+              key={opt.value}
+              className={`choice ${answers.fomo === opt.value ? "choice--on" : ""}`}
+              onClick={() => setAnswer("fomo", opt.value)}
+              disabled={disabled}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="survey-question">
+        <div className="survey-question__header">
+          <span className="survey-question__num">05</span>
+          <span className="survey-question__text">Bildirim sesleri veya sürekli çevrimiçi olma zorunluluğu sizde stres yaratıyor mu?</span>
+        </div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {[
+            { label: "Hayır", value: 0 },
+            { label: "Bazen", value: 1 },
+            { label: "Kesinlikle", value: 2 },
+          ].map((opt) => (
+            <button
+              key={opt.value}
+              className={`choice ${answers.notification_stress === opt.value ? "choice--on" : ""}`}
+              onClick={() => setAnswer("notification_stress", opt.value)}
+              disabled={disabled}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="survey-question">
+        <div className="survey-question__header">
+          <span className="survey-question__num">06</span>
+          <span className="survey-question__text">Telefonunuz yanınızda olmadığında veya şarjı bittiğinde panik/huzursuzluk (Nomofobi) hisseder misiniz?</span>
+        </div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {[
+            { label: "Hiç", value: 0 },
+            { label: "Bazen", value: 1 },
+            { label: "Kesinlikle", value: 2 },
+          ].map((opt) => (
+            <button
+              key={opt.value}
+              className={`choice ${answers.nomophobia === opt.value ? "choice--on" : ""}`}
+              onClick={() => setAnswer("nomophobia", opt.value)}
+              disabled={disabled}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="survey-question">
+        <div className="survey-question__header">
+          <span className="survey-question__num">07</span>
+          <span className="survey-question__text">Sosyal medyada paylaştığınız bir içerik yeterince beğeni/etkileşim almadığında moraliniz bozulur mu?</span>
+        </div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {[
+            { label: "Hiç", value: 0 },
+            { label: "Biraz", value: 1 },
+            { label: "Çok fazla", value: 2 },
+          ].map((opt) => (
+            <button
+              key={opt.value}
+              className={`choice ${answers.validation_seeking === opt.value ? "choice--on" : ""}`}
+              onClick={() => setAnswer("validation_seeking", opt.value)}
+              disabled={disabled}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="survey-question">
+        <div className="survey-question__header">
+          <span className="survey-question__num">08</span>
+          <span className="survey-question__text">Karşınızdaki insanlarla yüz yüze sohbet ederken bile sürekli telefonunuzu kontrol etme ihtiyacı duyar mısınız?</span>
+        </div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {[
+            { label: "Hayır", value: 0 },
+            { label: "Bazen", value: 1 },
+            { label: "Çoğu zaman", value: 2 },
+          ].map((opt) => (
+            <button
+              key={opt.value}
+              className={`choice ${answers.phubbing === opt.value ? "choice--on" : ""}`}
+              onClick={() => setAnswer("phubbing", opt.value)}
+              disabled={disabled}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="survey-question">
+        <div className="survey-question__header">
+          <span className="survey-question__num">09</span>
+          <span className="survey-question__text">Olumsuz veya üzücü haberleri arka arkaya kaydırmaktan (doomscrolling) kendinizi alamadığınız olur mu?</span>
+        </div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {[
+            { label: "Hiç", value: 0 },
+            { label: "Bazen", value: 1 },
+            { label: "Sık Sık", value: 2 },
+          ].map((opt) => (
+            <button
+              key={opt.value}
+              className={`choice ${answers.doomscrolling === opt.value ? "choice--on" : ""}`}
+              onClick={() => setAnswer("doomscrolling", opt.value)}
+              disabled={disabled}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="survey-question">
+        <div className="survey-question__header">
+          <span className="survey-question__num">10</span>
+          <span className="survey-question__text">Sosyal medyadaki gönderiler (filtreli fotoğraflar, lüks hayatlar vb.) kendinize olan güveninizi düşürüyor mu?</span>
+        </div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {[
+            { label: "Hayır", value: 0 },
+            { label: "Biraz", value: 1 },
+            { label: "Oldukça", value: 2 },
+          ].map((opt) => (
+            <button
+              key={opt.value}
+              className={`choice ${answers.self_esteem_impact === opt.value ? "choice--on" : ""}`}
+              onClick={() => setAnswer("self_esteem_impact", opt.value)}
+              disabled={disabled}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="survey-question">
+        <div className="survey-question__header">
+          <span className="survey-question__num">11</span>
+          <span className="survey-question__text">Sosyal medya kullanımı nedeniyle işinize, okulunuza veya günlük sorumluluklarınıza odaklanmakta zorluk çekiyor musunuz?</span>
+        </div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {[
+            { label: "Hayır", value: 0 },
+            { label: "Bazen", value: 1 },
+            { label: "Sık Sık", value: 2 },
+          ].map((opt) => (
+            <button
+              key={opt.value}
+              className={`choice ${answers.distraction === opt.value ? "choice--on" : ""}`}
+              onClick={() => setAnswer("distraction", opt.value)}
+              disabled={disabled}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="survey-divider">
+        <span className="survey-divider__label">
+          HEDEF DEĞİŞKEN
         </span>
-      ))}
+      </div>
+
+      <div className="survey-question">
+        <div className="survey-question__header">
+          <span className="survey-question__num">12</span>
+          <span className="survey-question__text">Genel olarak gün içinde kendinizi ne kadar kaygılı (anksiyeteli) hissediyorsunuz?</span>
+        </div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {[
+            { label: "Sakinim", value: 0 },
+            { label: "Yüksek Kaygılıyım", value: 1 },
+          ].map((opt) => (
+            <button
+              key={opt.value}
+              className={`choice choice--wide ${answers.anxiety_level === opt.value ? "choice--on" : ""}`}
+              onClick={() => setAnswer("anxiety_level", opt.value)}
+              disabled={disabled}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ marginTop: 40, textAlign: "center" }}>
+        <button
+          className="pill pill--primary"
+          onClick={handleSubmit}
+          disabled={!isComplete || disabled}
+        >
+          {disabled ? "Gönderiliyor..." : "Anketi Gönder"}
+        </button>
+      </div>
     </div>
   );
 }
