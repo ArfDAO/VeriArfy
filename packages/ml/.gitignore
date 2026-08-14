@@ -1,0 +1,6 @@
+deployment/
+data/chrMT.vcf.gz
+data/samples.panel
+.venv/
+__pycache__/
+node_modules
