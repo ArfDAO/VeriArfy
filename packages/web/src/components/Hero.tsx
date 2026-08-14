@@ -1,71 +1,29 @@
 export function Hero() {
   return (
     <header className="hero section">
-      <div className="hero__eyebrow eyebrow eyebrow--12">
-        ACIK CALISMA · FHE · ZERO-KNOWLEDGE · SEPOLIA
+      <div className="hero__wave">
+        <svg viewBox="0 0 900 200" fill="none">
+          <path d="M0 80 Q225 20 450 80 T900 80 V200 H0Z" fill="#c094e4" opacity="0.18" />
+          <path d="M0 100 Q225 50 450 100 T900 100 V200 H0Z" fill="#f7bbe6" opacity="0.15" />
+          <path d="M0 120 Q225 70 450 120 T900 120 V200 H0Z" fill="#ffb760" opacity="0.12" />
+        </svg>
       </div>
-      <h1>
-        Sosyal medya kullanimi{" "}
-        <span className="gradient-text">anksiyeteyi</span> artiriyor mu?
-      </h1>
-      <p className="hero__sub">
-        Gunde 0–5 saat kullananlarla 10+ saat kullananlar arasindaki farki
-        olcuyoruz. Yanitlariniz cihazinizda sifrelenir; yalnizca grup
-        ortalamalari acilir, bireysel puaniniz asla.
-      </p>
-      <div className="hero__cta">
-        <a className="pill pill--primary" href="#katil">
-          Calismaya katil →
-        </a>
-        <a className="pill pill--ghost" href="#sonuclar">
-          Sonuclari gor
-        </a>
-      </div>
-
-      <div className="hero__wave" aria-hidden>
-        <WaveIllustration />
+      
+      <div className="hero__content">
+        <span className="eyebrow" style={{ marginBottom: 24, display: "inline-block" }}>
+          ZAMA CONCRETE ML · FHE
+        </span>
+        <h1 className="hero__title">
+          Sosyal medya kaygıyı artırıyor mu?
+        </h1>
+        <p className="hero__sub">
+          Gerçek kullanıcı verisiyle şifreli makine öğrenimi doğruluğunu test ediyoruz. Cevaplarınız FHE ile şifrelenir ve şifreli halde tahmin yapılır.
+        </p>
+        <div className="hero__actions" style={{ marginTop: 40, display: 'flex', gap: 16, justifyContent: 'center' }}>
+          <a href="#anket" className="pill pill--primary">Ankete Katıl</a>
+          <a href="#sonuclar" className="pill pill--ghost">Sonuçları Gör</a>
+        </div>
       </div>
     </header>
-  );
-}
-
-/** Pastel akan dalga cizimi — ses/frekans egrilerini andirir. */
-function WaveIllustration() {
-  const lines = [
-    { color: "#c094e4", phase: 0, amp: 26 },
-    { color: "#f7bbe6", phase: 0.8, amp: 20 },
-    { color: "#ffb760", phase: 1.6, amp: 32 },
-    { color: "#cef1e1", phase: 2.4, amp: 16 },
-  ];
-  const w = 900;
-  const h = 260;
-  const mid = h / 2;
-
-  function path(amp: number, phase: number) {
-    const pts: string[] = [];
-    for (let x = 0; x <= w; x += 12) {
-      const y =
-        mid +
-        Math.sin(x / 70 + phase) * amp +
-        Math.sin(x / 180 + phase * 1.7) * (amp * 0.4);
-      pts.push(`${x === 0 ? "M" : "L"} ${x} ${y.toFixed(1)}`);
-    }
-    return pts.join(" ");
-  }
-
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} role="img" aria-label="Pastel dalga cizimi">
-      {lines.map((l, i) => (
-        <path
-          key={i}
-          d={path(l.amp, l.phase)}
-          fill="none"
-          stroke={l.color}
-          strokeWidth={2.5}
-          strokeLinecap="round"
-          opacity={0.9}
-        />
-      ))}
-    </svg>
   );
 }
