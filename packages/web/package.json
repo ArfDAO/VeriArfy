@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "VeriArfy arayuzu — ZK kimlik + FHE veri paylasimi (Hume AI stili)",
+  "description": "VeriArfy arayuzu \u2014 ZK kimlik + FHE veri paylasimi (Hume AI stili)",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -11,9 +11,11 @@
     "prepare-circuits": "node scripts/prepare-circuits.js"
   },
   "dependencies": {
+    "@veriarfy/client-fhe-rust": "^0.1.0",
+    "@veriarfy/client-side-rust": "^0.1.0",
     "@veriarfy/study": "^0.1.0",
-    "@zama-fhe/relayer-sdk": "^0.2.0",
-    "ethers": "^6.13.4",
+    "@zama-fhe/relayer-sdk": "0.4.1",
+    "ethers": "^6.16.0",
     "poseidon-lite": "^0.3.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -27,7 +29,7 @@
     "vite": "^5.4.11"
   },
   "//optionalPeer": {
-    "snarkjs": "tarayicida ZK kanit uretimi icin — `npm i snarkjs` ile ekleyin",
-    "@zama-fhe/relayer-sdk": "tarayicida FHE sifreleme icin — Zama relayer SDK"
+    "snarkjs": "tarayicida ZK kanit uretimi icin \u2014 `npm i snarkjs` ile ekleyin",
+    "@zama-fhe/relayer-sdk": "tarayicida FHE sifreleme icin \u2014 Zama relayer SDK"
   }
 }
