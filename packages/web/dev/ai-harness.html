@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <title>VeriArfy — AI Hatti Kanit Harness'i</title>
+    <style>
+      :root { color-scheme: dark; }
+      body {
+        margin: 0; padding: 40px;
+        background: #12100e; color: #ede8e0;
+        font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.02em; }
+      .sub { color: #8d857a; margin: 0 0 28px; }
+      section { border: 1px solid #2c2823; border-radius: 10px; padding: 18px 20px; margin-bottom: 16px; }
+      h2 { font-size: 11px; letter-spacing: 0.12em; color: #8d857a; margin: 0 0 14px; font-weight: 600; }
+      .case { display: flex; gap: 12px; align-items: baseline; padding: 5px 0; border-bottom: 1px dashed #232019; }
+      .case:last-child { border-bottom: 0; }
+      .badge { flex: none; width: 62px; font-weight: 700; }
+      .ok { color: #57c99a; }
+      .fail { color: #e8654f; }
+      .name { flex: 1; }
+      .val { color: #8d857a; }
+      table { border-collapse: collapse; width: 100%; }
+      td { padding: 6px 0; border-bottom: 1px dashed #232019; }
+      td:last-child { text-align: right; font-weight: 600; }
+      td:first-child { color: #8d857a; font-weight: 400; }
+      #verdict { font-size: 16px; font-weight: 700; padding: 14px 20px; border-radius: 10px; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./ai-harness.tsx"></script>
+  </body>
+</html>
