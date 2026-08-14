@@ -14,6 +14,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { IdentityTree } from "@veriarfy/circuits";
+import { handleUpload } from "./ipfs.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, "..", "data");
@@ -43,13 +44,17 @@ for (const c of commitments) tree.insert(BigInt(c));
 console.log(`Kurator: ${commitments.length} taahhut yuklendi.`);
 console.log(`Kok: ${tree.root}`);
 
-function json(res, status, body) {
+function json(res, status, body, extraHeaders = {}) {
   const payload = JSON.stringify(body);
   res.writeHead(status, {
     "content-type": "application/json",
     "access-control-allow-origin": "*",
-    "access-control-allow-headers": "content-type",
+    // Tarayicidan gelen yukleme istegi bu ozel basliklari kullaniyor.
+    "access-control-allow-headers": "content-type,x-pin-name,x-pin-keyvalues",
     "access-control-allow-methods": "GET,POST,OPTIONS",
+    // Retry-After varsayilan olarak JS'e gorunmez; acikca aciga cikarilmali.
+    "access-control-expose-headers": "retry-after",
+    ...extraHeaders,
   });
   res.end(payload);
 }
@@ -102,6 +107,12 @@ const server = createServer(async (req, res) => {
         pathIndices: proof.pathIndices,
         root: tree.root.toString(),
       });
+    }
+
+    // POST /ipfs/upload — sifreli blobu Pinata'ya vekaleten yukler.
+    // JWT burada kalir; istemciye hicbir zaman inmez.
+    if (req.method === "POST" && url.pathname === "/ipfs/upload") {
+      return handleUpload(req, res, json);
     }
 
     return json(res, 404, { error: "bulunamadi" });
