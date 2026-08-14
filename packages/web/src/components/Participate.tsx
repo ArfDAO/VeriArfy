@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { BrowserProvider } from "ethers";
 
-import { Survey, type SurveyResult } from "./Survey";
+import { Survey, toStudyScores, type SurveyResult } from "./Survey";
 import { getStudy, getRegistry, readParticipantState } from "../lib/contracts";
 import { encryptSubmission } from "../lib/fhe";
 import { createIdentity, deserializeIdentity, serializeIdentity, generateProof, type Identity } from "../lib/zk";
@@ -113,12 +113,14 @@ export function Participate({ provider, address, onConnect, onSubmitted }: Parti
     setBusy(true);
     try {
       setNote({ kind: "info", text: "Yanitlar cihazinizda sifreleniyor…" });
+      // 12 maddelik anket -> kontratin bekledigi {group, anxiety, panic} semasi.
+      const scores = toStudyScores(result);
       const enc = await encryptSubmission({
         contractAddress: CONTRACTS.AnxietyStudy,
         userAddress: address,
-        group: result.group,
-        anxiety: result.anxiety,
-        panic: result.panic,
+        group: scores.group,
+        anxiety: scores.anxiety,
+        panic: scores.panic,
       });
 
       setNote({ kind: "info", text: "Sifreli yanit zincire gonderiliyor…" });
