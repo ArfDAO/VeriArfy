@@ -6,22 +6,27 @@
   "type": "module",
   "main": "src/index.js",
   "exports": {
-    ".": "./src/index.js"
+    ".": "./src/index.js",
+    "./provenance": "./src/provenance.js"
   },
   "files": [
     "src",
     "circuits",
     "build/researcher_identity_js",
     "build/researcher_identity_final.zkey",
-    "build/verification_key.json"
+    "build/researcher_identity_verification_key.json",
+    "build/data_provenance_js",
+    "build/data_provenance_final.zkey",
+    "build/data_provenance_verification_key.json"
   ],
   "scripts": {
     "setup": "node scripts/fetch-circom.js",
     "build": "node scripts/build.js",
-    "test": "node scripts/smoke-test.js"
+    "test": "node scripts/smoke-test.js && node scripts/provenance-test.js"
   },
   "dependencies": {
     "circomlib": "^2.0.5",
+    "circomlibjs": "^0.1.7",
     "poseidon-lite": "^0.3.0",
     "snarkjs": "^0.7.6"
   }
