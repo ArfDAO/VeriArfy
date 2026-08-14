@@ -38,3 +38,11 @@ next-env.d.ts
 .env.local
 .env*.local
 !.env.example
+
+# Python / ML Environments
+.venv/
+__pycache__/
+*.pyc
+packages/ml/.venv/
+packages/ml/data/
+packages/ml/rust_expander/
