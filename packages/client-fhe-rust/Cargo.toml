@@ -1,0 +1,70 @@
+[package]
+name = "veriarfy-client-fhe"
+version = "0.1.0"
+edition = "2024"
+description = "VeriArfy — tarayici icinde dozaj vektorunu tfhe-rs ile sifreleyen Wasm modulu."
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+serde = { version = "1", features = ["derive"] }
+bincode = "1.3"
+# Hesap parametrelerini Concrete'in okudugu JSON olarak disari vermek icin.
+serde_json = "1"
+sharks = "0.5.0"
+
+# tfhe-rs — SURUM SABIT: 0.10.0.
+#
+# NEDEN 0.10 (1.7 degil): sunucu tarafindaki concrete-python 2.10.0, kendi
+# icinde tfhe-rs 0.10.0'a karsi derlenmistir (kaynak: zama-ai/concrete v2.10.0,
+# backends/concrete-cpu/implementation/Cargo.lock). Farkli surumler serde
+# duzeyinde uyusmaz; 1.7 ile denendiginde Concrete
+# "invalid value: integer 2, expected variant index 0 <= i < 2" ile
+# yakalanamayan bir panige dusuyordu. Concrete yukseltilmeden bu surum
+# YUKSELTILMEMELIDIR.
+#
+# DIKKAT — iki ayar zorunlu, aksi halde tarayicida CALISMAZ:
+#
+# 1) `default-features = false`: varsayilan feature `avx512`'dir ve x86'ya
+#    ozgudur; wasm32 hedefinde derleme kirilir.
+#
+# 2) `integer-client-js-wasm-api`: tfhe'nin *tek* wasm entropi kaynagi bu
+#    feature'in actigi `__wasm_api` bayragina bagli. `core_crypto/seeders.rs`
+#    icinde WasmSeeder (getrandom/js -> crypto.getRandomValues) yalnizca
+#    `#[cfg(feature = "__wasm_api")]` altinda derlenir; diger tum seeder'lar
+#    (RdSeed, AppleSecureEnclave, Unix) ise `not(feature = "__wasm_api")` ile
+#    kapatilir. Bu feature olmadan `new_seeder()` tarayicida
+#    "No compatible seeder found" ile panikler — yani anahtar uretilemez.
+#    `integer` da FheUint8 icin gerekli ve `shortint`'i zaten kendisi aciyor.
+#
+# `boolean-client-js-wasm-api` cikarildi: hic kullanilmiyordu ve wasm
+# artefaktini buyutuyordu.
+[dependencies.tfhe]
+version = "0.10.0"
+default-features = false
+# 0.10'da feature adlari farkli: "*-js-wasm-api" degil "*-client-js-wasm-api".
+features = ["integer-client-js-wasm-api", "shortint-client-js-wasm-api"]
+
+[profile.release]
+# FHE'de hiz dogrudan kullanici bekleme suresidir: burada boyut degil hiz secilir.
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+
+[dev-dependencies]
+serde_json = "1"
+bincode = "1.3"
+
+# Kopru ornegi icin hizli-derlenen optimize profil: LTO ve tek codegen-unit
+# tfhe'de derlemeyi 10+ dakikaya cikariyor; burada ihtiyacimiz olan sey hizli
+# calisan bir ikili, en kucuk ikili degil.
+[profile.bridge]
+inherits = "release"
+lto = false
+codegen-units = 16
