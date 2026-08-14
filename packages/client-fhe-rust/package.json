@@ -1,0 +1,12 @@
+{
+  "name": "@veriarfy/client-fhe-rust",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Dozaj vektorunu tarayicida tfhe-rs ile sifreleyen Wasm modulu.",
+  "scripts": {
+    "build": "wasm-pack build --release --target web --out-dir pkg --out-name veriarfy_client_fhe",
+    "test": "cargo test --release",
+    "check": "cargo check --target wasm32-unknown-unknown",
+    "demo": "vite .. --port 5199 --open /client-fhe-rust/examples/browser-demo.html"
+  }
+}
