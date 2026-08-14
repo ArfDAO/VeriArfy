@@ -1,0 +1,13 @@
+{
+  "name": "@veriarfy/client-side-rust",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Tarayici icinde calisan VCF stream parser (Rust -> WebAssembly).",
+  "scripts": {
+    "build": "wasm-pack build --release --target web --out-dir pkg --out-name veriarfy_vcf_parser",
+    "build:bundler": "wasm-pack build --release --target bundler --out-dir pkg-bundler --out-name veriarfy_vcf_parser",
+    "demo": "vite .. --port 5199 --open /client-side-rust/examples/browser-demo.html",
+    "test": "cargo test",
+    "check": "cargo check --target wasm32-unknown-unknown"
+  }
+}
