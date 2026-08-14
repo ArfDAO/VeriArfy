@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {FHE, euint8, euint32, ebool, externalEuint8, externalEuint32} from "@fhevm/solidity/lib/FHE.sol";
-import {SepoliaConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
+import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 
 import {IVeriArfyRegistry} from "./interfaces/IVeriArfyRegistry.sol";
 
@@ -35,7 +35,7 @@ import {IVeriArfyRegistry} from "./interfaces/IVeriArfyRegistry.sol";
  *       Yalnizca grup duzeyindeki 3 × (n, Σx, Σx²) toplamlari herkese acik
  *       cozulebilir yapilir. Yayimlanan sonuc budur.
  */
-contract AnxietyStudy is SepoliaConfig {
+contract AnxietyStudy is ZamaEthereumConfig {
     /// @notice Kullanim gruplari: 0 = 0–5 saat, 1 = 5–10 saat, 2 = 10+ saat.
     uint8 public constant GROUP_COUNT = 3;
 
