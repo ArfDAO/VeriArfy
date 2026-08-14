@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <title>VeriArfy — FHE Sifreleme Kanit Sayfasi</title>
+    <style>
+      :root { color-scheme: dark; }
+      body {
+        margin: 0; padding: 40px;
+        background: #12100e; color: #ede8e0;
+        font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.02em; }
+      .sub { color: #8d857a; margin: 0 0 28px; }
+      section { border: 1px solid #2c2823; border-radius: 10px; padding: 18px 20px; margin-bottom: 16px; }
+      h2 { font-size: 11px; letter-spacing: 0.12em; color: #8d857a; margin: 0 0 14px; font-weight: 600; }
+      .case { display: flex; gap: 12px; align-items: baseline; padding: 5px 0; border-bottom: 1px dashed #232019; }
+      .case:last-child { border-bottom: 0; }
+      .badge { flex: none; width: 62px; font-weight: 700; }
+      .ok { color: #57c99a; }
+      .fail { color: #e8654f; }
+      .name { flex: 1; }
+      .val { color: #8d857a; }
+      #log { white-space: pre-wrap; color: #8d857a; }
+      table { border-collapse: collapse; width: 100%; }
+      td { padding: 6px 0; border-bottom: 1px dashed #232019; }
+      td:last-child { text-align: right; font-weight: 600; }
+      td:first-child { color: #8d857a; font-weight: 400; }
+      #verdict { font-size: 16px; font-weight: 700; padding: 14px 20px; border-radius: 10px; }
+      .spin { color: #8d857a; }
+    </style>
+  </head>
+  <body>
+    <h1>VeriArfy · client-fhe-rust</h1>
+    <p class="sub">
+      VCF → dozaj → FHE şifreleme → çözüm zinciri, iki wasm paketiyle gerçek
+      tarayıcıda. <span class="spin" id="spin">çalışıyor…</span>
+    </p>
+
+    <section>
+      <h2>DOGRULAMALAR</h2>
+      <div id="cases"></div>
+    </section>
+
+    <section>
+      <h2>OLCUMLER</h2>
+      <table id="stats"></table>
+    </section>
+
+    <section>
+      <h2>GUNLUK</h2>
+      <div id="log"></div>
+    </section>
+
+    <div id="verdict"></div>
+
+    <script type="module">
+      const cases = document.getElementById("cases");
+      const logEl = document.getElementById("log");
+      const stats = document.getElementById("stats");
+      const verdict = document.getElementById("verdict");
+      const spin = document.getElementById("spin");
+
+      let pass = 0, fail = 0;
+
+      const worker = new Worker(new URL("./demo-worker.js", import.meta.url), { type: "module" });
+
+      worker.onmessage = ({ data }) => {
+        if (data.type === "case") {
+          data.ok ? pass++ : fail++;
+          const el = document.createElement("div");
+          el.className = "case";
+          el.innerHTML =
+            `<span class="badge ${data.ok ? "ok" : "fail"}">${data.ok ? "GECTI" : "KALDI"}</span>` +
+            `<span class="name">${data.name}</span><span class="val">${data.detail}</span>`;
+          cases.append(el);
+        } else if (data.type === "log") {
+          logEl.textContent += data.line + "\n";
+        } else if (data.type === "stats") {
+          for (const [k, v] of data.rows) {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `<td>${k}</td><td>${v}</td>`;
+            stats.append(tr);
+          }
+        } else if (data.type === "done") {
+          spin.remove();
+          verdict.textContent = fail === 0
+            ? `TUM DOGRULAMALAR GECTI — ${pass}/${pass + fail}`
+            : `${fail} DOGRULAMA BASARISIZ — ${pass}/${pass + fail}`;
+          verdict.style.background = fail === 0 ? "#16301f" : "#3a1a16";
+          verdict.style.color = fail === 0 ? "#57c99a" : "#e8654f";
+        } else if (data.type === "fatal") {
+          spin.remove();
+          verdict.textContent = "HATA";
+          verdict.style.background = "#3a1a16";
+          verdict.style.color = "#e8654f";
+          logEl.textContent += data.message + "\n";
+        }
+      };
+
+      worker.postMessage("start");
+    </script>
+  </body>
+</html>
