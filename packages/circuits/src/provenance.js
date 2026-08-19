@@ -15,7 +15,49 @@
 import { randomBytes } from "node:crypto";
 
 import { buildEddsa } from "circomlibjs";
-import { poseidon2 } from "poseidon-lite";
+import {
+  poseidon2,
+  poseidon3,
+  poseidon4,
+  poseidon5,
+  poseidon6,
+  poseidon7,
+  poseidon8,
+  poseidon9,
+  poseidon10,
+  poseidon11,
+  poseidon12,
+  poseidon13,
+  poseidon14,
+  poseidon15,
+  poseidon16,
+} from "poseidon-lite";
+
+/**
+ * Girdi sayisina gore Poseidon.
+ *
+ * `poseidon-lite` her arite icin AYRI bir fonksiyon verir (sabitler ariteye
+ * gore degisir); tek bir genel fonksiyon yoktur. Taahhut, parca sayisi + salt
+ * kadar girdi alir ve bu panel boyutuyla degisir — bu yuzden eslemeye ihtiyac
+ * var.
+ */
+const POSEIDON_BY_ARITY = {
+  2: poseidon2,
+  3: poseidon3,
+  4: poseidon4,
+  5: poseidon5,
+  6: poseidon6,
+  7: poseidon7,
+  8: poseidon8,
+  9: poseidon9,
+  10: poseidon10,
+  11: poseidon11,
+  12: poseidon12,
+  13: poseidon13,
+  14: poseidon14,
+  15: poseidon15,
+  16: poseidon16,
+};
 
 import { IdentityTree, SNARK_FIELD, TREE_DEPTH, randomFieldElement } from "./index.js";
 
@@ -26,7 +68,7 @@ import { IdentityTree, SNARK_FIELD, TREE_DEPTH, randomFieldElement } from "./ind
  * yalnizca bu sabiti degil, devredeki `PANEL` degerini de degistirmeyi ve
  * yeniden kurulum (setup) yapmayi gerektirir.
  */
-export const PANEL_SIZE = 16;
+export const PANEL_SIZE = 1000;
 
 /** Gecerli dozaj degerleri: 0 hom-referans, 1 heterozigot, 2 hom-alternatif. */
 const VALID_DOSAGES = new Set([0, 1, 2]);
@@ -62,34 +104,81 @@ export async function createInstitutionKey(privateKey = randomBytes(32)) {
 }
 
 /**
- * Dozaj vektorunu tek bir alan elemanina paketler (taban 4).
+ * Bir alan elemanina sigan dozaj sayisi.
  *
- * Devredeki dongunun aynisi. Bicim dogrulamasi burada da yapilir: gecersiz bir
- * deger devrede `secondFactor === 0` kisitini kirar ve kanit uretimi anlasilmaz
- * bir hatayla duser — burada erken ve okunur bicimde yakalamak daha iyidir.
+ * Dozaj basina 2 bit; BN254 alani ~254 bit. 125 secildi (127 degil): 250 bit,
+ * alanin altinda rahat bir pay birakir. Devredeki `DOSAGES_PER_CHUNK` ile
+ * BIREBIR ayni olmalidir.
+ */
+export const DOSAGES_PER_CHUNK = 125;
+
+/**
+ * Poseidon en fazla 16 girdi alir; biri salt'a gider.
+ * 15 parca x 125 dozaj = 1875.
+ */
+export const MAX_PANEL_SIZE = 15 * DOSAGES_PER_CHUNK;
+
+/**
+ * Dozaj vektorunu PARCALARA bolerek paketler (taban 4).
+ *
+ * Devredeki dongunun aynisi ve oyle KALMALIDIR: paketleme burada ve devrede
+ * ayrisirsa taahhutler tutmaz ve kanit uretimi anlasilmaz bir hatayla duser.
+ *
+ * Neden parcali: tek bir alan elemanina yalnizca 125 dozaj sigar. Panel daha
+ * buyuk olabilsin diye her parca kendi elemanina paketlenir ve taahhut
+ * hepsinin uzerinden alinir.
+ *
+ * Bicim dogrulamasi burada da yapilir: gecersiz bir deger devrede
+ * `secondFactor === 0` kisitini kirar — erken ve okunur bicimde yakalamak
+ * daha iyidir.
+ *
+ * @returns {bigint[]} parca degerleri (her biri bir alan elemani)
  */
 export function packPanel(dosages) {
   if (dosages.length !== PANEL_SIZE) {
     throw new Error(`panel ${PANEL_SIZE} elemanli olmali, ${dosages.length} verildi`);
   }
-
-  let packed = 0n;
-  let placeValue = 1n;
-
-  for (const [index, dosage] of dosages.entries()) {
-    if (!VALID_DOSAGES.has(dosage)) {
-      throw new Error(`gecersiz dozaj (indeks ${index}): ${dosage} — yalnizca 0, 1, 2`);
-    }
-    packed += BigInt(dosage) * placeValue;
-    placeValue *= 4n;
+  if (dosages.length > MAX_PANEL_SIZE) {
+    throw new Error(
+      `panel en fazla ${MAX_PANEL_SIZE} olabilir (15 parca x ${DOSAGES_PER_CHUNK}); ` +
+        `daha buyugu icin parcalar uzerinde Poseidon agaci gerekir`,
+    );
   }
 
-  return packed;
+  const chunks = [];
+
+  for (let start = 0; start < dosages.length; start += DOSAGES_PER_CHUNK) {
+    const stop = Math.min(start + DOSAGES_PER_CHUNK, dosages.length);
+
+    let packed = 0n;
+    // Her parca KENDI basamak degerinden baslar; devrede de oyle.
+    let placeValue = 1n;
+
+    for (let index = start; index < stop; index++) {
+      const dosage = dosages[index];
+      if (!VALID_DOSAGES.has(dosage)) {
+        throw new Error(`gecersiz dozaj (indeks ${index}): ${dosage} — yalnizca 0, 1, 2`);
+      }
+      packed += BigInt(dosage) * placeValue;
+      placeValue *= 4n;
+    }
+
+    chunks.push(packed);
+  }
+
+  return chunks;
 }
 
 /** Panelin taahhudu. Panel bundan geri cikarilamaz (salt bilinmedikce). */
 export function panelCommitment(dosages, salt) {
-  return poseidon2([packPanel(dosages), BigInt(salt)]);
+  const chunks = packPanel(dosages);
+  // Girdi sayisi parca sayisina gore degisir; devredeki `Poseidon(CHUNKS + 1)`
+  // ile ayni.
+  const hasher = POSEIDON_BY_ARITY[chunks.length + 1];
+  if (!hasher) {
+    throw new Error(`Poseidon ${chunks.length + 1} girdi icin tanimli degil`);
+  }
+  return hasher([...chunks, BigInt(salt)]);
 }
 
 /** Panel icin rastgele salt. Kaba kuvvetle panel aramayi engeller. */
