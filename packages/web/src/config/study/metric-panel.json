@@ -1,0 +1,67 @@
+{
+  "panelId": "veriarfy-demo-metrics-v1",
+  "version": 1,
+  "note": "Araliklar CALISMANIN ilan ettigi sinirlardir; disinda kalan olcum kirpilmaz, ELENIR. Sifir her metrikte 'eksik' isaretidir, bu yuzden minValue her zaman >= 1'dir.",
+  "metrics": [
+    {
+      "code": "VO2MAX",
+      "unit": "ml/kg/min",
+      "scale": 100,
+      "offset": 0,
+      "minValue": 1500,
+      "maxValue": 9000,
+      "olcum": "Kademeli rampa testi, dogrudan solunum gazi analizi (tahmin denklemi DEGIL).",
+      "gercekAralik": "15,00 - 90,00 ml/kg/dk"
+    },
+    {
+      "code": "LACTATE_THRESHOLD",
+      "unit": "mmol/L",
+      "scale": 1000,
+      "offset": 0,
+      "minValue": 1000,
+      "maxValue": 20000,
+      "olcum": "Kademeli yuklenmede kan laktat egrisinden okunan esik konsantrasyonu.",
+      "gercekAralik": "1,000 - 20,000 mmol/L"
+    },
+    {
+      "code": "CK_TOTAL",
+      "unit": "U/L",
+      "scale": 1,
+      "offset": 0,
+      "minValue": 1,
+      "maxValue": 200000,
+      "olcum": "Serum toplam kreatin kinaz. Ust sinir rabdomiyoliz araligini kapsayacak sekilde genis birakilmistir.",
+      "gercekAralik": "1 - 200.000 U/L"
+    },
+    {
+      "code": "CK_REPAIR_SLOPE",
+      "unit": "U/L/day",
+      "scale": 1,
+      "offset": 20000,
+      "minValue": 1,
+      "maxValue": 40000,
+      "olcum": "Zirve sonrasi ardisik CK olcumlerine en kucuk kareler dogrusu; egim gun basina.",
+      "gercekAralik": "-19.999 - +20.000 U/L/gun (ISARETLI — offset ile kodlanir)"
+    },
+    {
+      "code": "RESTING_HR",
+      "unit": "bpm",
+      "scale": 1,
+      "offset": 0,
+      "minValue": 25,
+      "maxValue": 220,
+      "olcum": "Uyanma sonrasi 5 dakikalik sirtustu dinlenmede ortalama kalp hizi.",
+      "gercekAralik": "25 - 220 vurus/dk"
+    },
+    {
+      "code": "HRV_RMSSD",
+      "unit": "ms",
+      "scale": 10,
+      "offset": 0,
+      "minValue": 10,
+      "maxValue": 3000,
+      "olcum": "Ardisik RR araliklari farklarinin karekok ortalamasi (RMSSD), gece penceresi.",
+      "gercekAralik": "1,0 - 300,0 ms"
+    }
+  ]
+}
