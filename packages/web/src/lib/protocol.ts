@@ -1,7 +1,15 @@
 import { Contract, formatUnits, type BrowserProvider, type Signer } from "ethers";
 
 import { CONTRACTS } from "../config";
-import { ERC20_ABI, PAYMENTS_ABI, PROTOCOL_ABI } from "../config/abi";
+import {
+  BIOMARKERS_ABI,
+  ERC20_ABI,
+  PAYMENTS_ABI,
+  PROTOCOL_ABI,
+  STORAGE_ABI,
+} from "../config/abi";
+import { encryptBiomarkers, encryptDosages, encryptGroup } from "./fhe";
+import type { MetricPanel, MetricSpec } from "./metrics";
 
 /**
  * Gizlilik Panelinin veri katmani.
@@ -13,6 +21,19 @@ import { ERC20_ABI, PAYMENTS_ABI, PROTOCOL_ABI } from "../config/abi";
 
 export function getProtocol(runner: BrowserProvider | Signer) {
   return new Contract(CONTRACTS.VeriarfyProtocol, PROTOCOL_ABI, runner);
+}
+
+/**
+ * Surekli olcum modulu — AYRI KONTRAT.
+ *
+ * Ayri olmasinin sebebi EIP-170'tir (protokol 24.576 baytlik kod sinirina
+ * dayandi), ama pratikte onemli olan sonucu: girdi kaniti kontrat adresine
+ * baglidir, yani olcumler BU adres icin sifrelenir.
+ */
+export function getBiomarkers(runner: BrowserProvider | Signer) {
+  const address = CONTRACTS.VeriarfyBiomarkers;
+  if (!address) throw new Error("Biyobelirtec modulu bu dagitimda yok.");
+  return new Contract(address, BIOMARKERS_ABI, runner);
 }
 
 export function getPayments(runner: BrowserProvider | Signer) {
@@ -79,6 +100,85 @@ export interface PermissionRecord {
   revokedAtBlock: bigint;
   expirationBlock: bigint;
   maxQueries: bigint;
+}
+
+/** Filecoin kalicilik durumu — rapor §2.9.2. */
+export interface PersistenceState {
+  /** Kalicilik defteri dagitildi mi? */
+  tracked: boolean;
+  /** Su an kac FARKLI saglayicida duruyor. */
+  replicas: number;
+  /** WBS 2.3'teki 3 replika kurali saglaniyor mu? */
+  adequate: boolean;
+  /** Yenileme penceresine girildi mi? */
+  dueForRenewal: boolean;
+}
+
+/**
+ * Blob'un Filecoin'deki kalicilik durumunu okur.
+ *
+ * Defter dagitilmamissa ya da CID icin hic anlasma yoksa `tracked: false`
+ * doner — panel bunu "IPFS'te pinli, Filecoin anlasmasi yok" olarak gosterir.
+ * Uydurma bir "guvende" mesaji YOKTUR.
+ */
+export async function readPersistence(
+  provider: BrowserProvider,
+  cidDigest: string,
+): Promise<PersistenceState> {
+  const address = CONTRACTS.VeriarfyStorage;
+  const empty: PersistenceState = {
+    tracked: false,
+    replicas: 0,
+    adequate: false,
+    dueForRenewal: false,
+  };
+
+  if (!address || !cidDigest || cidDigest === `0x${"0".repeat(64)}`) return empty;
+
+  const storage = new Contract(address, STORAGE_ABI, provider);
+  const dealCount = (await storage.dealCount(cidDigest)) as bigint;
+  if (dealCount === 0n) return empty;
+
+  const [replicas, adequate, dueForRenewal] = (await storage.persistenceStatus(
+    cidDigest,
+  )) as [bigint, boolean, boolean, bigint];
+
+  return {
+    tracked: true,
+    replicas: Number(replicas),
+    adequate,
+    dueForRenewal,
+  };
+}
+
+/** Nadirlik Carpani durumu — rapor §4.3. */
+export interface RarityState {
+  /** Katilimci esikli cozume izin verdi mi? */
+  requested: boolean;
+  /** KMS esigi biti cozdu ve zincir imzalari dogruladi mi? */
+  confirmed: boolean;
+  /** Sonuc: nadir varyant tasiyicisi mi? */
+  isCarrier: boolean;
+  /** Ilk 10.000 saglayicidan biri mi (kalici +%50)? */
+  isFounding: boolean;
+  /** Havuzun tamami — `R = log2(1 + N/C)` formulundeki N. */
+  poolCount: number;
+  /** Dogrulanmis tasiyici sayisi — formuldeki C. */
+  carriers: number;
+  /** Cozulecek sifreli bitin handle'i. */
+  handle: string;
+}
+
+/**
+ * Nadirlik carpani `R = log2(1 + N/C)` — baz puan cinsinden.
+ *
+ * Kontrattaki `RarityMath` ile AYNI degeri vermelidir; burada yalnizca
+ * kullaniciya "su an ne kadar" gosterilir, odeme buna gore YAPILMAZ.
+ * Odemede kullanilan deger her zaman zincirden (`queryWeights`) okunur.
+ */
+export function rarityMultiplierBps(poolCount: number, carriers: number): number {
+  if (carriers <= 0 || poolCount <= 0) return 0;
+  return Math.floor(Math.log2(1 + poolCount / carriers) * 10_000);
 }
 
 export interface DashboardState {
@@ -216,6 +316,64 @@ export async function readDashboard(
   };
 }
 
+/** Nadirlik durumunu zincirden okur (rapor §4.3). */
+export async function readRarity(
+  provider: BrowserProvider,
+  address: string,
+): Promise<RarityState> {
+  const protocol = getProtocol(provider);
+
+  const [requested, isCarrier, confirmedAt, isFounding, stats, handle] = await Promise.all([
+    protocol.rarityRequested(address) as Promise<boolean>,
+    protocol.isRareCarrier(address) as Promise<boolean>,
+    protocol.rarityConfirmedAtBlock(address) as Promise<bigint>,
+    protocol.isFoundingContributor(address) as Promise<boolean>,
+    protocol.rarityStats() as Promise<[bigint, bigint]>,
+    protocol.rarityHandle(address) as Promise<string>,
+  ]);
+
+  return {
+    requested,
+    confirmed: confirmedAt > 0n,
+    isCarrier,
+    isFounding,
+    poolCount: Number(stats[0]),
+    carriers: Number(stats[1]),
+    handle,
+  };
+}
+
+/**
+ * Nadirlik degerlendirmesini baslatir.
+ *
+ * Bu cagri BITI ACMAZ; yalnizca KMS dugumlerinin esikli cozumune izin verir.
+ * Cozum ayri bir adimdir ve sonucu `confirmRarity` zincirde dogrular.
+ */
+export async function requestRarityAssessment(signer: Signer) {
+  const tx = await getProtocol(signer).requestRarityAssessment();
+  return tx.wait();
+}
+
+/**
+ * Esikli cozulmus biti ve KMS imzalarini zincire yazar.
+ *
+ * @param decryptedResult Relayer'in dondurdugu `abiEncodedClearValues`.
+ * @param decryptionProof Relayer'in dondurdugu `decryptionProof`.
+ */
+export async function confirmRarity(
+  signer: Signer,
+  participant: string,
+  decryptedResult: string,
+  decryptionProof: string,
+) {
+  const tx = await getProtocol(signer).confirmRarity(
+    participant,
+    decryptedResult,
+    decryptionProof,
+  );
+  return tx.wait();
+}
+
 /** Bir arastirmaciya izin verir. `expirationBlock = 0` -> suresiz. */
 export async function grantAccess(
   signer: Signer,
@@ -243,4 +401,257 @@ export async function revokeAccess(signer: Signer, researcher: string) {
 export async function claimReward(signer: Signer, queryId: number) {
   const tx = await getPayments(signer).claim(queryId);
   return tx.wait();
+}
+
+/* ------------------------------------------------------------------ *
+ * Veri kategorisi 2 — surekli biyobelirtec kanali
+ * ------------------------------------------------------------------ */
+
+/**
+ * Metrik panelini ZINCIRDEN okur.
+ *
+ * @remarks Panel yerel bir dosyadan degil zincirden okunur ve olmasi gereken
+ *          budur: eleme sinirlarini sozlesme zorluyor. Yerel bir kopya
+ *          kullanilsaydi, ilan edilen aralik ile ZORLANAN aralik sessizce
+ *          ayrisabilirdi.
+ */
+export async function readMetricPanel(
+  runner: BrowserProvider | Signer,
+): Promise<MetricPanel & { metricsHash: string; metricsUri: string }> {
+  const biomarkers = getBiomarkers(runner);
+  const count = Number(await biomarkers.metricCount());
+
+  const metrics: MetricSpec[] = [];
+  for (let i = 0; i < count; i++) {
+    const spec = await biomarkers.metricAt(i);
+    metrics.push({
+      code: decodeBytes32(spec.code),
+      unit: decodeBytes32(spec.unit),
+      scale: Number(spec.scale),
+      offset: Number(spec.offset),
+      minValue: Number(spec.minValue),
+      maxValue: Number(spec.maxValue),
+    });
+  }
+
+  return {
+    panelId: "onchain",
+    version: 1,
+    metrics,
+    metricsHash: await biomarkers.metricsHash(),
+    metricsUri: await biomarkers.metricsUri(),
+  };
+}
+
+/** `bytes32` icine sifir dolgulu ASCII etiketi geri okur. */
+function decodeBytes32(value: string): string {
+  const hex = value.startsWith("0x") ? value.slice(2) : value;
+  let out = "";
+  for (let i = 0; i < hex.length; i += 2) {
+    const byte = parseInt(hex.slice(i, i + 2), 16);
+    if (byte === 0) break;
+    out += String.fromCharCode(byte);
+  }
+  return out;
+}
+
+/**
+ * Kodlanmis olcumleri sifreleyip PARTILER halinde gonderir.
+ *
+ * @param values Panel sirasinda kodlanmis degerler (`alignToMetrics` ciktisi).
+ * @param batchSize Parti buyuklugu; varsayilan olculen tavandir.
+ *
+ * @remarks Parti siniri fhEVM'in ISLEM BASINA HOMOMORFIK HESAP BUTCESIDIR
+ *          (HCU, 20.000.000), blok gazi degil. Olcum basina kareyi alma
+ *          islemi tek basina 596.000 HCU tuttugu icin tavan 8 metriktir
+ *          (`packages/contracts/test/BiomarkerHcu.test.ts`).
+ *
+ *          Kontrat katkilarin SIRALI olmasini zorlar: her parti tam olarak
+ *          `submittedMetrics` indeksinden baslar. Bu yuzden partiler
+ *          birbirini beklemek zorundadir; paralel gonderim ikinci islemi
+ *          revert ettirir.
+ */
+export async function contributeBiomarkers(
+  signer: Signer,
+  values: number[],
+  options: {
+    batchSize?: number;
+    onBatch?: (outcome: TxOutcome, from: number, to: number) => void;
+  } = {},
+): Promise<TxOutcome[]> {
+  const { batchSize = 6, onBatch } = options;
+
+  const biomarkers = getBiomarkers(signer);
+  const userAddress = await signer.getAddress();
+  const contractAddress = await biomarkers.getAddress();
+
+  const submitted = Number(await biomarkers.submittedMetrics(userAddress));
+  const outcomes: TxOutcome[] = [];
+
+  for (let i = submitted; i < values.length; i += batchSize) {
+    const slice = values.slice(i, i + batchSize);
+
+    const { handles, inputProof } = await encryptBiomarkers({
+      contractAddress,
+      userAddress,
+      values: slice,
+    });
+
+    const tx = await biomarkers.contributeBiomarkers(handles, inputProof);
+    const receipt = await tx.wait();
+
+    const outcome: TxOutcome = {
+      hash: receipt.hash,
+      blockNumber: receipt.blockNumber,
+      gasUsed: receipt.gasUsed.toString(),
+      handles,
+    };
+    outcomes.push(outcome);
+    onBatch?.(outcome, i, i + slice.length);
+  }
+
+  return outcomes;
+}
+
+/* ------------------------------------------------------------------ *
+ * Katki akisi — kayit, dozajlar, olcumler
+ * ------------------------------------------------------------------ */
+
+/** Grup etiketleri — kontrattaki `GROUP_*` sabitleriyle ayni. */
+export const GROUP = { CONTROL: 0, CASE: 1 } as const;
+
+/** Katilimcinin akistaki yeri; tamami ZINCIRDEN okunur. */
+export interface ContributionState {
+  isEnrolled: boolean;
+  submittedSnps: number;
+  snpCount: number;
+  panelHash: string;
+  biomarkerModule: string;
+  submittedMetrics: number;
+  metricCount: number;
+  metricsHash: string;
+  participantCount: number;
+}
+
+export async function readContributionState(
+  runner: BrowserProvider | Signer,
+  account: string,
+): Promise<ContributionState> {
+  const protocol = getProtocol(runner);
+
+  const [isEnrolled, submittedSnps, snpCount, panelHash, biomarkerModule, participantCount] =
+    await Promise.all([
+      protocol.isEnrolled(account),
+      protocol.submittedSnps(account),
+      protocol.snpCount(),
+      protocol.panelHash(),
+      protocol.biomarkerModule(),
+      protocol.participantCount(),
+    ]);
+
+  // Modul adresi ZINCIRDEN alinir, yapilandirmadan degil: sifreleme yanlis
+  // adrese yapilirsa girdi kaniti reddedilir ve sebebi anlasilmaz.
+  const biomarkers = new Contract(biomarkerModule, BIOMARKERS_ABI, runner);
+  const [submittedMetrics, metricCount, metricsHash] = await Promise.all([
+    biomarkers.submittedMetrics(account),
+    biomarkers.metricCount(),
+    biomarkers.metricsHash(),
+  ]);
+
+  return {
+    isEnrolled,
+    submittedSnps: Number(submittedSnps),
+    snpCount: Number(snpCount),
+    panelHash,
+    biomarkerModule,
+    submittedMetrics: Number(submittedMetrics),
+    metricCount: Number(metricCount),
+    metricsHash,
+    participantCount: Number(participantCount),
+  };
+}
+
+/** Bir islemin sonucu — konsolda kanit olarak gosterilir. */
+export interface TxOutcome {
+  hash: string;
+  blockNumber: number;
+  gasUsed: string;
+  /** Bu islemde gonderilen sifreli degerlerin handle'lari. */
+  handles: string[];
+}
+
+/**
+ * Katilimciyi vaka/kontrol grubuna SIFRELI olarak kaydeder.
+ *
+ * @remarks Grup bir kez yazilir ve tum partilerde yeniden kullanilir. Her
+ *          partide tekrar gonderilseydi katilimci partiler arasinda grup
+ *          degistirip tabloyu bozabilirdi.
+ */
+export async function enroll(signer: Signer, group: number): Promise<TxOutcome> {
+  const protocol = getProtocol(signer);
+  const contractAddress = await protocol.getAddress();
+  const userAddress = await signer.getAddress();
+
+  const { handle, inputProof } = await encryptGroup({ contractAddress, userAddress, group });
+
+  const tx = await protocol.enroll(handle, inputProof);
+  const receipt = await tx.wait();
+
+  return {
+    hash: receipt.hash,
+    blockNumber: receipt.blockNumber,
+    gasUsed: receipt.gasUsed.toString(),
+    handles: [handle],
+  };
+}
+
+/**
+ * Panele hizalanmis dozajlari PARTILER halinde sifreleyip gonderir.
+ *
+ * @param batchSize Olculen HCU tavani 12 SNP; varsayilan 10 pay birakir.
+ *
+ * @remarks Kontrat katkilarin SIRALI olmasini zorlar: her parti tam olarak
+ *          `submittedSnps` indeksinden baslar. Bu yuzden partiler birbirini
+ *          BEKLEMEK zorundadir; paralel gonderim ikinci islemi revert ettirir.
+ *
+ *          Zaten gonderilmis olan on ek atlanir — sayfa yenilendiginde ya da
+ *          bir parti yarida kaldiginda kaldigi yerden devam eder.
+ */
+export async function contributeDosages(
+  signer: Signer,
+  dosages: number[],
+  options: { batchSize?: number; onBatch?: (outcome: TxOutcome, from: number, to: number) => void } = {},
+): Promise<TxOutcome[]> {
+  const { batchSize = 10, onBatch } = options;
+
+  const protocol = getProtocol(signer);
+  const contractAddress = await protocol.getAddress();
+  const userAddress = await signer.getAddress();
+
+  const submitted = Number(await protocol.submittedSnps(userAddress));
+  const outcomes: TxOutcome[] = [];
+
+  for (let i = submitted; i < dosages.length; i += batchSize) {
+    const slice = dosages.slice(i, i + batchSize);
+
+    const { handles, inputProof } = await encryptDosages({
+      contractAddress,
+      userAddress,
+      dosages: slice,
+    });
+
+    const tx = await protocol.contributeDosages(handles, inputProof);
+    const receipt = await tx.wait();
+
+    const outcome: TxOutcome = {
+      hash: receipt.hash,
+      blockNumber: receipt.blockNumber,
+      gasUsed: receipt.gasUsed.toString(),
+      handles,
+    };
+    outcomes.push(outcome);
+    onBatch?.(outcome, i, i + slice.length);
+  }
+
+  return outcomes;
 }
