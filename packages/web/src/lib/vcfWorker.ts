@@ -10,6 +10,7 @@
  */
 
 import init, {
+  VcfStreamParser,
   parseBlob,
   parseReadableStream,
   type VcfParseResult,
@@ -116,12 +117,57 @@ function bgzfDecompressStream(source: ReadableStream<Uint8Array>): ReadableStrea
   });
 }
 
+/**
+ * Panel filtresiyle akis ayristirmasi.
+ *
+ * @remarks Hazir `parseBlob` / `parseReadableStream` kisayollari filtre
+ *          parametresi almadigi icin akis burada elle surulur. Filtre Rust
+ *          tarafinda uygulanir; JS'e yalnizca panele giren varyantlar doner.
+ */
+async function parseWithPanel(
+  stream: ReadableStream<Uint8Array>,
+  sampleName: string | undefined,
+  wantedIds: string[],
+  totalBytes: number | null,
+  onProgress: (bytes: number, total: number | null, variants: number) => void,
+): Promise<VcfParseResult> {
+  const parser = new VcfStreamParser(sampleName);
+  parser.setWantedIds(wantedIds);
+  // Panel boyutu biliniyor: dozaj vektoru tek seferde tahsis edilir.
+  parser.reserve(wantedIds.length);
+
+  const reader = stream.getReader();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      parser.pushChunk(value);
+      onProgress(parser.bytesProcessed, totalBytes, parser.variantCount);
+    }
+    return parser.finish();
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 export interface VcfWorkerRequest {
   file: File | Blob;
   /** Cok ornekli VCF'te hedef ornek adi. Bos ise ilk kolon kullanilir. */
   sampleName?: string;
   /** `.vcf.gz` icin tarayicinin DecompressionStream'i ile acmayi dene. */
   gzip?: boolean;
+  /**
+   * Calisma panelinin rsID listesi.
+   *
+   * VERILDIGINDE sonuc `ids` alani dolar ve dozajlar panele HIZALANABILIR.
+   * Verilmezse dosya sirasinda kimliksiz bir dizi doner — o dizi zincire
+   * gonderilemez, cunku hangi varyanta ait oldugu bilinmez.
+   *
+   * Filtre Rust tarafinda uygulanir: tum genom VCF'i milyonlarca satirdir,
+   * hepsini JS'e tasiyip sonra elemek isin buyuk kismini bellege tasimak
+   * olurdu.
+   */
+  wantedIds?: string[];
 }
 
 export type VcfWorkerResponse =
@@ -129,6 +175,9 @@ export type VcfWorkerResponse =
   | {
       type: "done";
       dosages: Uint8Array;
+      /** Dozajlarla AYNI SIRADA varyant kimlikleri; filtre yoksa bos. */
+      ids: string[];
+      filteredOutCount: number;
       sampleName: string;
       sampleNames: string[];
       variantCount: number;
@@ -144,7 +193,7 @@ function post(message: VcfWorkerResponse, transfer: Transferable[] = []) {
 }
 
 self.onmessage = async (event: MessageEvent<VcfWorkerRequest>) => {
-  const { file, sampleName, gzip } = event.data;
+  const { file, sampleName, gzip, wantedIds } = event.data;
 
   try {
     // Wasm modulu worker basina bir kez yuklenir.
@@ -157,22 +206,25 @@ self.onmessage = async (event: MessageEvent<VcfWorkerRequest>) => {
       variantCount: number,
     ) => post({ type: "progress", bytesProcessed, totalBytes, variantCount });
 
-    let result: VcfParseResult;
+    // Panel filtresi gerekiyorsa akis parser'i ELLE surulur: hazir
+    // `parseBlob`/`parseReadableStream` kisayollari filtre parametresi almaz.
+    const stream = gzip
+      ? bgzfDecompressStream(file.stream())
+      : (file.stream() as ReadableStream<Uint8Array>);
 
-    if (gzip) {
-      // Sikistirilmis dosyayi akis halinde ac; tam dosya RAM'e alinmaz.
-      // BGZF (gercek `.vcf.gz`) ve duz gzip'in ikisi de desteklenir.
-      const stream = bgzfDecompressStream(file.stream());
-      result = await parseReadableStream(stream, sampleName, null, onProgress);
-    } else {
-      result = await parseBlob(file, sampleName, onProgress);
-    }
+    const result: VcfParseResult = wantedIds?.length
+      ? await parseWithPanel(stream, sampleName, wantedIds, file.size ?? null, onProgress)
+      : gzip
+        ? await parseReadableStream(stream, sampleName, null, onProgress)
+        : await parseBlob(file, sampleName, onProgress);
 
     const dosages = result.dosages;
     post(
       {
         type: "done",
         dosages,
+        ids: result.ids,
+        filteredOutCount: result.filteredOutCount,
         sampleName: result.sampleName,
         sampleNames: result.sampleNames,
         variantCount: result.variantCount,
