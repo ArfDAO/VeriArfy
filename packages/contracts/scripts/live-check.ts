@@ -39,8 +39,14 @@ const TEST_DOSAGE = 1;
 /** Sentetik grup: 0 = kontrol (saglikli), 1 = vaka (hasta). */
 const TEST_GROUP = 1;
 
-/** Sentetik 16 SNP paneli — koken kaniti icin. Gercek hasta verisi DEGILDIR. */
-const PANEL = [0, 1, 2, 1, 0, 0, 2, 1, 1, 0, 2, 2, 0, 1, 0, 1];
+/**
+ * Sentetik panel — koken kaniti icin. Gercek hasta verisi DEGILDIR.
+ *
+ * Uzunluk devrenin `PANEL_SIZE`'indan gelir; sabit yazilmaz. Panel
+ * buyutuldugunde bu betik sessizce eski boyutta kalirsa kanit uretimi
+ * "uzunluk uyusmuyor" ile duser ve canli dogrulama bosa gider.
+ */
+let PANEL: number[] = [];
 
 async function main() {
   if (network.name === "hardhat") {
@@ -86,6 +92,12 @@ async function main() {
   const circuits = await import("@veriarfy/circuits");
   const snarkjs: any = await import("snarkjs");
   const { institution, registry: institutionRegistry } = await provenance.developmentRegistry();
+
+  // Panel uzunlugu devreden gelir; sabit yazilmaz.
+  PANEL = Array.from(
+    { length: provenance.PANEL_SIZE },
+    (_: unknown, i: number) => [0, 1, 2, 1, 0, 2][i % 6],
+  );
 
   // Kontratin tanidigi kok ile yerelde kurulan agacin koku ayni olmali;
   // degilse kanit gecerli olsa bile `UnknownAccreditedRoot` ile reddedilir.
@@ -146,27 +158,54 @@ async function main() {
   // Betik yeniden calistirilabilir olmali; ikinci kosumda bu adim atlanir.
   let aggTx: Awaited<ReturnType<typeof protocol.aggregateDosage>> | null = null;
 
+  const snpCount: number = Number(await protocol.snpCount());
+  const rareSnp: number = Number(await protocol.rareSnpIndex());
+  console.log(`SNP paneli: ${snpCount} varyant (nadirlik varyanti #${rareSnp})`);
+
   if (await protocol.hasAggregated(signer.address)) {
-    console.log("Sifreli dozaj zaten gonderilmis — adim atlaniyor.\n");
+    console.log("Sifreli dozajlar zaten gonderilmis — adim atlaniyor.\n");
   } else {
-    console.log("Sifreli dozaj hazirlaniyor (Zama relayer)...");
-    const encrypted = await fhevm
-      .createEncryptedInput(address, signer.address)
-      .add8(TEST_GROUP)
-      .add8(TEST_DOSAGE)
-      .encrypt();
+    // Kayit: grup BIR KEZ yazilir (rapor §3.3, MK-0012).
+    if (!(await protocol.isEnrolled(signer.address))) {
+      console.log("Gruba kayit hazirlaniyor (Zama relayer)...");
+      const groupInput = await fhevm
+        .createEncryptedInput(address, signer.address)
+        .add8(TEST_GROUP)
+        .encrypt();
 
-    console.log(`  handle uzunlugu : ${encrypted.handles[0].length} bayt`);
-    console.log(`  kanit uzunlugu  : ${encrypted.inputProof.length} bayt`);
+      const enrollTx = await protocol
+        .connect(signer)
+        .enroll(groupInput.handles[0], groupInput.inputProof);
+      const enrollReceipt = await enrollTx.wait();
+      console.log(`  enroll hash : ${enrollTx.hash}  (gas ${enrollReceipt?.gasUsed})`);
+    }
 
-    console.log("aggregateDosage gonderiliyor...");
-    aggTx = await protocol
-      .connect(signer)
-      .aggregateDosage(encrypted.handles[0], encrypted.handles[1], encrypted.inputProof);
-    const aggReceipt = await aggTx.wait();
-    console.log(`  hash : ${aggTx.hash}`);
-    console.log(`  blok : ${aggReceipt?.blockNumber}`);
-    console.log(`  gas  : ${aggReceipt?.gasUsed}\n`);
+    // Dozajlar PARTILER halinde. Parti tavani fhEVM'in HCU butcesinden gelir
+    // (blok gazindan degil); olculen guvenli deger 12, burada 8 kullanilir.
+    const BATCH = 8;
+    let sent = Number(await protocol.submittedSnps(signer.address));
+
+    while (sent < snpCount) {
+      const size = Math.min(BATCH, snpCount - sent);
+      const builder = fhevm.createEncryptedInput(address, signer.address);
+      // Nadirlik varyantinda TEST_DOSAGE, digerlerinde donusumlu deger.
+      for (let i = 0; i < size; i++) {
+        const snp = sent + i;
+        builder.add8(snp === rareSnp ? TEST_DOSAGE : snp % 3);
+      }
+      const encrypted = await builder.encrypt();
+
+      console.log(`contributeDosages gonderiliyor (SNP ${sent}..${sent + size - 1})...`);
+      aggTx = await protocol
+        .connect(signer)
+        .contributeDosages(encrypted.handles, encrypted.inputProof);
+      const aggReceipt = await aggTx.wait();
+      console.log(`  hash : ${aggTx.hash}`);
+      console.log(`  gas  : ${aggReceipt?.gasUsed}  (${size} SNP)`);
+
+      sent = Number(await protocol.submittedSnps(signer.address));
+    }
+    console.log("");
   }
 
   // --- Dogrulama -----------------------------------------------------------
@@ -193,6 +232,141 @@ async function main() {
   }
   if (poolHandle === ethers.ZeroHash) {
     throw new Error("Havuz handle'i bos — sifreli toplama olusmadi");
+  }
+
+  // --- 2c) Surekli biyobelirtec kanali (veri kategorisi 2) -----------------
+  //
+  // Genomik dozajdan farkli olarak burada SUREKLI degerler var ve zincirde
+  // biriken sey kontenjans tablosu degil, Welch t-testinin yeterli
+  // istatistikleri: n, Sum x, Sum x^2.
+  //
+  // Gercek agda dogrulanan sey: `mul(euint64, euint64)` — yani kareyi alma —
+  // Zama'nin coprocessor'unda gercekten calisiyor ve islem fhEVM'in HCU
+  // butcesine sigiyor. Mock ortami bunu kanitlamaz.
+  console.log("--- Surekli biyobelirtec kanali ---");
+
+  const biomarkersAddress: string | undefined = record.contracts.VeriarfyBiomarkers;
+
+  if (!biomarkersAddress) {
+    console.log("Bu dagitimda biyobelirtec modulu yok — adim atlaniyor.\n");
+  } else {
+    const biomarkers = await ethers.getContractAt("VeriarfyBiomarkers", biomarkersAddress);
+    const metricCount = Number(await biomarkers.metricCount());
+    console.log(`Metrik paneli: ${metricCount} metrik  (${biomarkersAddress})`);
+
+    let sentMetrics = Number(await biomarkers.submittedMetrics(signer.address));
+
+    if (sentMetrics >= metricCount) {
+      console.log("Olcumler zaten gonderilmis — adim atlaniyor.\n");
+    } else {
+      // OLCUMLER SENTETIKTIR ama zincirin ZORLADIGI araliga uyar: her deger
+      // panelin ilan ettigi [minValue, maxValue] icinde secilir. Disinda
+      // secilseydi kirpilmaz, ELENIRDI — ve sayaç artmadigi icin bu adim
+      // sessizce basarisiz gorunurdu.
+      const encodedValues: number[] = [];
+      for (let i = 0; i < metricCount; i++) {
+        const spec = await biomarkers.metricAt(i);
+        const min = Number(spec.minValue);
+        const max = Number(spec.maxValue);
+        // Araligin ortasina yakin, tekrarlanabilir bir deger.
+        encodedValues.push(min + Math.floor((max - min) / 3));
+      }
+
+      // Parti tavani: olculen 8 metrik/islem (kareyi alma pahali).
+      const METRIC_BATCH = 6;
+
+      while (sentMetrics < metricCount) {
+        const size = Math.min(METRIC_BATCH, metricCount - sentMetrics);
+
+        // DIKKAT: girdi kaniti KONTRAT ADRESINE baglidir. Olcumler MODULUN
+        // adresi icin sifrelenir; protokolunki kullanilsaydi `fromExternal`
+        // gecersiz girdi diye reddederdi.
+        const builder = fhevm.createEncryptedInput(biomarkersAddress, signer.address);
+        for (let i = 0; i < size; i++) builder.add32(encodedValues[sentMetrics + i]);
+        const encrypted = await builder.encrypt();
+
+        console.log(
+          `contributeBiomarkers gonderiliyor (metrik ${sentMetrics}..${sentMetrics + size - 1})...`,
+        );
+        const bioTx = await biomarkers
+          .connect(signer)
+          .contributeBiomarkers(encrypted.handles, encrypted.inputProof);
+        const bioReceipt = await bioTx.wait();
+        console.log(`  hash : ${bioTx.hash}`);
+        console.log(`  gas  : ${bioReceipt?.gasUsed}  (${size} metrik)`);
+
+        sentMetrics = Number(await biomarkers.submittedMetrics(signer.address));
+      }
+    }
+
+    // Zincirden GERI OKU: "gonderdim" ile "zincir oyle diyor" ayni sey degil.
+    const [sumHandle, sumSqHandle, countHandle] = await biomarkers.biomarkerAggregate(
+      0,
+      TEST_GROUP,
+    );
+    console.log(`  panel tamam : ${await biomarkers.hasBiomarkerPanel(signer.address)}`);
+    console.log(`  Sum x   handle: ${sumHandle}`);
+    console.log(`  Sum x^2 handle: ${sumSqHandle}`);
+    console.log(`  n       handle: ${countHandle}`);
+
+    if (sumHandle === ethers.ZeroHash || sumSqHandle === ethers.ZeroHash) {
+      throw new Error("Biyobelirtec toplamlari bos — homomorfik birikim olusmadi");
+    }
+    if (Number(await biomarkers.submittedMetrics(signer.address)) !== metricCount) {
+      throw new Error("Zincir metrik sayacini beklenen degerde gostermiyor");
+    }
+    console.log("");
+  }
+
+  // --- 2b) Nadirlik Carpani (rapor §4.3) -----------------------------------
+  //
+  // Burada dogrulanan sey sudur: KMS dugumleri TEK BIR BITI gercek agda
+  // esikli olarak cozebiliyor ve kontrat bu cozumun KMS imzalarini zincirde
+  // dogruluyor. Sonucu getiren taraf guvenilir sayilmaz.
+  //
+  // Test dozaji heterozigot (1) oldugu icin beklenen yanit "nadir DEGIL".
+  // Bu, sonucun uydurulmadigi anlamina da gelir: uydurulsaydi "nadir" yazardi.
+  console.log("--- Nadirlik Carpani (esikli tek bit) ---");
+
+  if ((await protocol.rarityConfirmedAtBlock(signer.address)) !== 0n) {
+    console.log("Nadirlik zaten dogrulanmis — adim atlaniyor.\n");
+  } else {
+    if (!(await protocol.rarityRequested(signer.address))) {
+      const reqTx = await protocol.connect(signer).requestRarityAssessment();
+      const reqReceipt = await reqTx.wait();
+      console.log(`  acilim izni : ${reqTx.hash}  (gas ${reqReceipt?.gasUsed})`);
+    }
+
+    const rarityHandle: string = await protocol.rarityHandle(signer.address);
+    console.log(`  bit handle  : ${rarityHandle}`);
+
+    console.log("  KMS esikli cozumu isteniyor (gercek relayer)...");
+    const decryption = await fhevm.publicDecrypt([rarityHandle]);
+    const clearBit = (decryption.clearValues as any)[rarityHandle.toLowerCase()];
+    console.log(`  cozulen bit : ${clearBit}`);
+    console.log(`  imza uzunlugu: ${decryption.decryptionProof.length} bayt`);
+
+    const confirmTx = await protocol
+      .connect(signer)
+      .confirmRarity(
+        signer.address,
+        decryption.abiEncodedClearValues,
+        decryption.decryptionProof,
+      );
+    const confirmReceipt = await confirmTx.wait();
+    console.log(`  zincir dogrulamasi: ${confirmTx.hash}  (gas ${confirmReceipt?.gasUsed})`);
+  }
+
+  const isCarrier: boolean = await protocol.isRareCarrier(signer.address);
+  const [poolCount, carriers] = await protocol.rarityStats();
+  console.log(`  sonuc       : ${isCarrier ? "NADIR TASIYICI" : "yaygin varyant"}`);
+  console.log(`  havuz/tasiyici: ${poolCount} / ${carriers}`);
+  console.log(`  Kurucu Katkici: ${await protocol.isFoundingContributor(signer.address)}\n`);
+
+  // Dozaj 1 gonderildi; nadir esigi 2'dir. Sonuc "nadir" cikarsa ya kod ya da
+  // esikli cozum bozuk demektir — sessizce gecilmemeli.
+  if (TEST_DOSAGE !== 2 && isCarrier) {
+    throw new Error("Nadirlik biti yanlis: dozaj 2 degilken tasiyici isaretlendi");
   }
 
   // --- 3) Odeme ve gelir paylasimi -----------------------------------------
@@ -285,6 +459,52 @@ async function main() {
     console.log("Yetkili dugum atandi (tek cuzdanli duman testi)");
   }
 
+  // Rapor §2.7: onay vermek EKONOMIK SORUMLULUK gerektirir. Modul bagliysa
+  // teminatsiz dugum onay veremez.
+  const stakingAddress: string | undefined = record.contracts.VeriarfyStaking;
+  const staking = stakingAddress
+    ? await ethers.getContractAt("VeriarfyStaking", stakingAddress)
+    : null;
+
+  if (staking) {
+    const need = await staking.minStake();
+    const have = await staking.stakeOf(signer.address);
+    if (have < need) {
+      const stakeTx = await staking.stake({ value: need - have });
+      await stakeTx.wait();
+      console.log(`Dugum teminati yatirildi: ${ethers.formatEther(need)} ETH (${stakeTx.hash})`);
+    } else {
+      console.log(`Dugum teminati yeterli: ${ethers.formatEther(have)} ETH`);
+    }
+  }
+
+  // --- Dead Man's Switch dogrulamasi (rapor §2.6.1) ------------------------
+  //
+  // Gercek agda kanitlanan sey: devir esigi yururlukte, ana dugum hayattayken
+  // devir KAPALI, ve varis atanmamisken hicbir kosulda acilmaz.
+  //
+  // Devrin kendisini burada tetiklemiyoruz: sessizlik esigi uretimde ~1 gun
+  // olmalidir ve duman testinde bunu beklemek anlamsizdir. Devir davranisinin
+  // tamami `DeadMansSwitch.test.ts` icinde 24 testle dogrulanir.
+  console.log("--- Dead Man's Switch (rapor §2.6.1) ---");
+  const heirCount: bigint = await protocol.heirNodeCount();
+  const timeout: bigint = await protocol.livenessTimeout();
+  const lastBeat: bigint = await protocol.lastMainHeartbeat();
+  const failover: boolean = await protocol.isFailoverActive();
+
+  console.log(`  sessizlik esigi : ${timeout} blok`);
+  console.log(`  son yasam isareti: blok ${lastBeat}`);
+  console.log(`  varis dugum      : ${heirCount}`);
+  console.log(`  devir aktif      : ${failover}`);
+
+  if (failover) {
+    throw new Error("ana dugum hayattayken devir aktif gorunuyor");
+  }
+  if (timeout === 0n) {
+    throw new Error("sessizlik esigi ayarlanmamis — dagitim eksik");
+  }
+  console.log("");
+
   // TEK CUZDANLI TEST — k-anonimlik esigi gecici olarak dusurulur.
   //
   // Uretimde `minParticipants` 10'dur ve DUSURULMEMELIDIR: tek katilimciyken
@@ -319,8 +539,50 @@ async function main() {
   await approveTx.wait();
   console.log(`approveDisclosure tx: ${approveTx.hash}`);
 
-  if (!(await protocol.isDisclosureGranted(q.disclosureRequestId))) {
+  if (!(await protocol.isDisclosureFinalized(q.disclosureRequestId))) {
     throw new Error("esik saglanmadi — onay sayisi yetersiz olabilir");
+  }
+
+  // Rapor §2.7.1: esikten SONRA itiraz suresi baslar. Cozum yetkisi bu sure
+  // dolmadan verilmez — `FHE.allow` geri alinamadigi icin sira boyle olmak
+  // zorunda. Buradaki bekleme, mekanizmanin gercek agda da yururlukte
+  // oldugunun kanitidir.
+  const windowEnd: bigint = await protocol.challengeWindowEnd(q.disclosureRequestId);
+  if (await protocol.isDisclosureGranted(q.disclosureRequestId)) {
+    console.log("Acilim zaten yurutulmus — itiraz adimi atlaniyor.");
+  } else {
+    // Blok numarasi yoklamasi RPC kopmalarina DAYANIKLI olmali: burada
+    // dakikalarca beklenir ve tek bir ECONNRESET butun canli dogrulamayi
+    // bosa cikarirdi. Gecici hata yutulur, kalici hata sonunda yine duser.
+    const readBlock = async (): Promise<bigint> => {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          return BigInt(await ethers.provider.getBlockNumber());
+        } catch (err) {
+          if (attempt === 4) throw err;
+          await new Promise((resolve) => setTimeout(resolve, 3_000));
+        }
+      }
+      throw new Error("blok numarasi okunamadi");
+    };
+
+    let current = await readBlock();
+    if (current < windowEnd) {
+      console.log(`Itiraz suresi acik: blok ${current} -> ${windowEnd}, bekleniyor...`);
+      while (current < windowEnd) {
+        await new Promise((resolve) => setTimeout(resolve, 6_000));
+        current = await readBlock();
+      }
+      console.log(`  itiraz suresi doldu (blok ${current})`);
+    }
+
+    const execTx = await protocol.executeDisclosure(q.disclosureRequestId);
+    const execReceipt = await execTx.wait();
+    console.log(`executeDisclosure tx: ${execTx.hash}  (gas ${execReceipt?.gasUsed})`);
+  }
+
+  if (!(await protocol.isDisclosureGranted(q.disclosureRequestId))) {
+    throw new Error("itiraz suresi sonrasi cozum yetkisi verilmedi");
   }
 
   const settleTx = await payments.settleQuery(queryId);
