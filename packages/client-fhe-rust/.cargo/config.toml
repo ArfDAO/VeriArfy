@@ -1,0 +1,15 @@
+# tfhe-rs anahtarlari test is parcaciginin varsayilan yiginina SIGMAZ.
+#
+# Belirti yaniltici: `cargo test --lib` bazi makinelerde gecer, bazilarinda
+# "thread has overflowed its stack / SIGABRT" ile duser. Duseni derleme hatasi
+# saymak kolaydir ama testlerin hicbirinde yanlislik yoktur — 29'u da gecer,
+# yalnizca yigin yetmez. Paralel kosumda birden fazla `ClientKey` ayni anda
+# olusturuldugu icin sorun once burada gorunur.
+#
+# Rust'in varsayilan is parcacigi yigini 2 MiB'dir; `RUST_MIN_STACK` bunu
+# yukseltir. 64 MiB, `keygen` + `safe_serialize` icin rahat bir tavandir.
+#
+# Bu ayar depoya YAZILIR, gelistiricinin kabuguna birakilmaz: aksi halde
+# "bende calisiyor" ile "CI'da dusuyor" arasinda gezinen bir hata olur.
+[env]
+RUST_MIN_STACK = "67108864"
