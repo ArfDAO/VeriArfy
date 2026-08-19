@@ -1,0 +1,14 @@
+{
+  "dealClient": "0x7792CfB943F6523AB247e1a33835c758847a1732",
+  "proposalId": "0xaca494a960cc18f4b3ad60c2ce9b295bfa9a428783c3fc8564097a6ad4f6bc5f",
+  "pieceCid": "baga6ea4seaqfcsbi75owzonb4u2n6hz4j5vwkfel5v5nepiljq5hxeqra5v5mpa",
+  "pieceCidHex": "0x0181e203922020514828ff5d6cb9a1e534df1f3c4f6b65148bed7ad23d0b4c3a7b9211076bd63c",
+  "pieceSize": 131072,
+  "carUrl": "https://gateway.pinata.cloud/ipfs/bafkreie5bzl6wzo54numkadypsvppsl35qkl67czgromv7ui77kxbt6nwm",
+  "carSize": 65660,
+  "rootCid": "bafkreiaz6gv662glbydj3nndgohm43k55puxaavr2awrqgmi6l3p2cphrm",
+  "startEpoch": 3989275,
+  "endEpoch": 4507675,
+  "proposedAt": "2026-08-14T22:12:02.135Z",
+  "proposalTx": "0x18543c5bd2853f92012e328ccd8528f5049b777ca9141d47e4b8d6ba81d04b50"
+}
