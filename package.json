@@ -2,7 +2,7 @@
   "name": "veriarfy",
   "private": true,
   "version": "0.1.0",
-  "description": "VeriArfy \u2014 FHE tabanli biyoinformatik veri paylasim agi. ZK ile kimlik, FHE ile veri.",
+  "description": "VeriArfy — FHE tabanli biyoinformatik veri paylasim agi. ZK ile kimlik, FHE ile veri.",
   "engines": {
     "node": ">=20"
   },
@@ -42,5 +42,13 @@
   },
   "devDependencies": {
     "multiformats": "^13.4.2"
+  },
+  "dependencies": {
+    "@ipld/car": "^5.4.7",
+    "@nomicfoundation/solidity-analyzer": "^0.1.2",
+    "@web3-storage/data-segment": "^5.3.0",
+    "@zondax/filecoin-solidity": "^4.0.3",
+    "blockstore-core": "^7.0.1",
+    "ipfs-unixfs-importer": "^17.0.1"
   }
 }
