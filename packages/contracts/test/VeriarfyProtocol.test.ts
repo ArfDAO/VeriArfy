@@ -5,6 +5,7 @@ import { expect } from "chai";
 import { ethers, fhevm } from "hardhat";
 import { FhevmType } from "@fhevm/mock-utils";
 import type { Signer } from "ethers";
+import { protocolFactory } from "./helpers/factories";
 
 /**
  * VeriarfyProtocol — FHEVM mock ortaminda uctan uca dogrulama.
@@ -31,8 +32,13 @@ describe("VeriarfyProtocol", () => {
   const THRESHOLD = 2; // 2-of-3
   const MIN_PARTICIPANTS = 3;
 
-  /** Gercekci bir panel: 16 SNP dozaji (0 | 1 | 2). */
-  const PANEL = [0, 1, 2, 1, 0, 0, 2, 1, 1, 0, 2, 2, 0, 1, 0, 1];
+  /**
+   * Gercekci bir panel (0 | 1 | 2), uzunlugu devrenin `PANEL_SIZE`'indan gelir.
+   *
+   * Sabit uzunlukta yazilmaz: panel buyudugunde "uzunluk uyusmuyor" ile
+   * duserdi. Testin dogruladigi sey uzunluk degil DAVRANISTIR.
+   */
+  let PANEL: number[];
 
   const CIRCUITS_DIR = join(__dirname, "..", "..", "circuits");
   const PROVENANCE_WASM = join(
@@ -55,6 +61,10 @@ describe("VeriarfyProtocol", () => {
     }
 
     provenance = await import("@veriarfy/circuits/provenance");
+    PANEL = Array.from(
+      { length: provenance.PANEL_SIZE },
+      (_: unknown, i: number) => [0, 1, 2, 1, 0, 2][i % 6],
+    );
     snarkjs = await import("snarkjs");
 
     registry = provenance.createInstitutionRegistry();
@@ -70,7 +80,7 @@ describe("VeriarfyProtocol", () => {
     const verifier = await Verifier.deploy();
     await verifier.waitForDeployment();
 
-    const Factory = await ethers.getContractFactory("VeriarfyProtocol");
+    const Factory = await protocolFactory();
     protocol = await Factory.deploy(
       await owner.getAddress(),
       THRESHOLD,
@@ -170,6 +180,9 @@ describe("VeriarfyProtocol", () => {
 
     await protocol.connect(nodeA).approveDisclosure(0);
     await protocol.connect(nodeB).approveDisclosure(0);
+    // Rapor §2.7.1: esik saglanmak yetmez, itiraz suresi de gecmelidir.
+    // Bu dosyada sure 0'dir; suresi olan hal `VeriarfyStaking.test.ts`'te.
+    await protocol.executeDisclosure(0);
 
     const handle = await protocol.disclosureSnapshot(0);
     return fhevm.userDecryptEuint(FhevmType.euint32, handle, protocolAddr, researcher);
@@ -369,20 +382,32 @@ describe("VeriarfyProtocol", () => {
       expect(await discloseAndDecrypt()).to.equal(6n);
     });
 
-    it("arali disi dozaj homomorfik olarak 2'ye kirpilir", async () => {
-      // Kotu niyetli istemci 255 gonderiyor; toplam 255 degil 2 artmali.
+    it("arali disi dozaj EKSIK sayilir, toplami sismez", async () => {
+      // DAVRANIS DEGISTI (MK-0013): kirpma artik 2'ye degil
+      // `DOSAGE_MISSING`e (3) yapiliyor.
+      //
+      // Neden: gercek veride arali disi deger cogunlukla KOTU NIYET degil
+      // EKSIK OLCUMDUR (tuketici cipleri paneli tam kapsamaz). Bunu 2'ye
+      // kirpmak "homozigot mutant" demekti — uydurma bir gozlem. 3'e kirpmak
+      // ise katilimciyi o varyantin tablosundan dislar.
+      //
+      // Havuz toplami acisindan sonuc: 255 -> 3 eklenir. Bu bir "sayim"
+      // degil, isarettir; kontenjans tablosu 3'u hicbir hucreye koymaz.
       await aggregate(alice, 255);
       await aggregate(bob, 1);
       await aggregate(carol, 0);
 
-      expect(await discloseAndDecrypt()).to.equal(3n);
+      expect(await discloseAndDecrypt()).to.equal(4n); // 3 + 1 + 0
     });
 
     it("ayni adres iki kez katkida bulunamaz", async () => {
+      // Cok SNP'li panele gecisle birlikte koruma "zaten toplandi"dan
+      // "zaten kaydoldu"ya tasindi: grup bir kez yazilir, dozajlar sirali
+      // partiler halinde eklenir. Ikinci bir kayit denemesi reddedilir.
       await aggregate(alice, 1);
       await expect(aggregate(alice, 1)).to.be.revertedWithCustomError(
         protocol,
-        "AlreadyAggregated",
+        "AlreadyEnrolled",
       );
     });
   });
@@ -468,7 +493,12 @@ describe("VeriarfyProtocol", () => {
     it("esige ulasinca ARASTIRMACI cozebilir (rapor §2.5.2 adim 6)", async () => {
       await request(outsider, STATISTICS);
       await protocol.connect(nodeA).approveDisclosure(0);
+
+      // Esige ulasmak artik YETKI VERMEZ, yalnizca itiraz suresini baslatir
+      // (rapor §2.7.1). Iki olay bilincli olarak ayridir.
       await expect(protocol.connect(nodeB).approveDisclosure(0))
+        .to.emit(protocol, "DisclosureFinalized");
+      await expect(protocol.executeDisclosure(0))
         .to.emit(protocol, "DisclosureGranted")
         .withArgs(0, 3);
 
@@ -522,6 +552,7 @@ describe("VeriarfyProtocol", () => {
 
       await protocol.connect(nodeA).approveDisclosure(0);
       await protocol.connect(nodeB).approveDisclosure(0);
+      await protocol.executeDisclosure(0);
 
       const handle = await protocol.disclosureSnapshot(0);
       const clear = await fhevm.userDecryptEuint(
