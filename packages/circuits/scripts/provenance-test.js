@@ -42,7 +42,18 @@ const ZKEY = join(BUILD, "data_provenance_final.zkey");
 const VKEY = join(BUILD, "data_provenance_verification_key.json");
 
 /** Gercekci bir panel: 16 SNP dozaji. */
-const PANEL = [0, 1, 2, 1, 0, 0, 2, 1, 1, 0, 2, 2, 0, 1, 0, 1];
+/**
+ * Test paneli, `PANEL_SIZE`'dan TURETILIR — sabit uzunlukta yazilmaz.
+ *
+ * Onceden 16 elemanlik sabit bir diziydi ve panel buyutuldugunde testler
+ * "uzunluk uyusmuyor" ile dustu. Boyut degistiginde testin de degismesi
+ * gerekmesi, testi kirilgan yapar; asil dogrulanan sey uzunluk degil
+ * davranistir.
+ *
+ * Desen tekrarlanir ama sabit degildir: her uc dozaj degeri de temsil edilir,
+ * boylece bicim kontrolu (0/1/2) gercekten sinanir.
+ */
+const PANEL = Array.from({ length: PANEL_SIZE }, (_, i) => [0, 1, 2, 1, 0, 2][i % 6]);
 
 const EXTERNAL_NULLIFIER = 20260814n;
 const CID_DIGEST = "0x6141536c73ac0f16a16230490be5131d044466a72ff6c5b31b2eccdd4ffb9b30";
@@ -144,13 +155,16 @@ async function main() {
   ok("kanit CID'e ve yukleyen cuzdana bagli");
 
   // Panelin kendisi hicbir acik sinyalde gorunmemeli.
-  const packed = packPanel(PANEL);
-  assert.equal(
-    result.publicSignals.some((s) => BigInt(s) === packed),
-    false,
-    "paketlenmis panel acik sinyallerde gorunuyor — gizlilik ihlali",
-  );
-  ok("panel acik sinyallerde GORUNMUYOR");
+  // `packPanel` artik PARCA LISTESI dondurur; hicbir parca sizmamali.
+  const packedChunks = packPanel(PANEL);
+  for (const chunk of packedChunks) {
+    assert.equal(
+      result.publicSignals.some((s) => BigInt(s) === chunk),
+      false,
+      "paketlenmis panel parcasi acik sinyallerde gorunuyor — gizlilik ihlali",
+    );
+  }
+  ok(`panel acik sinyallerde GORUNMUYOR (${packedChunks.length} parca)`);
 
   // --- 2) Saldiri: imzasiz veri --------------------------------------------
   await expectRejection("akredite olmayan laboratuvarin imzasi reddedildi", {
