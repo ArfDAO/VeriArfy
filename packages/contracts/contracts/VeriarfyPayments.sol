@@ -6,8 +6,22 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
+import {RarityMath} from "./libraries/RarityMath.sol";
+
 interface IVeriarfyProtocol {
     function participantIndex(address account) external view returns (uint32);
+    /// @notice Havuzun tamami ve dogrulanmis nadir tasiyici sayisi (rapor §4.3).
+    function rarityStats() external view returns (uint32 poolCount, uint32 carriers);
+    /// @notice Izin ANINDA dondurulmus nadirlik durumu.
+    function rareAtGrant(address participant, address researcher) external view returns (bool);
+    /// @notice Bu arastirmaciya izin veren nadir tasiyici sayisi.
+    function consentRareCount(address researcher) external view returns (uint32);
+    /// @notice Bu arastirmaciya izin veren Kurucu Katkici sayisi.
+    function consentFoundingCount(address researcher) external view returns (uint32);
+    /// @notice Hem nadir hem Kurucu olan izin verenler.
+    function consentRareFoundingCount(address researcher) external view returns (uint32);
+    /// @notice Ilk 10.000 saglayicidan biri mi?
+    function isFoundingContributor(address account) external view returns (bool);
     /// @notice Acilim talebi acar; esik sorgu tipine gore belirlenir (rapor §2.6).
     function requestDisclosure(address researcher, uint8 queryType)
         external
@@ -59,7 +73,17 @@ interface IResearcherRegistry {
  * Tutarli olan tek okuma uygulandi:
  *
  *     havuz      = ucret x 0.80
- *     kisi basi  = havuz / katilimciSayisi
+ *     kisi basi  = havuz x (kisinin agirligi / toplam agirlik)
+ *
+ * # Agirliklar — rapor §4.3
+ *
+ * Agirlik iki carpandan olusur ve baz puan cinsindendir (10.000 = 1,00x):
+ *
+ *     Nadirlik Carpani  R = log2(1 + N_havuz / N_tasiyici)   (yalnizca tasiyicilar)
+ *     Kurucu Katkici    +%50 kalici                          (ilk 10.000 saglayici)
+ *
+ * Hicbiri gecerli degilse agirlik 1,00x'tir ve dagitim esit boluse doner —
+ * yani nadirlik ozelligi eski davranisin ustune eklenmistir, yerine gecmemistir.
  *
  * # Raporun O(N) sorunu — cozuldu
  *
@@ -186,6 +210,25 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
          */
         bool settled;
         bool refunded;
+        /**
+         * @dev Nadirlik Carpani, sorgu acildigi anda SABITLENIR.
+         *
+         * `R = log2(1 + N/C)` havuz buyudukce degisir. Sabitlenmeseydi, bir
+         * sorgudan alinacak pay sorgudan SONRA havuza katilan kisilere gore
+         * degisirdi ve paylarin toplami havuzu asabilirdi.
+         *
+         * Yalnizca iki sayi saklanir; carpan bunlardan yeniden hesaplanir
+         * (`RarityMath` saf fonksiyondur). Boylece kayit O(1) kalir.
+         */
+        uint32 snapshotPoolCount;
+        uint32 snapshotCarriers;
+        /**
+         * @dev Anlik goruntudeki TOPLAM agirlik (baz puan).
+         *
+         * Bireysel paylarin paydasi. Sorgu aninda dort sayacdan O(1) hesaplanir;
+         * izin verenler listesi hicbir zaman dolasilmaz.
+         */
+        uint256 totalWeightBps;
     }
 
     mapping(uint256 queryId => Query) private _queries;
@@ -196,6 +239,16 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
 
     /// @notice Hazinede biriken tutar (%20 + bolme artiklari).
     uint256 public treasuryBalance;
+
+    /**
+     * @notice Sistemden bugune kadar GECEN toplam ucret — rapor §2.7.1
+     *         formulundeki `TotalDataValue`.
+     *
+     * @dev Hazine bakiyesinden farklidir: hazine cekildikce azalir, bu sayac
+     *      azalmaz. Progresif teminat "ag ne kadar deger tasidi" sorusuna
+     *      bakar; "kasada su an ne var" sorusuna degil.
+     */
+    uint256 public cumulativeFees;
 
     // ---------------------------------------------------------------------------------
 
@@ -309,6 +362,11 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
         // Acilim talebi — esigi protokol, sorgu tipine gore hesaplar.
         uint256 requestId = protocol.requestDisclosure(msg.sender, queryType);
 
+        // Nadirlik anlik goruntusu (rapor §4.3). Carpanin girdisi HAVUZUN
+        // TAMAMIDIR; izin verenlerin sayisi degil — nadirlik, varyantin
+        // populasyondaki gercek seyrekligidir.
+        (uint32 poolCount, uint32 carriers) = protocol.rarityStats();
+
         queryId = nextQueryId++;
         _queries[queryId] = Query({
             researcher: msg.sender,
@@ -321,7 +379,10 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
             claimedTotal: 0,
             disclosureRequestId: requestId,
             settled: false,
-            refunded: false
+            refunded: false,
+            snapshotPoolCount: poolCount,
+            snapshotCarriers: carriers,
+            totalWeightBps: _totalWeightBps(msg.sender, participants, poolCount, carriers)
         });
 
         emit QueryOpened(queryId, msg.sender, fee, requestId, participants);
@@ -348,6 +409,11 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
         q.settled = true;
 
         treasuryBalance += q.fee - liquidityPot;
+
+        // Rapor §2.7.1'deki "TotalDataValue" — progresif teminatin girdisi.
+        // Iade edilen sorgular sayilmaz: iade, sistemden deger gecmedigi
+        // anlamina gelir. Bu yuzden sayac `openQuery`'de degil BURADA artar.
+        cumulativeFees += q.fee;
 
         emit QuerySettled(queryId, liquidityPot, q.fee - liquidityPot);
     }
@@ -411,7 +477,11 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
             revert NotInThisQuery(msg.sender, 0, q.snapshotCount);
         }
 
-        amount = q.liquidityPot / q.snapshotCount;
+        // Tutar `claimable` ile AYNI ifadeden gelmelidir. Iki yerde ayri ayri
+        // yazilsaydi (bir kere burada, bir kere gorunumde) panelde gosterilen
+        // ile odenen sessizce ayrisirdi — nitekim nadirlik agirliklari
+        // eklenirken tam bu oldu ve test yakaladi.
+        amount = (q.liquidityPot * weightOf(queryId, msg.sender)) / q.totalWeightBps;
 
         hasClaimed[queryId][msg.sender] = true;
         q.claimedTotal += amount;
@@ -429,7 +499,105 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
         if (protocol.participantIndex(account) == 0) return 0;
         if (!protocol.hasAccessAt(account, q.researcher, q.openedAtBlock)) return 0;
 
-        return q.liquidityPot / q.snapshotCount;
+        // Payda sifir olamaz: `snapshotCount > 0` ise en az bir izin veren
+        // vardir ve her agirlik en az `ONE_BPS`'tir.
+        return (q.liquidityPot * weightOf(queryId, account)) / q.totalWeightBps;
+    }
+
+    /**
+     * @notice Bir katilimcinin BELIRLI BIR SORGUDAKI agirligi (baz puan).
+     *
+     * @dev  Nadirlik durumu `rareAtGrant` uzerinden okunur, guncel durumdan
+     *       DEGIL. Sebep: paydayi olusturan sayaclar da izin anindaki duruma
+     *       gore tutulur; ikisi ayni kaynaktan beslenmezse paylarin toplami
+     *       havuzu asabilir.
+     *
+     *       `hasAccessAt` zaten `grantedAtBlock <= openedAtBlock` sartini
+     *       arar; dolayisiyla burada okunan izin, sorgu acildiginda yururlukte
+     *       olan iznin ta kendisidir. Sonradan yenilenen bir izin eski
+     *       sorgulari etkilemez cunku o sorgularda hakedis zaten dusar.
+     */
+    function weightOf(uint256 queryId, address account) public view returns (uint256) {
+        Query storage q = _queries[queryId];
+        if (q.snapshotCount == 0) revert UnknownQuery(queryId);
+
+        uint256 weight = RarityMath.ONE_BPS;
+
+        if (protocol.rareAtGrant(account, q.researcher)) {
+            weight = RarityMath.multiplierBps(q.snapshotPoolCount, q.snapshotCarriers);
+        }
+        if (protocol.isFoundingContributor(account)) {
+            weight = RarityMath.withFoundingBonus(weight);
+        }
+        return weight;
+    }
+
+    /**
+     * @notice Anlik goruntudeki toplam agirlik — payin paydasi.
+     *
+     * @dev  Izin verenler DOLASILMAZ. Dort sayac dort ayrik kumeyi verir ve
+     *       toplam bu kumelerin agirliklarinin toplamidir:
+     *
+     *         N  = izin veren toplam        (`consentCount`)
+     *         C  = izin veren tasiyici      (`consentRareCount`)
+     *         F  = izin veren Kurucu        (`consentFoundingCount`)
+     *         CF = izin veren tasiyici+Kurucu
+     *
+     *         duz            = N - C - F + CF   agirlik 1,00x
+     *         yalniz Kurucu  = F - CF           agirlik 1,50x
+     *         yalniz tasiyici= C - CF           agirlik R
+     *         ikisi birden   = CF               agirlik R x 1,5
+     *
+     *       Kumeler ayrik ve tam oldugu icin toplam, `weightOf`'un tum izin
+     *       verenler uzerindeki toplamina BIREBIR esittir — ayni yardimci
+     *       fonksiyonlar kullanildigi surece yuvarlama farki da olusmaz.
+     */
+    function _totalWeightBps(
+        address researcher,
+        uint32 consenting,
+        uint32 poolCount,
+        uint32 carriers
+    ) private view returns (uint256) {
+        uint256 rare = protocol.consentRareCount(researcher);
+        uint256 founding = protocol.consentFoundingCount(researcher);
+        uint256 both = protocol.consentRareFoundingCount(researcher);
+
+        uint256 multiplier = RarityMath.multiplierBps(poolCount, carriers);
+
+        // ISLEM SIRASI ONEMLI: `N - C - F + CF` matematiksel olarak dogru ama
+        // ara adimda negatife duser (ornek: N=2, C=1, F=2, CF=1 -> "2-1-2").
+        // Solidity'de bu bir tasma paniğidir. Once eklenir, sonra cikarilir.
+        uint256 plain = uint256(consenting) + both - rare - founding;
+
+        return
+            plain * RarityMath.ONE_BPS +
+            (founding - both) * RarityMath.withFoundingBonus(RarityMath.ONE_BPS) +
+            (rare - both) * multiplier +
+            both * RarityMath.withFoundingBonus(multiplier);
+    }
+
+    /**
+     * @notice Sorgunun nadirlik anlik goruntusu — panel ve denetim icin.
+     * @dev `multiplierBps` bu sorguda tasiyicilara uygulanan carpandir.
+     */
+    function queryWeights(uint256 queryId)
+        external
+        view
+        returns (
+            uint32 poolCount,
+            uint32 carriers,
+            uint256 multiplierBps,
+            uint256 totalWeightBps
+        )
+    {
+        Query storage q = _queries[queryId];
+        if (q.snapshotCount == 0) revert UnknownQuery(queryId);
+        return (
+            q.snapshotPoolCount,
+            q.snapshotCarriers,
+            RarityMath.multiplierBps(q.snapshotPoolCount, q.snapshotCarriers),
+            q.totalWeightBps
+        );
     }
 
     /**
