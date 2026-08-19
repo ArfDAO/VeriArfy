@@ -35,6 +35,16 @@
 use std::fmt::{self, Display};
 
 use js_sys::{Function, Reflect, Uint8Array};
+use std::collections::HashSet;
+
+/// Eksik / cagirilamamis genotip isareti.
+///
+/// `VeriarfyProtocol.DOSAGE_MISSING` ile AYNI olmak zorundadir: sozlesme
+/// aralik disi degeri buna kirpar ve 3, kontenjans tablosunun sordugu
+/// `dozaj == 0|1|2` sorularinin hicbirine uymaz.
+pub const DOSAGE_MISSING: u8 = 3;
+
+use noodles_vcf::variant::record::Ids as _;
 use noodles_vcf::{
     self as vcf, Header, Record,
     variant::record::samples::series::{Value, value::genotype::Genotype},
@@ -79,11 +89,18 @@ fn err(msg: impl Display) -> ParseError {
 #[wasm_bindgen]
 pub struct VcfParseResult {
     dosages: Vec<u8>,
+    /// Dozajlarla AYNI SIRADA varyant kimlikleri (rsID).
+    ///
+    /// Panel filtresi verilmediyse bos kalir: milyonlarca kimligi bellekte
+    /// tutmak tarayiciyi sisirirdi ve filtresiz modda kimseye lazim degildir.
+    ids: Vec<String>,
     sample_name: String,
     sample_names: Vec<String>,
     variant_count: u32,
     missing_genotype_count: u32,
     skipped_line_count: u32,
+    /// Panelde bulunmadigi icin atlanan varyant sayisi (filtreli modda).
+    filtered_out_count: u32,
     bytes_processed: f64,
 }
 
@@ -97,6 +114,18 @@ impl VcfParseResult {
     #[wasm_bindgen(getter)]
     pub fn dosages(&self) -> Uint8Array {
         Uint8Array::from(&self.dosages[..])
+    }
+
+    /// Dozajlarla ayni siradaki varyant kimlikleri.
+    ///
+    /// PANELE HIZALAMANIN SART KOSULU. Zincir yalnizca sirali dozajlar gorur;
+    /// hangi varyanta ait olduklari yazili degildir. Kimlikler cikmadan iki
+    /// kullanicinin "3 numarali SNP"si farkli varyantlar olur ve kontenjans
+    /// tablosu alakasiz seyleri toplar — tek kullaniciyla fark edilmeyen,
+    /// ikinci kullanicida sessizce bozulan bir hata.
+    #[wasm_bindgen(getter)]
+    pub fn ids(&self) -> Vec<String> {
+        self.ids.clone()
     }
 
     /// Dozaji hesaplanan ornek (sample) adi.
@@ -129,6 +158,15 @@ impl VcfParseResult {
         self.skipped_line_count
     }
 
+    /// Panelde bulunmadigi icin atlanan varyant sayisi.
+    ///
+    /// Kapsama oranini gostermek icin: "dosyada 601.885 varyant vardi,
+    /// panelin 998'i bulundu, 2'si dosyada yok."
+    #[wasm_bindgen(getter, js_name = filteredOutCount)]
+    pub fn filtered_out_count(&self) -> u32 {
+        self.filtered_out_count
+    }
+
     /// Okunan toplam bayt (ilerleme dogrulamasi icin).
     #[wasm_bindgen(getter, js_name = bytesProcessed)]
     pub fn bytes_processed(&self) -> f64 {
@@ -156,6 +194,16 @@ pub struct VcfStreamParser {
     record: Record,
     /// Cikti dozaj vektoru.
     dosages: Vec<u8>,
+    /// Filtreli modda dozajlarla ayni siradaki varyant kimlikleri.
+    ids: Vec<String>,
+    /// Panelin rsID kumesi. `None` ise TUM varyantlar dosya sirasiyla alinir.
+    ///
+    /// Filtreleme burada yapilir cunku tum genom VCF'i milyonlarca satirdir;
+    /// hepsini alip sonra JS tarafinda elemek, isin buyuk kismini bellege
+    /// tasimak olurdu.
+    wanted: Option<HashSet<String>>,
+    /// Panelde OLMADIGI icin atlanan varyant sayisi.
+    filtered_out_count: u32,
     /// Hedef ornegin kolon indeksi.
     sample_index: usize,
     /// Kullanicinin istedigi ornek adi (yoksa ilk ornek kullanilir).
@@ -184,6 +232,9 @@ impl VcfStreamParser {
             line_buf: Vec::with_capacity(4096),
             record: Record::default(),
             dosages: Vec::new(),
+            ids: Vec::new(),
+            wanted: None,
+            filtered_out_count: 0,
             sample_index: 0,
             requested_sample: sample_name.filter(|s| !s.is_empty()),
             resolved_sample_name: String::new(),
@@ -194,6 +245,26 @@ impl VcfStreamParser {
             bytes_processed: 0.0,
             finished: false,
         }
+    }
+
+    /// Calismanin panelini verir: YALNIZCA bu kimlikler toplanir.
+    ///
+    /// Verildiginde sonuc `ids` alani dolar ve dozajlar panele hizalanabilir
+    /// hale gelir. Verilmezse eski davranis surer (tum varyantlar, dosya
+    /// sirasiyla, kimliksiz).
+    #[wasm_bindgen(js_name = setWantedIds)]
+    pub fn set_wanted_ids(&mut self, ids: Vec<String>) {
+        if ids.is_empty() {
+            self.wanted = None;
+            return;
+        }
+        self.wanted = Some(ids.into_iter().collect());
+    }
+
+    /// Panelde bulunmadigi icin atlanan varyant sayisi.
+    #[wasm_bindgen(getter, js_name = filteredOutCount)]
+    pub fn filtered_out_count(&self) -> u32 {
+        self.filtered_out_count
     }
 
     /// Beklenen varyant sayisi biliniyorsa cagirin: dozaj vektoru tek seferde tahsis
@@ -282,11 +353,13 @@ impl VcfStreamParser {
 
         Ok(VcfParseResult {
             dosages: std::mem::take(&mut self.dosages),
+            ids: std::mem::take(&mut self.ids),
             sample_name: self.resolved_sample_name.clone(),
             sample_names: self.sample_names.clone(),
             variant_count: self.variant_count,
             missing_genotype_count: self.missing_genotype_count,
             skipped_line_count: self.skipped_line_count,
+            filtered_out_count: self.filtered_out_count,
             bytes_processed: self.bytes_processed,
         })
     }
@@ -334,14 +407,53 @@ impl VcfStreamParser {
             .read_record(&mut self.record)
             .map_err(|e| err(format!("varyant satiri ayristirilamadi: {e}")))?;
 
+        // PANEL FILTRESI — varsa, once kimlige bakilir.
+        //
+        // Kimlik cikarmak ucuz degil (ID alani dolasilir), ama alternatifi tum
+        // genomu bellege almak. Filtre yoksa bu blok hic calismaz.
+        let matched_id = match &self.wanted {
+            None => None,
+            Some(wanted) => {
+                let mut found: Option<String> = None;
+                for id in self.record.ids().iter() {
+                    if wanted.contains(id) {
+                        found = Some(id.to_string());
+                        break;
+                    }
+                }
+                match found {
+                    Some(id) => Some(id),
+                    None => {
+                        self.filtered_out_count += 1;
+                        return Ok(());
+                    }
+                }
+            }
+        };
+
         match genotype_dosage(header, &self.record, self.sample_index)? {
             Some(Dosage::Called(d)) => {
                 self.dosages.push(d);
+                if let Some(id) = matched_id {
+                    self.ids.push(id);
+                }
                 self.variant_count += 1;
             }
             Some(Dosage::Missing) => {
-                // Hizalamayi bozmamak icin yer tutucu 0 yazilir, sayaca islenir.
-                self.dosages.push(0);
+                // EKSIK ICIN 0 YAZMAK SESSIZ BIR YALANDIR.
+                //
+                // 0, "homozigot referans" demektir — yani "bu mutasyonu
+                // tasimiyor". Cagirilamamis bir genotipin dogru ifadesi
+                // "bilmiyoruz"dur. 0 yazmak alel frekanslarini sistematik
+                // olarak asagi ceker ve GWAS sonuclarini bozar.
+                //
+                // `DOSAGE_MISSING` sozlesmedeki degerle AYNIDIR: tablo
+                // `dozaj == 0|1|2` sorularini sorar, 3 hicbirine uymaz ve
+                // katilimci o varyantin tablosuna hic girmez.
+                self.dosages.push(DOSAGE_MISSING);
+                if let Some(id) = matched_id {
+                    self.ids.push(id);
+                }
                 self.variant_count += 1;
                 self.missing_genotype_count += 1;
             }
@@ -565,7 +677,20 @@ chr1\t600\trs6\tA\tG\t50\tPASS\t.\tDP\t33\t21
 ";
 
     fn parse_all(src: &str, chunk_size: usize, sample: Option<&str>) -> VcfParseResult {
+        parse_filtered(src, chunk_size, sample, &[])
+    }
+
+    /// `wanted` bos degilse panel filtresi acilir.
+    fn parse_filtered(
+        src: &str,
+        chunk_size: usize,
+        sample: Option<&str>,
+        wanted: &[&str],
+    ) -> VcfParseResult {
         let mut parser = VcfStreamParser::new(sample.map(String::from));
+        if !wanted.is_empty() {
+            parser.set_wanted_ids(wanted.iter().map(|s| s.to_string()).collect());
+        }
         for chunk in src.as_bytes().chunks(chunk_size) {
             parser.push_chunk_inner(chunk).unwrap();
         }
@@ -576,7 +701,10 @@ chr1\t600\trs6\tA\tG\t50\tPASS\t.\tDP\t33\t21
     fn dosages_follow_the_mapping_rules() {
         let result = parse_all(VCF, 4096, None);
         // rs1=0/0, rs2=0/1, rs3=1|1, rs4=./., rs5=1/2 ; rs6'da GT yok -> atlanir
-        assert_eq!(result.dosages, vec![0, 1, 2, 0, 2]);
+        //
+        // rs4 CAGIRILAMAMIS: 0 degil DOSAGE_MISSING (3) yazilir. 0 "homozigot
+        // referans" demektir ve bu sessiz bir yalandir.
+        assert_eq!(result.dosages, vec![0, 1, 2, DOSAGE_MISSING, 2]);
         assert_eq!(result.variant_count, 5);
         assert_eq!(result.missing_genotype_count, 1);
         assert_eq!(result.skipped_line_count, 1);
@@ -602,13 +730,70 @@ chr1\t600\trs6\tA\tG\t50\tPASS\t.\tDP\t33\t21
     #[test]
     fn crlf_line_endings_are_tolerated() {
         let crlf = VCF.replace('\n', "\r\n");
-        assert_eq!(parse_all(&crlf, 17, None).dosages, vec![0, 1, 2, 0, 2]);
+        assert_eq!(parse_all(&crlf, 17, None).dosages, vec![0, 1, 2, DOSAGE_MISSING, 2]);
     }
 
     #[test]
     fn missing_trailing_newline_is_handled() {
         let trimmed = VCF.trim_end_matches('\n');
-        assert_eq!(parse_all(trimmed, 33, None).dosages, vec![0, 1, 2, 0, 2]);
+        assert_eq!(parse_all(trimmed, 33, None).dosages, vec![0, 1, 2, DOSAGE_MISSING, 2]);
+    }
+
+    #[test]
+    fn missing_genotype_is_not_reported_as_reference() {
+        // Bu testin tek isi 0 ile 3'u ayirmak. Eksik veriye 0 yazmak alel
+        // frekanslarini sistematik olarak asagi ceker; hatanin tamami budur.
+        let result = parse_all(VCF, 4096, None);
+        assert_eq!(result.dosages[3], DOSAGE_MISSING);
+        assert_ne!(result.dosages[3], 0);
+        assert_eq!(result.missing_genotype_count, 1);
+    }
+
+    #[test]
+    fn panel_filter_keeps_only_wanted_variants_with_their_ids() {
+        // PANELE HIZALAMANIN TEMELI: dozajlarin yaninda KIMLIK de cikmali.
+        let result = parse_filtered(VCF, 4096, None, &["rs3", "rs1"]);
+
+        assert_eq!(result.ids, vec!["rs1", "rs3"], "kimlikler DOSYA sirasinda cikar");
+        assert_eq!(result.dosages, vec![0, 2]);
+        assert_eq!(result.variant_count, 2);
+        // rs2, rs4, rs5 VE rs6 — dordu de panelde yok.
+        //
+        // rs6'nin GT alani yok ama filtre GT COZUMUNDEN ONCE calisir, bu yuzden
+        // "atlanan satir" degil "panelde yok" sayilir. Sira bilincli: panelde
+        // olmayan bir satirin genotipini cozmek bosa is olurdu.
+        assert_eq!(result.filtered_out_count, 4);
+        assert_eq!(result.skipped_line_count, 0);
+    }
+
+    #[test]
+    fn panel_filter_keeps_ids_and_dosages_paired() {
+        // Eslesme bozulursa hizalama sessizce yanlis olur; boyut esitligi
+        // bunun en ucuz kontrolu.
+        let result = parse_filtered(VCF, 7, None, &["rs1", "rs4", "rs5"]);
+        assert_eq!(result.ids.len(), result.dosages.len());
+        assert_eq!(result.ids, vec!["rs1", "rs4", "rs5"]);
+        // rs4 cagirilamamis -> eksik isareti.
+        assert_eq!(result.dosages, vec![0, DOSAGE_MISSING, 2]);
+    }
+
+    #[test]
+    fn panel_filter_survives_chunk_boundaries() {
+        let reference = parse_filtered(VCF, 4096, None, &["rs1", "rs3", "rs5"]);
+        for size in [1, 2, 3, 7, 13, 64] {
+            let got = parse_filtered(VCF, size, None, &["rs1", "rs3", "rs5"]);
+            assert_eq!(got.dosages, reference.dosages, "chunk={size}");
+            assert_eq!(got.ids, reference.ids, "chunk={size}");
+        }
+    }
+
+    #[test]
+    fn without_a_filter_no_ids_are_collected() {
+        // Tum genom VCF'inde milyonlarca kimligi bellekte tutmak tarayiciyi
+        // sisirirdi; filtresiz modda kimseye lazim da degil.
+        let result = parse_all(VCF, 4096, None);
+        assert!(result.ids.is_empty());
+        assert_eq!(result.filtered_out_count, 0);
     }
 
     #[test]
@@ -621,5 +806,72 @@ chr1\t600\trs6\tA\tG\t50\tPASS\t.\tDP\t33\t21
     fn data_before_header_is_an_error() {
         let mut parser = VcfStreamParser::new(None);
         assert!(parser.push_chunk_inner(b"chr1\t100\t.\tA\tG\t.\t.\t.\tGT\t0/1\n").is_err());
+    }
+}
+
+#[cfg(test)]
+mod real_data_check {
+    use super::*;
+    use std::io::Read;
+
+    /// GERCEK 1000 Genomes verisiyle panel filtresi.
+    ///
+    /// # Bu testin belgeledigi BULGU
+    ///
+    /// 1000 Genomes faz 3 genotip VCF'lerinde **ID kolonu bostur** (`.`).
+    /// Varyant dosyada vardir — ornegin rs4680, `22:19951271 G>A` olarak —
+    /// ama ADI yazili degildir.
+    ///
+    /// Sonuc: rsID'ye gore hizalama bu dosyalarda HICBIR SEY bulamaz.
+    /// Bu bir hata degil, gercek verinin bir ozelligidir: kimlik bir
+    /// ANOTASYONDUR, ham cagri verisinin parcasi degil. Klinik VCF'lerin
+    /// buyuk kismi de boyle gelir.
+    ///
+    /// Tuketici dosyalari (23andMe, AncestryDNA) rsID TASIR; o yol calisir.
+    /// VCF tarafi icin konum+alel eslesmesi gerekir ve bu, panelin ilan
+    /// ettigi ASSEMBLY ile dosyanin ayni olmasini sart kosar.
+    ///
+    /// Dosya depoda yoktur; testi calistirmak icin:
+    ///     VERIARFY_TEST_VCF_GZ=/yol/ALL.chr22...vcf.gz cargo test -- --nocapture
+    #[test]
+    fn thousand_genomes_phase3_has_no_variant_ids() {
+        let path = match std::env::var("VERIARFY_TEST_VCF_GZ") {
+            Ok(p) => p,
+            Err(_) => return, // dosya verilmediyse sessizce atla
+        };
+
+        let file = std::fs::File::open(&path).expect("vcf acilamadi");
+        let mut gz = flate2::read::MultiGzDecoder::new(file);
+
+        let mut parser = VcfStreamParser::new(None);
+        parser.set_wanted_ids(vec!["rs4680".into(), "rs1051730".into()]);
+
+        let mut buf = vec![0u8; 1 << 20];
+        loop {
+            let n = gz.read(&mut buf).expect("gz okunamadi");
+            if n == 0 {
+                break;
+            }
+            parser.push_chunk_inner(&buf[..n]).expect("ayristirma hatasi");
+        }
+        let result = parser.finish_inner().expect("finish hatasi");
+
+        println!("ornek          : {}", result.sample_name);
+        println!("ornek sayisi   : {}", result.sample_names.len());
+        println!("panelde bulunan: {:?}", result.ids);
+        println!("taranan varyant: {}", result.filtered_out_count);
+
+        // Akis SAGLAM calisiyor: milyonlarca varyant sorunsuz tarandi.
+        assert!(
+            result.filtered_out_count > 1_000_000,
+            "chr22 milyonlarca varyant icermeli — akis bozuk"
+        );
+        assert_eq!(result.sample_names.len(), 2504, "faz 3 panelinde 2504 ornek var");
+
+        // Ve BULGU: kimlik olmadigi icin hicbir eslesme yok.
+        assert!(
+            result.ids.is_empty(),
+            "faz 3 VCF'lerinde ID kolonu bostur; eslesme beklenmiyor"
+        );
     }
 }
