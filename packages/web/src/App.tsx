@@ -5,6 +5,8 @@ import { Survey, SurveyResult } from "./components/Survey";
 import { FheResults } from "./components/FheResults";
 import { PrivacyPanel } from "./components/PrivacyPanel";
 import { SectionHead, FeatureRow, Footer, StatRow } from "./components/Marketing";
+import { Contribute } from "./components/Contribute";
+import { SystemStatus } from "./components/SystemStatus";
 import { submitSurvey, getResults, getStats, type AnalysisResults } from "./lib/api";
 
 export default function App() {
@@ -57,6 +59,30 @@ export default function App() {
 
       <Hero />
       <StatRow participants={participantCount} />
+
+      {/* Sistem durumu — zincirden okunan gercek yapilandirma */}
+      <div className="section" style={{ marginTop: 48 }} id="durum">
+        <SectionHead
+          eyebrow="SİSTEM DURUMU"
+          title="Ne dağıtıldı, ne zorlanıyor"
+          sub="Aşağıdaki her satır sözleşmeden okundu. Panel özeti tarayıcıda yeniden hesaplanıp zincirdekiyle karşılaştırılır — tutmuyorsa katkı akışı kapanır."
+        />
+        <div style={{ maxWidth: 880, margin: "0 auto" }}>
+          <SystemStatus />
+        </div>
+      </div>
+
+      {/* Katki akisi — veri kategorisi 1 ve 2 */}
+      <div className="band" id="katil">
+        <div className="section">
+          <SectionHead
+            eyebrow="KATILIM"
+            title="Verinizi şifreli olarak paylaşın"
+            sub="Genomik dosyanız ve sürekli ölçümleriniz tarayıcıda şifrelenir. Sağdaki konsol her adımın kanıtını gösterir: işlem özeti, blok, gaz, ciphertext handle'ı ve zincirden geri okunan sonuç."
+          />
+          <Contribute />
+        </div>
+      </div>
 
       {/* Survey Section */}
       <div className="band" id="anket">
