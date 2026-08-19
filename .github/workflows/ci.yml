@@ -21,6 +21,12 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Gunluk kosum yalnizca depolama tanigini denetlemek icin (bkz. `storage-audit`).
+  # Kod degismese bile ZINCIRDEKI durum degisebilir: bir anlasma dusebilir,
+  # suresi dolabilir ya da tanik yanlis beyanda bulunabilir.
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
 
 # Ayni dal uzerinde yeni bir itme gelirse eskisini iptal et: CI kuyrugu
 # tutmasin.
@@ -87,6 +93,49 @@ jobs:
 
       - name: Testler
         run: npm run contracts:test
+
+  # ---------------------------------------------------------------------------
+  # Depolama tanigi denetimi — rapor §2.9.2
+  # ---------------------------------------------------------------------------
+  #
+  # NEDEN AYRI VE NEDEN GUNLUK
+  #
+  # `VeriarfyStorage` iki farkli sey yapar: politikayi ZORLAR (guvensiz) ama
+  # "boyle bir anlasma var mi" olgusunu bir TANIK beyan eder. Ethereum,
+  # Filecoin'in durumunu goremedigi icin bu kacinilmaz.
+  #
+  # Tasarim geregi tanigin yalani tespit EDILEBILIR: her kayit bir `dealId`
+  # tasir ve Filecoin'in herkese acik RPC'sinden dogrulanabilir. Ama
+  # "edilebilir" ile "edilir" ayni sey degildir — kimse betigi kosturmazsa
+  # yanlis kayit aylarca durur.
+  #
+  # Bu is o farki kapatir: tanik yanlis beyanda bulunursa en gec 24 saat
+  # icinde CI kirilir. Zincir durumu koda bagli olmadigi icin `schedule` ile
+  # de kosar.
+  #
+  # Kimlik bilgisi GEREKMEZ: hem Sepolia hem Filecoin ucu genel okuma.
+  storage-audit:
+    name: Depolama tanigi denetimi
+    runs-on: ubuntu-latest
+    # Catallar depo sirlarina erisemez; zaten sir gerekmiyor ama gereksiz
+    # kosumu de engelleyelim.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Derle
+        run: npm run contracts:compile
+
+      - name: Anlasma kayitlarini Filecoin ile karsilastir
+        working-directory: packages/contracts
+        run: npx hardhat run scripts/verify-storage-deals.ts --network sepolia
 
   # ---------------------------------------------------------------------------
   # ZK — Circom devresi bastan kuruluyor
