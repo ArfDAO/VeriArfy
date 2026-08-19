@@ -75,7 +75,21 @@ async function main() {
   const threshold = Number(process.env.DISCLOSURE_THRESHOLD ?? 2);
   const minParticipants = Number(process.env.MIN_PARTICIPANTS ?? 10);
 
-  const Protocol = await ethers.getContractFactory("VeriarfyProtocol");
+  // KUTUPHANE BAGLAMA.
+  //
+  // Protokol ve biyobelirtec modulu, EIP-170'in 24.576 baytlik kod sinirini
+  // asmamak icin agir homomorfik dongulerini `public` kutuphanelere tasiyor.
+  // Bu kutuphaneler ayri birer adrese dagitilir ve `delegatecall` ile
+  // cagrilir; adresleri fabrikaya BAGLANMAZSA dagitim duser.
+  const Contingency = await ethers.getContractFactory("ContingencyStats");
+  const contingency = await Contingency.deploy();
+  await contingency.waitForDeployment();
+  const contingencyAddress = await contingency.getAddress();
+  console.log(`ContingencyStats (kutuphane): ${contingencyAddress}`);
+
+  const Protocol = await ethers.getContractFactory("VeriarfyProtocol", {
+    libraries: { ContingencyStats: contingencyAddress },
+  });
   const protocol = await Protocol.deploy(
     deployer.address,
     threshold,
@@ -128,11 +142,185 @@ async function main() {
       `(katilimci payi %${liquidityShareBps / 100}, taban ${baseFee}, kisi basi ${perParticipantFee})`,
   );
 
+  // --- Calisma tanimlari ---------------------------------------------------
+  //
+  // `study/deploy-env.json`, `packages/web/scripts/prepare-study.ts` tarafindan
+  // uretilir: panel ozetleri ORADA, panelin kendisiyle ayni yerde hesaplanir ki
+  // ikisi birbirinden sapamasin. Dosya yoksa ortam degiskenlerine dusulur.
+  const studyEnvPath = join(__dirname, "..", "study", "deploy-env.json");
+  const studyEnv: Record<string, string> = existsSync(studyEnvPath)
+    ? JSON.parse(readFileSync(studyEnvPath, "utf8"))
+    : {};
+
+  if (Object.keys(studyEnv).length > 0) {
+    console.log(`\nCalisma tanimlari: study/deploy-env.json (${studyEnv.preparedAt})`);
+  }
+
+  const pick = (key: string, fallback = "") =>
+    process.env[key] ?? studyEnv[key] ?? fallback;
+
+  // --- SNP paneli (rapor §3.3) ---------------------------------------------
+  //
+  // Panel ILK KATKIDAN ONCE yapilandirilmalidir; sonrasinda dondurulur.
+  // Varsayilan 8: cok SNP'li yolun gercek agda calistigini gosterecek kadar
+  // buyuk, tek islemde rahat sigacak kadar kucuk (olculen HCU tavani 12).
+  const snpCount = Number(pick("SNP_COUNT", "8"));
+  const rareSnpIndex = Number(process.env.RARE_SNP_INDEX ?? 0);
+
+  // Panel OZETI — istemcinin hangi varyant listesine hizalandiginin kaniti.
+  //
+  // Zincir yalnizca sirali dozajlar gorur; hangi varyanta karsilik geldikleri
+  // yazili degildir. Iki kullanici farkli listeler kullanirsa "3 numarali SNP"
+  // farkli varyantlar olur ve tablo alakasiz seyleri toplar. Ozet bunu
+  // dogrulanabilir kilar.
+  //
+  // Panelin kendisi zincire yazilmaz (binlerce satir); IPFS'te durur.
+  const panelHash = pick("PANEL_HASH", ethers.ZeroHash);
+  const panelUri = pick("PANEL_URI");
+
+  if (panelHash === ethers.ZeroHash) {
+    console.log(
+      "  UYARI: PANEL_HASH verilmedi. Tek kullanicili duman testi icin sorun\n" +
+        "         degil, ama GERCEK katilimcilarla panel ozeti ZORUNLUDUR —\n" +
+        "         yoksa farkli dosyalar sessizce hizasiz toplanir.",
+    );
+  }
+
+  // --- Veri kategorisi 2: surekli biyobelirtec modulu -----------------------
+  //
+  // SIRA ONEMLI: modul ILK KAYITTAN ONCE baglanmalidir. Katilimcinin sifreli
+  // grup etiketinin kullanim izni kayit aninda verilir; sonradan baglanan bir
+  // modul, once kaydolmus katilimcilarin etiketini kullanamaz ve o kisiler
+  // hicbir zaman olcum gonderemezdi.
+  const BiomarkerLib = await ethers.getContractFactory("BiomarkerStats");
+  const biomarkerLib = await BiomarkerLib.deploy();
+  await biomarkerLib.waitForDeployment();
+  const biomarkerLibAddress = await biomarkerLib.getAddress();
+  console.log(`BiomarkerStats (kutuphane): ${biomarkerLibAddress}`);
+
+  const Biomarkers = await ethers.getContractFactory("VeriarfyBiomarkers", {
+    libraries: { BiomarkerStats: biomarkerLibAddress },
+  });
+  const biomarkers = await Biomarkers.deploy(protocolAddress);
+  await biomarkers.waitForDeployment();
+  const biomarkersAddress = await biomarkers.getAddress();
+  console.log(`VeriarfyBiomarkers: ${biomarkersAddress}`);
+
+  await (await protocol.setBiomarkerModule(biomarkersAddress)).wait();
+  console.log("  biyobelirtec modulu baglandi (kayitlardan ONCE)");
+
+  await (
+    await protocol.configurePanel(snpCount, rareSnpIndex, panelHash, panelUri)
+  ).wait();
+  console.log(`  SNP paneli: ${snpCount} varyant (nadirlik varyanti #${rareSnpIndex})`);
+
+  // Metrik paneli: tanimi `METRICS_FILE` ile verilir (JSON dizisi). Verilmezse
+  // calisma yalnizca genomiktir ve metrik kanali bos kalir.
+  const metricsFile = pick("METRICS_FILE");
+  if (metricsFile) {
+    const specs = JSON.parse(readFileSync(metricsFile, "utf8"));
+    const metricsHash = pick("METRICS_HASH", ethers.ZeroHash);
+    const metricsUri = pick("METRICS_URI");
+
+    if (metricsHash === ethers.ZeroHash) {
+      console.log(
+        "  UYARI: METRICS_HASH verilmedi. Aralik sinirlari zincirde zorlanir\n" +
+          "         ama OLCUM PROTOKOLU (hangi test, hangi kosulda) yazili\n" +
+          "         kalmaz — farkli protokolle olculen sayilar sessizce\n" +
+          "         karsilastirilir.",
+      );
+    }
+
+    await (
+      await biomarkers.configureMetrics(specs, metricsHash, metricsUri)
+    ).wait();
+    console.log(`  metrik paneli: ${specs.length} metrik`);
+  } else {
+    console.log("  metrik paneli: yok (METRICS_FILE verilmedi — yalnizca genomik calisma)");
+  }
+
   // Sorgu kapisi: acilim talebini yalnizca odeme sozlesmesi acabilir.
   // Rapor §2.5.2'deki "Gateway" rolu — arastirmacinin yetkisini dogrulayan ve
   // talebi ileten bilesen. Bu satir olmadan hicbir sorgu acilamaz.
   await (await protocol.setQueryGateway(paymentsAddress)).wait();
   console.log("  sorgu kapisi baglandi (protocol -> payments)");
+
+  // --- Kripto-ekonomik guvenlik (rapor §2.7) -------------------------------
+  //
+  // Taban teminat raporda 32 ETH'dir; test aglarinda bu tutari edinmek mumkun
+  // olmadigi icin ortam degiskeniyle kucultulebilir. Esik degeri raporun 1M USD
+  // kontrol noktasindan turetilmistir (bkz. VeriarfyStaking dokumantasyonu).
+  const baseStake = BigInt(process.env.NODE_BASE_STAKE ?? ethers.parseEther("0.001"));
+  const valueThreshold = BigInt(process.env.STAKE_VALUE_THRESHOLD ?? 250_000);
+  const challengePeriod = BigInt(process.env.CHALLENGE_PERIOD_BLOCKS ?? 20);
+
+  const Staking = await ethers.getContractFactory("VeriarfyStaking");
+  const staking = await Staking.deploy(
+    deployer.address,
+    protocolAddress,
+    baseStake,
+    valueThreshold,
+  );
+  await staking.waitForDeployment();
+  const stakingAddress = await staking.getAddress();
+  console.log(
+    `VeriarfyStaking: ${stakingAddress} ` +
+      `(taban teminat ${ethers.formatEther(baseStake)} ETH, esik ${valueThreshold})`,
+  );
+
+  // Ucret hacmi (TotalDataValue) odeme sozlesmesinden okunur.
+  await (await staking.setPayments(paymentsAddress)).wait();
+  // Modul bagli degilse teminat aranmaz; bu satir olmadan §2.7 devre disidir.
+  await (await protocol.setStakingModule(stakingAddress)).wait();
+  await (await protocol.setChallengePeriod(challengePeriod)).wait();
+  console.log(`  guvenlik modulu baglandi (itiraz suresi ${challengePeriod} blok)`);
+
+  // --- Dead Man's Switch (rapor §2.6.1) ------------------------------------
+  //
+  // Sessizlik esigi UZUN olmalidir: kisa bir esik, gecici bir altyapi
+  // kesintisini "ele gecirildi" sanip yetkiyi gereksiz yere devrederdi.
+  // Varsayilan ~1 gun (12 sn blok varsayimiyla).
+  //
+  // Varis dugumler ELLE atanir; kurumsal bir karardir ve dagitim betiginin
+  // uyduracagi bir sey degildir. Atanmadigi surece devir mekanizmasi
+  // sessizce devre disidir — yetkiyi bos bir kumeye devretmek havuzu kalici
+  // olarak kilitlerdi.
+  const livenessTimeout = BigInt(process.env.LIVENESS_TIMEOUT_BLOCKS ?? 7_200);
+  await (await protocol.setLivenessTimeout(livenessTimeout)).wait();
+  console.log(
+    `  Dead Man's Switch: sessizlik esigi ${livenessTimeout} blok ` +
+      `(varis dugum atanmadi — devir su an devre disi)`,
+  );
+
+  // --- Filecoin kalicilik defteri (rapor §2.9.2, WBS 2.3) ------------------
+  //
+  // Genesis zaman damgasi hangi Filecoin agina baglandigimizi belirler.
+  // Her iki deger de `Filecoin.ChainGetGenesis` ile GERCEK aglardan
+  // dogrulanmistir (tahmin degildir):
+  //
+  //   ana ag      1.598.306.400  (24 Agustos 2020, 22:00 UTC)
+  //   Calibration 1.667.326.380  (1 Kasim 2022, 18:13 UTC)
+  //
+  // Calibration kullanilacaksa BIRLIKTE degistirilmesi gerekenler:
+  //   FILECOIN_GENESIS=1667326380
+  //   FILECOIN_RPC_URL=https://api.calibration.node.glif.io/rpc/v1
+  //
+  // Yanlis deger epoch hesabini kaydirir; `verify-storage-deals.ts` bunu
+  // gercek zincir basiyla karsilastirip yakalar (20 epoch tolerans).
+  const FILECOIN_MAINNET_GENESIS = 1_598_306_400;
+  const filecoinGenesis = BigInt(process.env.FILECOIN_GENESIS ?? FILECOIN_MAINNET_GENESIS);
+
+  const Storage = await ethers.getContractFactory("VeriarfyStorage");
+  const storage = await Storage.deploy(deployer.address, filecoinGenesis);
+  await storage.waitForDeployment();
+  const storageAddress = await storage.getAddress();
+  console.log(`VeriarfyStorage: ${storageAddress} (Filecoin genesis ${filecoinGenesis})`);
+
+  // Tanik: anlasmalari kaydeden zincir disi ajan. Ayri bir adres verilmezse
+  // dagitici ustlenir; uretimde kurator servisinin adresi olmalidir.
+  const attestor = process.env.STORAGE_ATTESTOR ?? deployer.address;
+  await (await storage.setAttestor(attestor)).wait();
+  console.log(`  tanik: ${attestor}`);
 
   const out = {
     network: network.name,
@@ -143,6 +331,9 @@ async function main() {
       DataProvenanceVerifier: provenanceVerifierAddress,
       VeriarfyProtocol: protocolAddress,
       VeriarfyPayments: paymentsAddress,
+      VeriarfyBiomarkers: biomarkersAddress,
+      VeriarfyStaking: stakingAddress,
+      VeriarfyStorage: storageAddress,
       PaymentToken: paymentTokenAddress,
       VeriArfyRegistry: registryAddress,
       AnxietyStudy: studyAddress,
@@ -152,6 +343,9 @@ async function main() {
     initialRoot: initialRoot.toString(),
     accreditedRoot: institutionRegistry.root.toString(),
     deployedAt: new Date().toISOString(),
+    // Olay taramalarinin baslangic noktasi: sozlesmeler bu bloktan once yoktu,
+    // daha geriye bakmak genel RPC'lerin blok araligi sinirini bosuna zorlar.
+    deployedAtBlock: await ethers.provider.getBlockNumber(),
   };
 
   const outDir = join(__dirname, "..", "deployments");
