@@ -5,6 +5,7 @@ import { expect } from "chai";
 import { ethers, fhevm } from "hardhat";
 import { FhevmType } from "@fhevm/mock-utils";
 import type { Signer } from "ethers";
+import { protocolFactory } from "./helpers/factories";
 
 /**
  * GWAS — sifreli kontenjans tablosu ve ki-kare (rapor §3.3).
@@ -78,7 +79,7 @@ describe("GWAS ki-kare", () => {
     const verifier = await Verifier.deploy();
     await verifier.waitForDeployment();
 
-    const Protocol = await ethers.getContractFactory("VeriarfyProtocol");
+    const Protocol = await protocolFactory();
     protocol = await Protocol.deploy(
       await owner.getAddress(),
       THRESHOLD,
@@ -125,6 +126,8 @@ describe("GWAS ki-kare", () => {
 
     await protocol.connect(nodeA).approveDisclosure(0);
     await protocol.connect(nodeB).approveDisclosure(0);
+    // Rapor §2.7.1: esik saglandi; itiraz suresi (burada 0) sonrasi yurutulur.
+    await protocol.executeDisclosure(0);
 
     const handles = await protocol.disclosureContingency(0);
 
@@ -226,7 +229,7 @@ describe("GWAS ki-kare", () => {
     }
     const usable = Math.min(big.length, signers.length - 4);
 
-    const Protocol = await ethers.getContractFactory("VeriarfyProtocol");
+    const Protocol = await protocolFactory();
     const provenanceLib = await import("@veriarfy/circuits/provenance");
     const { registry } = await provenanceLib.developmentRegistry();
     const Verifier = await ethers.getContractFactory("DataProvenanceVerifier");
@@ -284,12 +287,12 @@ describe("GWAS ki-kare", () => {
     const table = await discloseTable();
     const total = table.flat().reduce((a, b) => a + b, 0);
 
-    // Kirpma sonrasi vaka + dozaj 2 hucresine dusmeli; toplam tam olarak +1.
-    expect(total).to.equal(COHORT.length + 1);
-
-    const expected = expectedTable();
-    expected[1][2] += 1;
-    expect(table).to.deep.equal(expected);
+    // DAVRANIS DEGISTI (MK-0013): dozaj artik `DOSAGE_MISSING`e (3) kirpiliyor.
+    // Sonuc saldirgan acisindan DAHA IYI: tabloya hic girmiyor. Onceden
+    // "vaka + dozaj 2" hucresine dusuyordu, yani uydurma bir gozlem
+    // ekliyordu.
+    expect(total).to.equal(COHORT.length);
+    expect(table).to.deep.equal(expectedTable());
   });
 
   it("k-anonimlik esigi altinda tablo acilamaz", async () => {
@@ -314,6 +317,8 @@ describe("GWAS ki-kare", () => {
       .requestDisclosure(await researcher.getAddress(), GWAS_TYPE);
     await protocol.connect(nodeA).approveDisclosure(0);
     await protocol.connect(nodeB).approveDisclosure(0);
+    // Rapor §2.7.1: esik saglandi; itiraz suresi (burada 0) sonrasi yurutulur.
+    await protocol.executeDisclosure(0);
 
     const poolHandle = await protocol.disclosureSnapshot(0);
     const pool = Number(
