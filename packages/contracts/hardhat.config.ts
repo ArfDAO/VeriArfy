@@ -37,6 +37,10 @@ const config: HardhatUserConfig = {
       chainId: 11155111,
       accounts: DEPLOYER_PRIVATE_KEY ? [DEPLOYER_PRIVATE_KEY] : [],
     },
+    // Filecoin Calibration AYRI bir yapilandirmadadir: `hardhat.filecoin.ts`.
+    // Sebep: `@fhevm/hardhat-plugin` yalnizca hardhat/localhost/anvil/sepolia/
+    // mainnet aglarini kabul eder ve baska bir ag adi gorunce eklenti
+    // seviyesinde hata verir. Ayni dosyada tutmak mumkun degil.
   },
   etherscan: {
     apiKey: process.env.ETHERSCAN_API_KEY ?? "",
