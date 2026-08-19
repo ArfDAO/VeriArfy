@@ -1,10 +1,24 @@
 // SPDX-License-Identifier: BSD-3-Clause-Clear
 pragma solidity ^0.8.24;
 
-import {FHE, ebool, euint8, euint32, externalEuint8} from "@fhevm/solidity/lib/FHE.sol";
-import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
+import {
+    FHE,
+    ebool,
+    euint8,
+    euint32,
+    euint64,
+    externalEuint8,
+    externalEuint32
+} from "@fhevm/solidity/lib/FHE.sol";
+import {ZamaConfig, ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
+
+import {ContingencyStats} from "./libraries/ContingencyStats.sol";
+
+import {IVeriarfyBiomarkers} from "./interfaces/IVeriarfyBiomarkers.sol";
 
 import {IDataProvenanceVerifier} from "./interfaces/IDataProvenanceVerifier.sol";
+import {IKMSVerifier} from "./interfaces/IKMSVerifier.sol";
+import {IVeriarfyStaking} from "./interfaces/IVeriarfyStaking.sol";
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -76,6 +90,29 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     error NotQueryGateway(address caller);
     error UnknownQueryType(uint8 queryType);
     error NoAuthorizedNodes();
+    error RarityAlreadyRequested(address participant);
+    error RarityNotRequested(address participant);
+    error RarityAlreadyConfirmed(address participant);
+    error InvalidDecryptionProof(address participant);
+    error NotFinalized(uint256 requestId);
+    error DisclosureRevoked(uint256 requestId);
+    error ChallengePeriodOpen(uint256 requestId, uint256 openUntilBlock);
+    error NotStakingModule(address caller);
+    error NodeNotStaked(address node);
+    error ChallengeUnresolved(uint256 requestId);
+    error NoHeirNodes();
+    error NotHeirNode(address caller);
+    error UseBatchApi(uint32 snpCount);
+    error AlreadyEnrolled(address participant);
+    error NotEnrolled(address participant);
+    error EmptyBatch();
+    error TooManySnps(uint32 requested, uint32 available);
+    error PanelFrozen();
+    error InvalidSnpCount(uint32 value);
+    error InvalidSnpWindow(uint32 requested, uint32 maximum);
+    error SnpOutsideWindow(uint32 snp, uint32 from, uint32 to);
+    error InvalidMetricWindow(uint32 requested, uint32 maximum);
+    error ModuleAlreadyLocked();
 
     // ---------------------------------------------------------------------------------
     // Olaylar
@@ -99,6 +136,29 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     event DisclosureRequested(uint256 indexed requestId, address indexed requester, uint32 snapshotCount);
     event DisclosureApproved(uint256 indexed requestId, address indexed node, uint256 approvals);
     event DisclosureGranted(uint256 indexed requestId, uint32 snapshotCount);
+    /// @dev `handle` disariya verilir: relayer'a `publicDecrypt` bununla cagrilir.
+    event RarityAssessmentRequested(address indexed participant, bytes32 handle);
+    event RarityConfirmed(address indexed participant, bool isRare, uint32 rareCarrierCount);
+    /// @dev Esik saglandi; itiraz suresi `openUntilBlock`'a kadar acik.
+    event DisclosureFinalized(uint256 indexed requestId, uint256 openUntilBlock);
+    event DisclosureRevokedByChallenge(uint256 indexed requestId);
+    event StakingModuleUpdated(address indexed module);
+    event ChallengePeriodUpdated(uint256 blocks);
+    event HeirNodeAuthorized(address indexed node);
+    event HeirNodeRevoked(address indexed node);
+    event Heartbeat(address indexed node, uint256 atBlock);
+    event Enrolled(address indexed participant);
+    event DosagesContributed(address indexed participant, uint32 fromSnp, uint32 toSnp);
+    event PanelConfigured(
+        uint32 snpCount,
+        uint32 rareSnpIndex,
+        bytes32 panelHash,
+        string panelUri
+    );
+    event BiomarkerModuleUpdated(address indexed module);
+    event LivenessTimeoutUpdated(uint256 blocks);
+    event FailoverDeclared(uint256 atBlock);
+    event FailoverCleared(uint256 atBlock);
 
     // ---------------------------------------------------------------------------------
     // IPFS indeksi
@@ -181,7 +241,9 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     uint32 public participantCount;
 
     /// @notice Bir adres havuza yalnizca bir kez katkida bulunabilir.
-    mapping(address => bool) public hasAggregated;
+    /// @dev `hasAggregated` artik bir gorunumdur (asagida); panel cok SNP'li
+    ///      olabildigi icin "tamamladi mi" tek bir bayrakla temsil edilemez.
+    bool public panelFrozen;
 
     /**
      * @notice Katilimcinin havuza katilma sirasi (1 tabanli; 0 = katilimci degil).
@@ -246,6 +308,27 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      */
     uint8 public constant MAX_DOSAGE = 2;
 
+    /**
+     * @notice "Bu varyant kullanicinin dosyasinda YOK" isareti.
+     *
+     * @dev  NEDEN 0 DEGIL
+     *
+     *       Eksik bir varyanti 0 yazmak sessiz bir yalandir: 0, "homozigot
+     *       referans" demektir — yani "bu mutasyonu tasimiyor". Oysa dogru
+     *       ifade "bilmiyoruz"dur. Tuketici cipleri (23andMe, AncestryDNA)
+     *       panelin tamamini kapsamaz; 0 yazmak alel frekanslarini sistematik
+     *       olarak asagi ceker ve GWAS sonuclarini bozar.
+     *
+     *       3 secilmesi BEDAVADIR: tablo zaten `dozaj == 0|1|2` sorularini
+     *       soruyor. 3 hicbirine uymaz, dolayisiyla o katilimci O SNP'nin
+     *       tablosuna hic girmez — istenen davranis tam olarak budur.
+     *
+     *       Kirpma da buna gore: arali disi bir deger (kotu niyetli 255 dahil)
+     *       3'e kirpilir, yani "eksik" sayilir. Tabloyu bozmak yerine
+     *       kendini disarida birakir.
+     */
+    uint8 public constant DOSAGE_MISSING = 3;
+
     // ---------------------------------------------------------------------------------
     // GWAS — sifreli kontenjans tablosu (rapor §3.3)
     // ---------------------------------------------------------------------------------
@@ -261,6 +344,16 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
 
     /// @notice Dozaj seviyeleri: 0, 1, 2.
     uint8 public constant DOSAGE_LEVELS = 3;
+
+    /**
+     * @notice Tek bir acilim talebinin kapsayabilecegi en fazla SNP.
+     *
+     * @dev SNP basina 6 handle kopyalanir ve her biri ACL yazimi gerektirir.
+     *      Sinirsiz birakmak, buyuk panelde talebi blok gaz limitine
+     *      carptirir — yani sinir zaten fiziksel; kodda acikca durmasi
+     *      hatanin anlasilir olmasini saglar.
+     */
+    uint32 public constant MAX_DISCLOSURE_WINDOW = 32;
 
     /**
      * @notice 2x3 sifreli kontenjans tablosu: `[grup][dozaj]` hucre sayaci.
@@ -291,7 +384,193 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *       Rapor §2.1.1 "PBS ile esik karsilastirmasi yapilabilir" diyor; bu
      *       dogru ama χ²'nin TAMAMINI sifreli hesaplamak gereksiz pahalidir.
      */
-    euint32[3][2] private _contingency;
+    mapping(uint32 snp => euint32[3][2]) private _contingency;
+
+    /**
+     * @notice Calismanin kapsadigi SNP sayisi.
+     *
+     * @dev  NEDEN SABIT KODLANMADI
+     *
+     *       Ilk surumde tablo TEK bir varyant icindi (`euint32[3][2]`). Gercek
+     *       bir GWAS calismasi onlarca-binlerce varyant tarar; tek SNP'ye
+     *       gomulu bir tasarim gercek veri geldiginde yeniden yazilmayi
+     *       gerektirirdi.
+     *
+     *       Ilk katki geldikten SONRA degistirilemez: yarida degisen bir panel,
+     *       kimi katilimcinin 10 kimi 50 SNP gonderdigi tutarsiz bir tablo
+     *       birakirdi.
+     */
+    uint32 public snpCount;
+
+    /**
+     * @notice Katilimcinin sifreli grup etiketi (vaka/kontrol).
+     *
+     * @dev Bir kez kaydedilir ve tum partilerde yeniden kullanilir. Her partide
+     *      tekrar gonderilseydi hem gereksiz maliyet olurdu hem de katilimcinin
+     *      partiler arasinda grup degistirmesi mumkun hale gelirdi.
+     */
+    mapping(address => euint8) private _participantGroup;
+
+    /// @notice Katilimci gruba kaydoldu mu (dozaj gondermeye hazir mi)?
+    mapping(address => bool) public isEnrolled;
+
+    /**
+     * @notice Katilimcinin su ana kadar gonderdigi SNP sayisi.
+     *
+     * @dev Katkilar SIRALIDIR: bir sonraki parti tam olarak bu indeksten
+     *      baslar. Boylece ne bosluk kalir ne de ayni SNP iki kez sayilir —
+     *      ikisi de tabloyu sessizce bozardi.
+     */
+    mapping(address => uint32) public submittedSnps;
+
+    /**
+     * @notice Nadirlik bitinin hangi SNP'ye ait oldugu (rapor §4.3).
+     *
+     * @dev Cok SNP'li panelde "nadir tasiyici" sorusu bir varyanta ozgudur;
+     *      hangisi oldugu acikca belirtilmelidir. Ilk katkidan sonra
+     *      degistirilemez.
+     */
+    uint32 public rareSnpIndex;
+
+    /**
+     * @notice Calismanin varyant listesinin ozeti (keccak256).
+     *
+     * @dev  NEDEN ZORUNLU — sessiz bozulmayi onler
+     *
+     *       Zincir yalnizca SIRALI dozajlar gorur: `[d0, d1, ... dk]`. Bu
+     *       dizinin hangi varyantlara karsilik geldigi zincirde YAZILI DEGILDIR.
+     *
+     *       Iki kullanici farkli dosyalar yukleyip farkli varyant siralari
+     *       uretirse, "3 numarali SNP" biri icin rs1234 digeri icin rs9999
+     *       olur ve kontenjans tablosu ALAKASIZ seyleri toplar. Tek
+     *       kullaniciyla fark edilmez; ikinci gercek kullanicida sessizce
+     *       bozulur.
+     *
+     *       Cozum: calisma bir PANEL tanimlar (sirali rsID + etki aleli
+     *       listesi), ozeti buraya yazilir ve istemci dosyasini bu panele
+     *       HIZALAR. Ozet, herkesin ayni listeyi kullandiginin kanitidir.
+     *
+     *       Panelin kendisi zincire yazilmaz (binlerce satir); IPFS'te durur
+     *       ve `panelUri` ile isaret edilir.
+     */
+    bytes32 public panelHash;
+
+    /// @notice Panel tanimina erisim adresi (IPFS CID ya da URL).
+    string public panelUri;
+
+    /// @dev SNP'nin kontenjans hucreleri baslatildi mi?
+    mapping(uint32 => bool) private _snpInitialized;
+
+    // ---------------------------------------------------------------------------------
+    // Surekli biyobelirtec kanali (veri kategorisi 2) — AYRI MODUL
+    // ---------------------------------------------------------------------------------
+
+    /**
+     * @notice Surekli olcum modulu (`VeriarfyBiomarkers`); 0 ise calisma
+     *         yalnizca genomiktir.
+     *
+     * @dev  NEDEN AYRI KONTRAT — EIP-170
+     *
+     *       Metrik kanali bu kontrata eklendiginde derlenmis boyut 26.299
+     *       bayta cikti; EIP-170 siniri 24.576'dir. Yani kontrat DAGITILAMAZ
+     *       hale geldi. Optimizasyon ayarlari yetmedi (`runs: 1` ile 26.507,
+     *       `viaIR` ile 28.483 — daha kotu) ve kod kutuphaneye tasimak da
+     *       yetmedi: `delegatecall` icin gereken ABI kodlamasi, tasinan kodun
+     *       kendisi kadar yer tutuyor.
+     *
+     *       Ayrim ayrica DOGRU olan: veri kategorileri birbirinden bagimsiz
+     *       kanallardir ve her yeni kategori (3: klinik etiketler) ayni duvara
+     *       carpardi. Onay/acilim dongusu TEK yerde — burada — kalir; modul
+     *       yalnizca veriyi tutar.
+     */
+    address public biomarkerModule;
+
+
+    // ---------------------------------------------------------------------------------
+    // Nadirlik Carpani — rapor §4.3
+    // ---------------------------------------------------------------------------------
+
+    /**
+     * @notice Nadir tasiyiciligi temsil eden dozaj seviyesi.
+     *
+     * @dev Rapor §4.3 sunu yaziyor: `ebool result = TFHE.eq(patient_SNP,
+     *      SMA_mutant_code)`. Bizim dozaj olcegimizde (0/1/2 = tasinan minor
+     *      allel sayisi) bunun karsiligi HOMOZIGOT MUTANT, yani 2'dir.
+     *      Heterozigot (1) tasiyicilar cok daha yaygindir ve nadirlik
+     *      primini hak etmez.
+     */
+    uint8 public constant RARE_DOSAGE = 2;
+
+    /**
+     * @notice "Kurucu Katkici" siniri — rapor §4.3: ilk 10.000 veri saglayici.
+     * @dev Bonus kalicidir; carpani `VeriarfyPayments` uygular (+%50).
+     */
+    uint32 public constant FOUNDING_CONTRIBUTOR_LIMIT = 10_000;
+
+    /**
+     * @notice Katilimcinin sifreli nadirlik biti (`dozaj == RARE_DOSAGE`).
+     *
+     * @dev Bu bit `aggregateDosage` sirasinda ZATEN hesaplanan
+     *      `FHE.eq(dosage, 2)` karsilastirmasindan alinir — ek FHE maliyeti
+     *      yoktur. Sifreli kalir; yalnizca katilimci `requestRarityAssessment`
+     *      derse acilabilir hale gelir.
+     */
+    mapping(address => ebool) private _rarityBit;
+
+    /// @notice Katilimci nadirlik degerlendirmesini baslatti mi?
+    mapping(address => bool) public rarityRequested;
+
+    /**
+     * @notice Katilimci nadir varyant tasiyicisi mi (KMS esigiyle dogrulandi).
+     *
+     * @dev  BILINCLI VE KACINILMAZ IFSA
+     *
+     *       Bu alan HERKESE ACIKTIR ve "bu adres nadir varyant tasiyor"
+     *       bilgisini sizdirir. Bu bir uygulama hatasi degil, rapor §4.3'un
+     *       ekonomisinin dogrudan sonucudur: nadirlik carpani odemeye
+     *       yansidigi anda, 11 kat pay alan bir adresin tasiyici oldugu zaten
+     *       zincirden okunur. Alani gizli tutmak yalnizca yanilsama yaratirdi.
+     *
+     *       Bu yuzden degerlendirme OTOMATIK DEGIL, katilimcinin acik
+     *       cagrisiyla (`requestRarityAssessment`) baslar: tek bitlik ifsa ile
+     *       yuksek gelir arasindaki takasi katilimci kendisi secer.
+     *       Degerlendirme istenmezse carpan 1x kalir ve bit sifreli kalir.
+     *
+     *       Ifsa edilen sey TEK BITTIR: genomun kendisi, panel, hatta dozajin
+     *       0 mi 1 mi oldugu acilmaz.
+     */
+    mapping(address => bool) public isRareCarrier;
+
+    /// @notice Nadirlik biti hangi blokta dogrulandi (0 = dogrulanmadi).
+    mapping(address => uint256) public rarityConfirmedAtBlock;
+
+    /// @notice Havuzdaki dogrulanmis nadir tasiyici sayisi (`N_variant`).
+    uint32 public rareCarrierCount;
+
+    /**
+     * @notice Izin ANINDA katilimcinin nadirlik durumu.
+     *
+     * @dev  NEDEN DONDURULUYOR
+     *
+     *       Odeme sozlesmesi payi O(1) hesaplayabilmek icin arastirmaci basina
+     *       "kac tasiyici izin verdi" sayaclarini tutar. Katilimcinin durumu
+     *       izin verdikten SONRA degisirse, bu sayaclar ile bireysel agirlik
+     *       birbirini tutmaz ve havuz asilir. Durumu izin aninda dondurmak
+     *       ikisini tanim geregi esitler.
+     *
+     *       Sonradan tasiyici oldugu dogrulanan bir katilimci, izni yenileyerek
+     *       (iptal + yeniden izin) yeni agirligiyla sayilir.
+     */
+    mapping(address participant => mapping(address researcher => bool)) public rareAtGrant;
+
+    /// @notice Bu arastirmaciya izin veren nadir tasiyici sayisi.
+    mapping(address researcher => uint32) public consentRareCount;
+
+    /// @notice Bu arastirmaciya izin veren Kurucu Katkici sayisi.
+    mapping(address researcher => uint32) public consentFoundingCount;
+
+    /// @notice Hem nadir tasiyici hem Kurucu Katkici olan izin verenler.
+    mapping(address researcher => uint32) public consentRareFoundingCount;
 
     // ---------------------------------------------------------------------------------
     // BSKK-44 — yetkili dugumler ve esikli erisim
@@ -299,6 +578,92 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
 
     /// @notice Konsensus uyesi dugumler.
     mapping(address => bool) public isAuthorizedNode;
+
+    /**
+     * @notice Kripto-ekonomik guvenlik modulu (rapor §2.7).
+     *
+     * @dev Atanmissa, onay verebilmek icin dugumun YETERLI TEMINATI olmasi
+     *      gerekir; atanmamissa yetkilendirme tek basina yeter. Bos
+     *      birakilabilir olmasi bilincli: modul olmadan da protokol calisir,
+     *      yalnizca ekonomik caydiricilik olmaz.
+     */
+    address public stakingModule;
+
+    // ---------------------------------------------------------------------------------
+    // Dead Man's Switch — varis dugumler (rapor §2.6.1)
+    // ---------------------------------------------------------------------------------
+
+    /**
+     * @notice Varis (fallback) dugumler — ana dugumler susarsa yetki bunlara gecer.
+     *
+     * @dev Varis olmak yetki VERMEZ; yalnizca devir halinde yetki dogar. Ana
+     *      dugum ile varis ayni adres olmamalidir, ama kod bunu zorlamaz:
+     *      kurumsal yapida ayni kurumun iki ayri tesisi varis olabilir.
+     */
+    mapping(address => bool) public isHeirNode;
+
+    /// @notice Varis dugum sayisi.
+    uint256 public heirNodeCount;
+
+    /**
+     * @notice Ana dugumlerden gelen SON yasam isaretinin blogu.
+     *
+     * @dev  NEDEN TEK SAYAC, DUGUM BASINA DEGIL
+     *
+     *       Rapor "ana dugumlerin belirli bir sure yanit vermemesi" diyor —
+     *       yani TAMAMININ susmasi. Bir dugum bile hayattaysa ag ayakta
+     *       demektir. Tek sayac bu tanimi birebir karsilar ve kontrolu O(1)
+     *       yapar; dugum basina zaman damgasi tutmak, devir kontrolunde tum
+     *       listeyi dolasmayi gerektirirdi.
+     *
+     *       Hem `heartbeat()` hem de gercek is (`approveDisclosure`) bu
+     *       sayaci gunceller: calisan bir dugumun ayrica "hayattayim" demesi
+     *       gerekmemelidir.
+     */
+    uint256 public lastMainHeartbeat;
+
+    /**
+     * @notice Sessizlik esigi (blok). 0 = Dead Man's Switch kapali.
+     *
+     * @dev Uretimde gunler mertebesinde olmalidir: kisa bir esik, gecici bir
+     *      altyapi kesintisini "ele gecirildi" sanip yetkiyi gereksiz yere
+     *      devrederdi.
+     */
+    uint256 public livenessTimeout;
+
+    /**
+     * @notice Yonetimin ELLE ilan ettigi devir.
+     *
+     * @dev  NEDEN GEREKLI — raporun kapatmadigi bosluk:
+     *
+     *       Sessizlik tespiti yalnizca dugumlerin SUSMASINI gorur. Rapor
+     *       §2.6.1 mekanizmanin "ana dugumler dusman tarafindan hacklenirse"
+     *       de devreye girdigini soyluyor; ama ele gecirilmis bir dugum
+     *       susmaz — saldirgan yasam isareti gondermeye devam eder ve devri
+     *       sonsuza kadar erteleyebilir.
+     *
+     *       Bu, sessizlik tabanli hicbir tasarimin cozemeyecegi bir sorundur.
+     *       Ele gecirme durumu icin acik bir yonetisim karari gerekir; burada
+     *       o karar ayri ve gorunur bir islemdir. Kendi kendine kalkmaz —
+     *       yasam isareti gelmesi bunu temizlemez.
+     */
+    bool public failoverDeclared;
+
+    /// @notice Varis esigi — rapor §2.6.1: 9/12.
+    uint8 public constant HEIR_THRESHOLD_NUMERATOR = 9;
+    uint8 public constant HEIR_THRESHOLD_DENOMINATOR = 12;
+
+    /**
+     * @notice Itiraz suresi (blok) — rapor §2.7.1 "Challenge Period".
+     *
+     * @dev Esige ulasan bir acilim, bu sure boyunca FIILEN verilmez. Sure
+     *      dolmadan `executeDisclosure` reddedilir.
+     *
+     *      Varsayilan 0'dir: itiraz mekanizmasi kurulmadan once sureyi
+     *      uygulamak, hicbir guvenlik kazanci saglamadan sistemi
+     *      yavaslatirdi. `setChallengePeriod` ile acilir.
+     */
+    uint256 public challengePeriod;
 
     /// @notice Yetkili dugum sayisi (N).
     uint256 public authorizedNodeCount;
@@ -360,9 +725,53 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         /// @dev Talep aninda hesaplanan onay sayisi. Sonradan dugum eklenip
         ///      cikarilsa bile bu talebin esigi degismez.
         uint32 requiredApprovals;
+        /**
+         * @dev Devir halinde gecerli olacak esik (rapor §2.6.1).
+         *
+         * Talep aninda AYRICA hesaplanir. Sebep: devir, talep acildiktan
+         * SONRA da olabilir. Tek esik saklansaydi, ana dugumler talep
+         * asamasinda susarsa o talep sonsuza kadar onaylanamaz — havuz kalici
+         * olarak erisilemez hale gelirdi.
+         */
+        uint32 heirRequiredApprovals;
+        /// @dev Ana dugumlerden gelen onay sayisi.
+        uint32 mainApprovals;
+        /**
+         * @dev Varis dugumlerden gelen onay sayisi — AYRI sayilir.
+         *
+         * Devir aninda ana dugumlerin onaylari varislerinkine EKLENMEZ:
+         * devir zaten "ana dugumlere guvenilmiyor" demektir. Karistirmak,
+         * ele gecirilmis dugumlerin biriktirdigi onaylarin varis esigini
+         * doldurmasina izin verirdi.
+         */
+        uint32 heirApprovals;
         uint32 snapshotCount;
         uint64 requestedAt;
+        /// @dev Esige ULASILDI mi? Tek basina cozum yetkisi VERMEZ (bkz. asagi).
         bool finalized;
+        /**
+         * @dev Itiraz suresinin BITTIGI blok — esige ulasildiginda hesaplanir.
+         *
+         * Rapor §2.7.1: coklu imza onayindan sonra bir "Itiraz Suresi"
+         * (Challenge Period) baslar.
+         *
+         * Sure, baslangic blogu degil BITIS blogu olarak saklanir: sahip
+         * `challengePeriod`'u sonradan degistirirse zaten acilmis taleplerin
+         * penceresi kaymamalidir. Baslangici saklayip her okumada guncel
+         * sureyi eklemek, gecmise donuk bir degisiklik anlamina gelirdi.
+         */
+        uint256 challengeEndsAtBlock;
+        /**
+         * @dev Cozum yetkisi GERCEKTEN verildi mi?
+         *
+         * Neden `finalized`'dan ayri: FHE erisim izni (`FHE.allow`) geri
+         * ALINAMAZ. Bir kez verildikten sonra arastirmaci zincir disinda
+         * aninda cozer; sonradan "itiraz kabul edildi" demek bir sey
+         * degistirmez. Bu yuzden itiraz suresi izinden ONCE gelmek zorundadir.
+         */
+        bool executed;
+        /// @dev Itiraz kabul edildi mi (bkz. `VeriarfyStaking`)?
+        bool revoked;
         /// @dev Talep anindaki havuzun anlik goruntusu; havuz aksamalar boyunca
         ///      buyumeye devam eder, verilen izin bu donmus degere baglidir.
         euint32 snapshot;
@@ -373,8 +782,21 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
          * gelmeye devam eder. Cozum izni, talep anindaki donmus tabloya
          * baglidir; aksi halde onaylayanlarin gordugu sayilar oy verdikleri
          * sayilar olmazdi.
+         *
+         * SINIRLI PENCERE: tum panelin goruntusu alinmaz. 1000 SNP'lik bir
+         * panelde bu 6000 handle kopyasi demektir — hem gaz acisindan imkansiz
+         * hem de gereksiz: bir arastirmaci genelde belirli varyantlarla
+         * ilgilenir. Talep, ilgilendigi araligi bildirir ve yalnizca o aralik
+         * dondurulur.
          */
-        euint32[3][2] contingencySnapshot;
+        mapping(uint32 => euint32[3][2]) contingencySnapshot;
+        /// @dev Goruntunun kapsadigi SNP araligi [snpFrom, snpTo).
+        uint32 snpFrom;
+        uint32 snpTo;
+        /// @dev Goruntunun kapsadigi metrik araligi [metricFrom, metricTo).
+        ///      Toplamlarin kendisi `biomarkerModule` icinde dondurulur.
+        uint32 metricFrom;
+        uint32 metricTo;
         address[] approvers;
     }
 
@@ -425,16 +847,30 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
 
         // Havuzu sifir olarak baslat ve kontrata kendi degerini kullanma izni ver.
         // Bu satir olmadan ilk `aggregateDosage` cagrisi ACL nedeniyle revert eder.
+        // Varsayilan tek SNP: mevcut davranisla ayni. Cok varyantli calisma
+        // icin `configurePanel` ile buyutulur (ilk katkidan ONCE).
+        snpCount = 1;
+
         _dosagePool = FHE.asEuint32(0);
         FHE.allowThis(_dosagePool);
 
-        // Kontenjans tablosunun 6 hucresi de ayni sebeple baslatilmali.
-        for (uint8 g = 0; g < GROUP_COUNT; ++g) {
-            for (uint8 level = 0; level < DOSAGE_LEVELS; ++level) {
-                _contingency[g][level] = FHE.asEuint32(0);
-                FHE.allowThis(_contingency[g][level]);
-            }
-        }
+        // Kontenjans tablosu artik SNP basina ayri; kurucuda hepsini
+        // baslatmak mumkun degil (panel binlerce olabilir). Hucreler ilk
+        // dokunusta tembel baslatilir — bkz. `_ensureSnpInitialized`.
+    }
+
+    /**
+     * @dev Bir SNP'nin 6 hucresini ilk kullanimda baslatir.
+     *
+     * fhEVM'de baslatilmamis bir `euint32` sifir HANDLE'idir, sifir DEGER
+     * degil; uzerinde islem yapmak gecersizdir. Kurucuda tum paneli
+     * baslatmak binlerce SNP'de imkansiz oldugu icin baslatma ilk katkiya
+     * ertelenir. Maliyeti SNP basina bir kez odenir.
+     */
+    function _ensureSnpInitialized(uint32 snp) private {
+        if (_snpInitialized[snp]) return;
+        ContingencyStats.initialize(_contingency, snp);
+        _snpInitialized[snp] = true;
     }
 
     // ---------------------------------------------------------------------------------
@@ -574,57 +1010,231 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         externalEuint8 encDosage,
         bytes calldata inputProof
     ) external nonReentrant {
-        if (hasAggregated[msg.sender]) revert AlreadyAggregated(msg.sender);
+        // Tek SNP'lik calismalarin kisayolu: kayit ve tek dozaj bir arada.
+        // Cok SNP'li panelde anlamsizdir; cagiran `enroll` + `contributeDosages`
+        // kullanmalidir.
+        if (snpCount != 1) revert UseBatchApi(snpCount);
+
+        _enroll(encGroup, inputProof);
+
+        externalEuint8[] memory single = new externalEuint8[](1);
+        single[0] = encDosage;
+        _contribute(single, inputProof);
+    }
+
+    /**
+     * @notice Katilimciyi vaka/kontrol grubuna sifreli olarak kaydeder.
+     *
+     * @dev Grup BIR KEZ yazilir ve tum partilerde yeniden kullanilir. Her
+     *      partide tekrar gonderilseydi katilimci partiler arasinda grup
+     *      degistirebilir ve tabloyu bozabilirdi.
+     */
+    function enroll(
+        externalEuint8 encGroup,
+        bytes calldata inputProof
+    ) external nonReentrant {
+        _enroll(encGroup, inputProof);
+    }
+
+    /**
+     * @notice Bir sonraki SNP dilimi icin sifreli dozajlari gonderir.
+     *
+     * @dev  PARTILI OLMASININ SEBEBI GAZ.
+     *
+     *       SNP basina kontenjans tablosu ~23 FHE islemi ve olculen ~620.000
+     *       gaz demektir. 1000 SNP tek islemde blok limitine sigmaz. Katilimci
+     *       paneli kendi sectigi buyuklukte partiler halinde gonderir;
+     *       sozlesme yalnizca SIRALILIGI zorlar.
+     *
+     *       Parti buyuklugunu cagiran secer cunku blok gaz limiti aga gore
+     *       degisir; sozlesmeye gomulu bir sayi bir agda israf, digerinde
+     *       basarisiz islem olurdu.
+     *
+     * @param encDosages Sirali dozaj dilimi; `submittedSnps[msg.sender]`
+     *        indeksinden baslar.
+     */
+    function contributeDosages(
+        externalEuint8[] calldata encDosages,
+        bytes calldata inputProof
+    ) external nonReentrant {
+        externalEuint8[] memory copied = new externalEuint8[](encDosages.length);
+        for (uint256 i = 0; i < encDosages.length; ++i) {
+            copied[i] = encDosages[i];
+        }
+        _contribute(copied, inputProof);
+    }
+
+    function _enroll(externalEuint8 encGroup, bytes calldata inputProof) private {
+        if (isEnrolled[msg.sender]) revert AlreadyEnrolled(msg.sender);
 
         euint8 group = FHE.fromExternal(encGroup, inputProof);
-        euint8 dosage = FHE.fromExternal(encDosage, inputProof);
-
-        // Butunluk: arali disi degerleri sifreliyken kirp. Kotu niyetli bir
-        // istemci 255 gonderip tablo ya da toplami bozamaz.
-        dosage = FHE.min(dosage, FHE.asEuint8(MAX_DOSAGE));
+        // Butunluk: arali disi grup degerini sifreliyken kirp.
         group = FHE.min(group, FHE.asEuint8(GROUP_CASE));
 
-        _dosagePool = FHE.add(_dosagePool, dosage);
-        FHE.allowThis(_dosagePool);
+        _participantGroup[msg.sender] = group;
+        FHE.allowThis(group);
 
-        // --- Kontenjans tablosu ---------------------------------------------
+        // Modul, ayni sifreli grup etiketini KULLANABILMELIDIR.
         //
-        // Her hucre icin "bu katilimci buraya mi ait" sorusu homomorfik
-        // sorulur. `FHE.asEuint32(ebool)` sonucu 0 veya 1'e cevirir; boylece
-        // dogru hucre 1 artar, digerleri 0 eklenerek DEGISMEDEN kalir.
-        //
-        // Diger hucrelere de 0 eklenmesi israf degil zorunluluktur: hangi
-        // hucrenin arttigi gizli kalmalidir. Kosullu yazim yapilsaydi, islem
-        // izinden grup ve dozaj okunabilirdi.
+        // fhEVM'de erisim izni kontrat bazlidir: `VeriarfyBiomarkers` bu
+        // handle uzerinde islem yapamazsa metrikleri gruplara ayiramaz. Izin
+        // kayit aninda verilir cunku sonradan verilemez — katilimci ikinci bir
+        // islem imzalamak zorunda kalirdi. Bu yuzden modul, ILK KAYITTAN ONCE
+        // baglanmis olmak zorundadir; `setBiomarkerModule` bunu zorlar.
+        if (biomarkerModule != address(0)) FHE.allow(group, biomarkerModule);
+
+        isEnrolled[msg.sender] = true;
+
+        // Panel ilk katkidan sonra degistirilemez.
+        panelFrozen = true;
+
+        emit Enrolled(msg.sender);
+    }
+
+    function _contribute(externalEuint8[] memory encDosages, bytes calldata inputProof) private {
+        if (!isEnrolled[msg.sender]) revert NotEnrolled(msg.sender);
+        if (encDosages.length == 0) revert EmptyBatch();
+
+        uint32 start = submittedSnps[msg.sender];
+        uint32 end = start + uint32(encDosages.length);
+        if (end > snpCount) revert TooManySnps(end, snpCount);
+
+        // Grup karsilastirmalari PARTI BASINA BIR KEZ yapilir; SNP basina
+        // tekrarlanmasi gereksiz iki bootstrapping olurdu.
+        euint8 group = _participantGroup[msg.sender];
         ebool[2] memory inGroup;
         inGroup[GROUP_CONTROL] = FHE.eq(group, GROUP_CONTROL);
         inGroup[GROUP_CASE] = FHE.eq(group, GROUP_CASE);
 
-        for (uint8 level = 0; level < DOSAGE_LEVELS; ++level) {
-            ebool atLevel = FHE.eq(dosage, level);
+        for (uint256 i = 0; i < encDosages.length; ++i) {
+            uint32 snp = start + uint32(i);
 
-            for (uint8 g = 0; g < GROUP_COUNT; ++g) {
-                euint32 cell = FHE.add(
-                    _contingency[g][level],
-                    FHE.asEuint32(FHE.and(inGroup[g], atLevel))
-                );
-                _contingency[g][level] = cell;
-                FHE.allowThis(cell);
+            _ensureSnpInitialized(snp);
+
+            euint8 dosage = FHE.fromExternal(encDosages[i], inputProof);
+            // Butunluk: arali disi degerleri sifreliyken kirp. Kotu niyetli bir
+            // istemci 255 gonderip tablo ya da toplami bozamaz.
+            // Kirpma `DOSAGE_MISSING`'e yapilir, `MAX_DOSAGE`'a degil:
+            // arali disi deger tabloyu bozmak yerine "eksik" sayilir.
+            dosage = FHE.min(dosage, FHE.asEuint8(DOSAGE_MISSING));
+
+            _dosagePool = FHE.add(_dosagePool, dosage);
+            FHE.allowThis(_dosagePool);
+
+            // Kontenjans tablosu — ayrinti `ContingencyStats` icinde.
+            //
+            // Nadirlik biti (rapor §4.3) burada BEDAVA gelir: aranan
+            // karsilastirma `dozaj == 2`, tablo icin zaten yapiliyor.
+            // Yalnizca `rareSnpIndex` icin saklanir — cok SNP'li panelde
+            // "nadir tasiyici" sorusu bir varyanta ozgudur.
+            ebool isRare = ContingencyStats.accumulate(
+                _contingency,
+                snp,
+                dosage,
+                inGroup[GROUP_CONTROL],
+                inGroup[GROUP_CASE],
+                RARE_DOSAGE
+            );
+
+            if (snp == rareSnpIndex) {
+                _rarityBit[msg.sender] = isRare;
+                FHE.allowThis(isRare);
             }
         }
 
-        hasAggregated[msg.sender] = true;
-        participantCount += 1;
+        submittedSnps[msg.sender] = end;
+        emit DosagesContributed(msg.sender, start, end);
 
-        // 1 TABANLI indeks — 0 "katilimci degil" anlamina gelir.
+        // Katilimci ancak paneli TAMAMLAYINCA sayilir.
         //
-        // Gelir paylasimi bunu kullanir: bir sorgu, acildigi andaki katilimci
-        // sayisini (`snapshotCount`) dondurur. Indeksi bu sayidan kucuk esit
-        // olan herkes o sorguya dahildir. Boylece odeme sozlesmesi katilimci
-        // listesini dolasmak zorunda kalmaz — pay hesabi O(1) olur.
-        participantIndex[msg.sender] = participantCount;
+        // Yarim kalan bir katki tabloya girmistir ama katilimci degildir:
+        // k-anonimlik esigi ve gelir paylasimi eksik veriyi tam saymamalidir.
+        if (end == snpCount) {
+            participantCount += 1;
 
-        emit DosageAggregated(msg.sender, participantCount);
+            // 1 TABANLI indeks — 0 "katilimci degil" anlamina gelir.
+            //
+            // Gelir paylasimi bunu kullanir: bir sorgu, acildigi andaki katilimci
+            // sayisini (`snapshotCount`) dondurur. Indeksi bu sayidan kucuk esit
+            // olan herkes o sorguya dahildir. Boylece odeme sozlesmesi katilimci
+            // listesini dolasmak zorunda kalmaz — pay hesabi O(1) olur.
+            participantIndex[msg.sender] = participantCount;
+
+            emit DosageAggregated(msg.sender, participantCount);
+        }
+    }
+
+    /**
+     * @notice Calismanin SNP panelini yapilandirir (rapor §3.3).
+     *
+     * @dev  ILK KATKIDAN SONRA DEGISTIRILEMEZ.
+     *
+     *       Yarida degisen bir panel, kimi katilimcinin 10 kimi 50 SNP
+     *       gonderdigi tutarsiz bir tablo birakirdi: sutun sayilari farkli
+     *       kohortlardan gelir ve ki-kare anlamsizlasirdi.
+     *
+     * @param snpCount_     Panelin varyant sayisi.
+     * @param rareSnpIndex_ Nadirlik Carpani'nin hangi varyanta ait oldugu.
+     */
+    function configurePanel(
+        uint32 snpCount_,
+        uint32 rareSnpIndex_,
+        bytes32 panelHash_,
+        string calldata panelUri_
+    ) external onlyOwner {
+        if (panelFrozen) revert PanelFrozen();
+        if (snpCount_ == 0) revert InvalidSnpCount(snpCount_);
+        if (rareSnpIndex_ >= snpCount_) revert InvalidSnpCount(rareSnpIndex_);
+
+        snpCount = snpCount_;
+        rareSnpIndex = rareSnpIndex_;
+        panelHash = panelHash_;
+        panelUri = panelUri_;
+
+        emit PanelConfigured(snpCount_, rareSnpIndex_, panelHash_, panelUri_);
+    }
+
+    /// @notice Katilimci paneli TAMAMLADI mi?
+    function hasAggregated(address participant) public view returns (bool) {
+        return submittedSnps[participant] == snpCount && isEnrolled[participant];
+    }
+
+    /**
+     * @notice Katilimcinin SIFRELI grup etiketinin handle'i.
+     *
+     * @dev Modul bunu okur. Handle'i gormek bir sey aciga cikarmaz: cozum yine
+     *      ACL iznine baglidir ve o izin yalnizca kayit aninda module verilir.
+     */
+    function participantGroup(address participant) external view returns (euint8) {
+        return _participantGroup[participant];
+    }
+
+    /**
+     * @notice Surekli olcum modulunu baglar.
+     *
+     * @dev  ILK KAYITTAN ONCE cagrilmak ZORUNDADIR ve bir kez baglanan modul
+     *       degistirilemez.
+     *
+     *       Sebep `_enroll` icinde anlatiliyor: sifreli grup etiketinin
+     *       kullanim izni kayit aninda verilir. Modul sonradan baglansaydi,
+     *       once kaydolmus katilimcilarin etiketini kullanamaz ve o
+     *       katilimcilar metrik gonderemezdi — sessiz, kismi bir bozulma.
+     *       Degistirilebilseydi ayni sorun tersine olurdu: eski modulun
+     *       biriktirdigi toplamlar erisilemez kalirdi.
+     */
+    function setBiomarkerModule(address module) external onlyOwner {
+        if (biomarkerModule != address(0)) revert ModuleAlreadyLocked();
+        if (module == address(0)) revert ZeroAddress();
+        if (panelFrozen) revert PanelFrozen();
+
+        biomarkerModule = module;
+        emit BiomarkerModuleUpdated(module);
+    }
+
+    /// @dev Varsayilan metrik penceresi: modul yoksa 0, varsa tavana kadar.
+    function _defaultMetricWindow() private view returns (uint32) {
+        if (biomarkerModule == address(0)) return 0;
+        return IVeriarfyBiomarkers(biomarkerModule).disclosureWindowSize();
     }
 
     // ---------------------------------------------------------------------------------
@@ -668,7 +1278,18 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
             maxQueries: maxQueries
         });
 
+        // Nadirlik/kuruculuk durumu izin aninda DONDURULUR; gerekcesi
+        // `rareAtGrant` aciklamasinda. Sayaclar ile bireysel agirlik ayni
+        // kaynaktan beslenir, boylece dagitim havuzu asla asilamaz.
+        bool rare = isRareCarrier[msg.sender];
+        bool founding = isFoundingContributor(msg.sender);
+        rareAtGrant[msg.sender][researcher] = rare;
+
         consentCount[researcher] += 1;
+        if (rare) consentRareCount[researcher] += 1;
+        if (founding) consentFoundingCount[researcher] += 1;
+        if (rare && founding) consentRareFoundingCount[researcher] += 1;
+
         emit AccessGranted(msg.sender, researcher, queryTypes, expirationBlock);
     }
 
@@ -693,7 +1314,17 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         grant.isAllowed = false;
         grant.revokedAtBlock = block.number;
 
+        // Sayaclardan dusulen degerler, IZIN ANINDA dondurulan duruma gore
+        // secilir — guncel duruma gore dusulseydi, arada nadirligi dogrulanan
+        // bir katilimci sayaci eksiye dusurebilirdi.
+        bool rare = rareAtGrant[msg.sender][researcher];
+        bool founding = isFoundingContributor(msg.sender);
+
         consentCount[researcher] -= 1;
+        if (rare) consentRareCount[researcher] -= 1;
+        if (founding) consentFoundingCount[researcher] -= 1;
+        if (rare && founding) consentRareFoundingCount[researcher] -= 1;
+
         emit AccessRevoked(msg.sender, researcher, block.number);
     }
 
@@ -748,7 +1379,118 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     }
 
     // ---------------------------------------------------------------------------------
-    // 3) Yetkili dugum yonetimi
+    // 3) Nadirlik Carpani — rapor §4.3
+    // ---------------------------------------------------------------------------------
+
+    /**
+     * @notice Kurucu Katkici mi (ilk `FOUNDING_CONTRIBUTOR_LIMIT` saglayici)?
+     * @dev Indeks 1 tabanlidir; 0 "katilimci degil" demektir.
+     */
+    function isFoundingContributor(address account) public view returns (bool) {
+        uint32 index = participantIndex[account];
+        return index != 0 && index <= FOUNDING_CONTRIBUTOR_LIMIT;
+    }
+
+    /**
+     * @notice Sifreli nadirlik bitinin esikli cozumune izin verir.
+     *
+     * @dev  Rapor §4.3: "KMS dugumleri, hastanin tum genomunu degil, yalnizca
+     *       bu tek bitlik boolean sonucunu threshold decryption ile cozer."
+     *
+     *       Bu cagri BITI ACMAZ; yalnizca acilabilir kilar. Gercek cozum
+     *       KMS dugumlerinin esigini gerektirir ve zincir disinda olur.
+     *       Cagriyi KATILIMCININ KENDISI yapar — ifsa takasi onun secimidir
+     *       (bkz. `isRareCarrier` aciklamasi).
+     *
+     *       Donen `handle` ile relayer'a `publicDecrypt([handle])` cagrilir;
+     *       sonuc ve KMS imzalari `confirmRarity` ile zincire geri yazilir.
+     */
+    function requestRarityAssessment() external nonReentrant returns (bytes32 handle) {
+        if (!hasAggregated(msg.sender)) revert NotAParticipant(msg.sender);
+        if (rarityRequested[msg.sender]) revert RarityAlreadyRequested(msg.sender);
+
+        rarityRequested[msg.sender] = true;
+
+        ebool bit = _rarityBit[msg.sender];
+        FHE.makePubliclyDecryptable(bit);
+
+        handle = ebool.unwrap(bit);
+        emit RarityAssessmentRequested(msg.sender, handle);
+    }
+
+    /**
+     * @notice Esikli cozulmus nadirlik bitini zincire yazar.
+     *
+     * @dev  HERKES CAGIRABILIR — ve bu guvenlik acigi DEGIL, tasarimdir.
+     *
+     *       Sonucun dogrulugu cagiranin durustluguna degil, KMS dugumlerinin
+     *       EIP-712 imzalarina baglidir: `verifyDecryptionEIP712KMSSignatures`
+     *       "bu handle bu degere cozulur" iddiasini zincirde dogrular. Yanlis
+     *       bir deger imzalanamayacagi icin sonucu kimin tasidigi onemsizdir.
+     *
+     *       Rapor §4.3 "sonuc 1 ise kullaniciya Nadirlik Carpani OTOMATIK
+     *       tanimlanir" diyor. fhEVM 0.11.x'te sozlesmeye geri donen bir oracle
+     *       geri cagrisi bulunmadigindan (bkz. `IKMSVerifier`), otomatiklik
+     *       "izinsiz/permissionless" olmakla saglanir: tanimayi baslatmak icin
+     *       ayricalikli bir role gerek yoktur.
+     *
+     *       Tek yonlu: bir kez dogrulanan bit degistirilemez. Dozaj da
+     *       degistirilemedigi icin (`AlreadyAggregated`) yeniden degerlendirme
+     *       anlamsizdir.
+     *
+     * @param participant     Biti dogrulanacak katilimci.
+     * @param decryptedResult Duz sonucun ABI kodlamasi (`abi.encode(bool)`).
+     * @param decryptionProof KMS dugumlerinin imzalari.
+     */
+    function confirmRarity(
+        address participant,
+        bytes calldata decryptedResult,
+        bytes calldata decryptionProof
+    ) external nonReentrant {
+        if (!rarityRequested[participant]) revert RarityNotRequested(participant);
+        if (rarityConfirmedAtBlock[participant] != 0) {
+            revert RarityAlreadyConfirmed(participant);
+        }
+
+        bytes32[] memory handles = new bytes32[](1);
+        handles[0] = ebool.unwrap(_rarityBit[participant]);
+
+        IKMSVerifier kms = IKMSVerifier(
+            ZamaConfig.getEthereumCoprocessorConfig().KMSVerifierAddress
+        );
+        if (!kms.verifyDecryptionEIP712KMSSignatures(handles, decryptedResult, decryptionProof)) {
+            revert InvalidDecryptionProof(participant);
+        }
+
+        bool rare = abi.decode(decryptedResult, (bool));
+
+        rarityConfirmedAtBlock[participant] = block.number;
+        if (rare) {
+            isRareCarrier[participant] = true;
+            rareCarrierCount += 1;
+        }
+
+        emit RarityConfirmed(participant, rare, rareCarrierCount);
+    }
+
+    /**
+     * @notice Nadirlik carpaninin paydasi ve payi — `R = log2(1 + N/C)` girdisi.
+     *
+     * @dev Odeme sozlesmesi bunu sorgu aninda anlik goruntuye alir. Rapor §4.3
+     *      `N_total`'i HAVUZUN TAMAMI olarak tanimlar (izin verenler degil):
+     *      nadirlik, varyantin populasyondaki gercek seyrekligidir.
+     */
+    function rarityStats() external view returns (uint32 poolCount, uint32 carriers) {
+        return (participantCount, rareCarrierCount);
+    }
+
+    /// @notice Sifreli nadirlik handle'i (cozmek ayri yetkidir).
+    function rarityHandle(address participant) external view returns (bytes32) {
+        return ebool.unwrap(_rarityBit[participant]);
+    }
+
+    // ---------------------------------------------------------------------------------
+    // 4) Yetkili dugum yonetimi
     // ---------------------------------------------------------------------------------
 
     function authorizeNode(address node) external onlyOwner {
@@ -757,10 +1499,23 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
 
         isAuthorizedNode[node] = true;
         authorizedNodeCount += 1;
+
+        // Yeni bir ana dugum katilmasi da bir yasam isaretidir. Bu satir
+        // olmasaydi, ilk dugum atandiginda sayac 0 kalir ve sessizlik esigi
+        // aciksa devir DERHAL tetiklenirdi.
+        lastMainHeartbeat = block.number;
+
         emit NodeAuthorized(node);
     }
 
-    function revokeNode(address node) external onlyOwner {
+    function revokeNode(address node) external {
+        // Sahip DISINDA tek yetkili, kripto-ekonomik guvenlik moduludur:
+        // kesilen (slash edilen) bir dugumun yetkisi de dusmelidir, yoksa
+        // teminatsiz kalan dugum onay vermeye devam edebilirdi. Bu adimi
+        // sahibin elle yapmasina birakmak, cezayi insafa baglardi.
+        if (msg.sender != owner() && msg.sender != stakingModule) {
+            revert NotStakingModule(msg.sender);
+        }
         if (!isAuthorizedNode[node]) revert NotAuthorized(node);
 
         isAuthorizedNode[node] = false;
@@ -821,6 +1576,70 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         address researcher,
         uint8 queryType
     ) external nonReentrant returns (uint256 requestId) {
+        // Varsayilan pencere: panelin basindan, tavana kadar. Tek SNP'lik
+        // calismalarda eski davranisla birebir ayni.
+        uint32 window = snpCount > MAX_DISCLOSURE_WINDOW ? MAX_DISCLOSURE_WINDOW : snpCount;
+
+        // Metrik paneli varsa varsayilan olarak o da tavana kadar acilir;
+        // yoksa (modul yok) aralik bostur ve modul hic cagrilmaz.
+        uint32 metricWindow = _defaultMetricWindow();
+
+        return _requestDisclosure(researcher, queryType, 0, window, 0, metricWindow);
+    }
+
+    /**
+     * @notice Acilim talebini belirli bir METRIK araligi icin acar.
+     *
+     * @dev SNP penceresiyle ayni gerekce: arastirmaci genelde birkac metrikle
+     *      ilgilenir ve ne kadar az acilirsa gizlilik o kadar korunur.
+     */
+    function requestDisclosureMetrics(
+        address researcher,
+        uint8 queryType,
+        uint32 snpFrom,
+        uint32 snpWindow,
+        uint32 metricFrom,
+        uint32 metricWindow
+    ) external nonReentrant returns (uint256 requestId) {
+        return
+            _requestDisclosure(
+                researcher,
+                queryType,
+                snpFrom,
+                snpWindow,
+                metricFrom,
+                metricWindow
+            );
+    }
+
+    /**
+     * @notice Acilim talebini BELIRLI bir SNP araligi icin acar.
+     *
+     * @dev Cok varyantli panellerde arastirmaci genelde birkac SNP ile
+     *      ilgilenir; tum paneli cozdurmek hem gereksiz hem de gizlilik
+     *      acisindan savurgandir (ne kadar az acilirsa o kadar iyi).
+     *
+     * @param snpFrom   Aralik basi (dahil).
+     * @param snpWindow Aralik uzunlugu; en fazla `MAX_DISCLOSURE_WINDOW`.
+     */
+    function requestDisclosureWindow(
+        address researcher,
+        uint8 queryType,
+        uint32 snpFrom,
+        uint32 snpWindow
+    ) external nonReentrant returns (uint256 requestId) {
+        uint32 metricWindow = _defaultMetricWindow();
+        return _requestDisclosure(researcher, queryType, snpFrom, snpWindow, 0, metricWindow);
+    }
+
+    function _requestDisclosure(
+        address researcher,
+        uint8 queryType,
+        uint32 snpFrom,
+        uint32 snpWindow,
+        uint32 metricFrom,
+        uint32 metricWindow
+    ) private returns (uint256 requestId) {
         if (msg.sender != queryGateway) revert NotQueryGateway(msg.sender);
         if (researcher == address(0)) revert ZeroAddress();
         if (participantCount == 0) revert PoolEmpty();
@@ -836,6 +1655,11 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         request.requester = researcher;
         request.queryType = queryType;
         request.requiredApprovals = required;
+        // Devir esigi de SIMDI dondurulur; gerekcesi alanin aciklamasinda.
+        // Varis atanmamissa 0 kalir ve devir zaten mumkun olmaz.
+        request.heirRequiredApprovals = heirNodeCount == 0
+            ? 0
+            : heirRequiredApprovals(queryType);
         request.snapshotCount = participantCount;
         request.requestedAt = uint64(block.timestamp);
         request.snapshot = _dosagePool;
@@ -845,11 +1669,40 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         FHE.allowThis(request.snapshot);
 
         // Kontenjans tablosu da dondurulur — GWAS'in ki-kare girdisi budur.
-        for (uint8 g = 0; g < GROUP_COUNT; ++g) {
-            for (uint8 level = 0; level < DOSAGE_LEVELS; ++level) {
-                request.contingencySnapshot[g][level] = _contingency[g][level];
-                FHE.allowThis(request.contingencySnapshot[g][level]);
-            }
+        //
+        // Yalnizca ISTENEN ARALIK kopyalanir. Tum panel kopyalansaydi 1000
+        // SNP'de 6000 handle yazimi olurdu: gaz acisindan imkansiz ve
+        // gereksiz, cunku arastirmaci belirli varyantlarla ilgilenir.
+        uint32 windowEnd = snpFrom + snpWindow;
+        if (windowEnd > snpCount) revert TooManySnps(windowEnd, snpCount);
+        if (snpWindow == 0 || snpWindow > MAX_DISCLOSURE_WINDOW) {
+            revert InvalidSnpWindow(snpWindow, MAX_DISCLOSURE_WINDOW);
+        }
+
+        request.snpFrom = snpFrom;
+        request.snpTo = windowEnd;
+
+        for (uint32 snp = snpFrom; snp < windowEnd; ++snp) {
+            ContingencyStats.snapshot(_contingency, request.contingencySnapshot, snp);
+        }
+
+        // Biyobelirtec toplamlari da ayni anda dondurulur.
+        //
+        // `metricWindow == 0` gecerlidir ve "bu talep metrik istemiyor"
+        // demektir — yalnizca genomik calismalarda (metrik paneli yok) ve
+        // arastirmacinin sadece GWAS istedigi durumlarda olur. SNP penceresi
+        // icin ayni sey gecerli DEGILDIR: orada 0 pencere anlamsizdir cunku
+        // her calismanin en az bir SNP'si vardir.
+        uint32 metricEnd = metricFrom + metricWindow;
+        if (metricWindow > 0 && biomarkerModule == address(0)) {
+            revert InvalidMetricWindow(metricWindow, 0);
+        }
+
+        request.metricFrom = metricFrom;
+        request.metricTo = metricEnd;
+
+        if (metricEnd > metricFrom) {
+            IVeriarfyBiomarkers(biomarkerModule).snapshotFor(requestId, metricFrom, metricEnd);
         }
 
         emit DisclosureRequested(requestId, researcher, participantCount);
@@ -880,6 +1733,105 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         return uint32(required == 0 ? 1 : required);
     }
 
+    /**
+     * @notice Devir halinde gereken varis onayi sayisi (rapor §2.6.1: 9/12).
+     *
+     * @dev  IKI KURALIN BUYUGU ALINIR.
+     *
+     *       Rapor devir esigini tek bir oran olarak veriyor (9/12 = %75) ama
+     *       §2.6'daki kademeli esikler de yururlukte: populasyon genetigi
+     *       sorgusu 9/10 = %90 ister. Yalnizca 9/12 uygulansaydi, en hassas
+     *       sorgu KRIZ ANINDA daha KOLAY gecerdi — mekanizmanin amacinin tam
+     *       tersi. Bu yuzden iki esikten buyugu gecerlidir.
+     */
+    function heirRequiredApprovals(uint8 queryType) public view returns (uint32) {
+        uint8 fraction = thresholdFraction[queryType];
+        if (fraction == 0) revert UnknownQueryType(queryType);
+
+        uint256 heirs = heirNodeCount;
+        if (heirs == 0) revert NoHeirNodes();
+
+        uint256 crisis = (heirs * HEIR_THRESHOLD_NUMERATOR + HEIR_THRESHOLD_DENOMINATOR - 1) /
+            HEIR_THRESHOLD_DENOMINATOR;
+        uint256 graded = (heirs * fraction + THRESHOLD_DENOMINATOR - 1) / THRESHOLD_DENOMINATOR;
+
+        uint256 required = crisis > graded ? crisis : graded;
+        return uint32(required == 0 ? 1 : required);
+    }
+
+    /**
+     * @notice Yetki su anda varis dugumlerde mi (rapor §2.6.1)?
+     *
+     * @dev Iki yoldan biriyle aktiflesir:
+     *      1. ana dugumler `livenessTimeout` boyunca SUSTU (otomatik),
+     *      2. yonetim devri ELLE ilan etti (ele gecirme hali).
+     *
+     *      Varis atanmamissa devir olmaz: yetkiyi kimsenin olmadigi bir
+     *      kumeye devretmek havuzu kalici olarak kilitlerdi.
+     */
+    function isFailoverActive() public view returns (bool) {
+        if (heirNodeCount == 0) return false;
+        if (failoverDeclared) return true;
+        if (livenessTimeout == 0) return false;
+        return block.number > lastMainHeartbeat + livenessTimeout;
+    }
+
+    /**
+     * @notice Ana dugumun yasam isareti.
+     *
+     * @dev Gercek is de (onay vermek) ayni sayaci gunceller; bu cagri, uzun
+     *      sure sorgu gelmeyen donemlerde agin ayakta oldugunu gostermek
+     *      icindir.
+     */
+    function heartbeat() external onlyAuthorizedNode {
+        lastMainHeartbeat = block.number;
+        emit Heartbeat(msg.sender, block.number);
+    }
+
+    /// @notice Varis dugum atar (rapor §2.6.1 "Fallback Nodes").
+    function authorizeHeirNode(address node) external onlyOwner {
+        if (node == address(0)) revert ZeroAddress();
+        if (isHeirNode[node]) revert AlreadyAuthorized(node);
+
+        isHeirNode[node] = true;
+        heirNodeCount += 1;
+        emit HeirNodeAuthorized(node);
+    }
+
+    function revokeHeirNode(address node) external onlyOwner {
+        if (!isHeirNode[node]) revert NotAuthorized(node);
+
+        isHeirNode[node] = false;
+        heirNodeCount -= 1;
+        emit HeirNodeRevoked(node);
+    }
+
+    /// @notice Sessizlik esigini ayarlar; 0 = Dead Man's Switch kapali.
+    function setLivenessTimeout(uint256 blocks) external onlyOwner {
+        livenessTimeout = blocks;
+        // Sayaci simdiye cek: aksi halde esik ilk kez acildiginda gecmisteki
+        // sifir degeri yuzunden devir ANINDA tetiklenirdi.
+        lastMainHeartbeat = block.number;
+        emit LivenessTimeoutUpdated(blocks);
+    }
+
+    /**
+     * @notice Devri elle ilan eder — ele gecirme hali (rapor §2.6.1).
+     * @dev Yasam isareti gelmesi bunu TEMIZLEMEZ; yalnizca `clearFailover`.
+     */
+    function declareFailover() external onlyOwner {
+        if (heirNodeCount == 0) revert NoHeirNodes();
+        failoverDeclared = true;
+        emit FailoverDeclared(block.number);
+    }
+
+    /// @notice Elle ilan edilen devri kaldirir ve yasam sayacini sifirlar.
+    function clearFailover() external onlyOwner {
+        failoverDeclared = false;
+        lastMainHeartbeat = block.number;
+        emit FailoverCleared(block.number);
+    }
+
     /// @notice Sorgu kapisini belirler (odeme sozlesmesi).
     function setQueryGateway(address gateway) external onlyOwner {
         if (gateway == address(0)) revert ZeroAddress();
@@ -887,19 +1839,94 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         emit QueryGatewayUpdated(gateway);
     }
 
-    /// @notice Bir talebin esigi saglanmis ve cozum yetkisi verilmis mi?
+    /// @notice Kripto-ekonomik guvenlik modulunu baglar (rapor §2.7).
+    function setStakingModule(address module) external onlyOwner {
+        stakingModule = module; // sifir adres: modulu devre disi birakir
+        emit StakingModuleUpdated(module);
+    }
+
+    /**
+     * @notice Itiraz suresini blok cinsinden ayarlar (rapor §2.7.1).
+     *
+     * @dev Sure UZUN olmali ki dogrulayicilar inceleyebilsin, ama sonsuz
+     *      olmamali ki arastirmaci rehin kalmasin. Zaten acilmis taleplerin
+     *      suresi degismez: `executeDisclosure` her cagrildiginda guncel
+     *      degeri okur, bu yuzden ayar yalnizca ileriye donuk uygulanmalidir —
+     *      bu nedenle yalnizca sahip degistirebilir ve degisiklik olay olarak
+     *      yayilir.
+     */
+    function setChallengePeriod(uint256 blocks) external onlyOwner {
+        challengePeriod = blocks;
+        emit ChallengePeriodUpdated(blocks);
+    }
+
+    /**
+     * @notice Cozum yetkisi FIILEN verildi mi?
+     *
+     * @dev Esige ulasmak yetmez: itiraz suresi de dolmus ve
+     *      `executeDisclosure` cagrilmis olmalidir. Odeme sozlesmesi ucreti
+     *      buna bakarak dagitima acar — yani para, sonuc gercekten teslim
+     *      edildiginde el degistirir.
+     */
     function isDisclosureGranted(uint256 requestId) external view returns (bool) {
+        return _requests[requestId].executed;
+    }
+
+    /// @notice Esik saglandi mi (itiraz suresi henuz surebilir)?
+    function isDisclosureFinalized(uint256 requestId) external view returns (bool) {
         return _requests[requestId].finalized;
     }
 
-    /// @notice Baska bir yetkili dugum talebi onaylar; esige ulasilinca izin verilir.
-    function approveDisclosure(uint256 requestId) external onlyAuthorizedNode nonReentrant {
+    /// @notice Itiraz suresinin bittigi blok (0 = esige henuz ulasilmadi).
+    function challengeWindowEnd(uint256 requestId) external view returns (uint256) {
+        return _requests[requestId].challengeEndsAtBlock;
+    }
+
+    /// @notice Itiraz kabul edildigi icin iptal edilmis mi?
+    function isDisclosureRevoked(uint256 requestId) external view returns (bool) {
+        return _requests[requestId].revoked;
+    }
+
+    /**
+     * @notice Talebi onaylar; esige ulasilinca itiraz suresi baslar.
+     *
+     * @dev  KIM ONAYLAYABILIR, DEVIR DURUMUNA BAGLIDIR (rapor §2.6.1):
+     *
+     *       - normal halde  -> yalnizca ANA dugumler
+     *       - devir halinde -> yalnizca VARIS dugumler
+     *
+     *       Devir halinde ana dugumlerin onay verememesi mekanizmanin
+     *       ozudur: devir zaten "ana dugumlere guvenilmiyor" demektir.
+     */
+    function approveDisclosure(uint256 requestId) external nonReentrant {
         DisclosureRequest storage request = _requests[requestId];
         if (request.requester == address(0)) revert UnknownRequest(requestId);
         if (request.finalized) revert AlreadyFinalized(requestId);
         if (hasApproved[requestId][msg.sender]) revert AlreadyApproved(requestId, msg.sender);
 
-        _approve(requestId, request);
+        bool failover = isFailoverActive();
+
+        if (failover) {
+            if (!isHeirNode[msg.sender]) revert NotHeirNode(msg.sender);
+            // Devir talep acilmadan once yoktu ve varis esigi hesaplanmadiysa
+            // bu talep varislerce sonuclandirilamaz; yeni talep acilmalidir.
+            if (request.heirRequiredApprovals == 0) revert NoHeirNodes();
+        } else {
+            if (!isAuthorizedNode[msg.sender]) revert NotAuthorizedNode(msg.sender);
+            // Onay vermek yasam isaretidir: calisan bir dugumun ayrica
+            // "hayattayim" demesi gerekmemelidir.
+            lastMainHeartbeat = block.number;
+        }
+
+        // Rapor §2.7: onay vermek EKONOMIK SORUMLULUK gerektirir. Modul
+        // atanmissa teminati yetersiz dugum oy kullanamaz — aksi halde
+        // slashing'in yaptirim gucu olmazdi. Varis dugumler de bu kurala
+        // tabidir; kriz ani sorumsuzlugu mesrulastirmaz.
+        if (stakingModule != address(0) && !IVeriarfyStaking(stakingModule).canApprove(msg.sender)) {
+            revert NodeNotStaked(msg.sender);
+        }
+
+        _approve(requestId, request, failover);
     }
 
     /**
@@ -909,17 +1936,79 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *      Izin yalnizca onaylayanlara verilir: cozum yetkisi kolektif kararin
      *      sonucudur, tek bir talep sahibinin odulu degil.
      */
-    function _approve(uint256 requestId, DisclosureRequest storage request) private {
+    function _approve(
+        uint256 requestId,
+        DisclosureRequest storage request,
+        bool failover
+    ) private {
         hasApproved[requestId][msg.sender] = true;
         request.approvers.push(msg.sender);
 
-        uint256 approvals = request.approvers.length;
+        // Iki sayac AYRI tutulur: devir halinde ana dugumlerin daha once
+        // biriktirdigi onaylar varis esigine sayilmaz (bkz. alan aciklamasi).
+        uint256 approvals;
+        uint32 required;
+
+        if (failover) {
+            request.heirApprovals += 1;
+            approvals = request.heirApprovals;
+            required = request.heirRequiredApprovals;
+        } else {
+            request.mainApprovals += 1;
+            approvals = request.mainApprovals;
+            required = request.requiredApprovals;
+        }
+
         emit DisclosureApproved(requestId, msg.sender, approvals);
 
         // Esik, TALEP ANINDA sorgu tipine gore sabitlenmistir (rapor §2.6).
-        if (approvals < request.requiredApprovals) return;
+        if (approvals < required) return;
 
+        // Esik saglandi — ama cozum yetkisi HENUZ VERILMEZ.
+        //
+        // Rapor §2.7.1: coklu imza onayindan sonra bir Itiraz Suresi baslar.
+        // Izin bu noktada verilseydi itiraz suresi susleme olurdu: `FHE.allow`
+        // geri alinamaz ve arastirmaci zincir disinda aninda cozerdi.
         request.finalized = true;
+        request.challengeEndsAtBlock = block.number + challengePeriod;
+
+        emit DisclosureFinalized(requestId, request.challengeEndsAtBlock);
+    }
+
+    /**
+     * @notice Itiraz suresi dolduktan sonra cozum yetkisini FIILEN verir.
+     *
+     * @dev  Herkes cagirabilir: sartlarin tamami zincirde gorunur olgulardir
+     *       (esik saglandi, sure doldu, itiraz kabul edilmedi). Yetkinin
+     *       verilmesini birinin insafina birakmak, arastirmaciyi rehin
+     *       birakirdi.
+     *
+     *       `isDisclosureGranted` bu adimdan SONRA true doner; odeme
+     *       sozlesmesi de ucreti ancak o zaman dagitima acar. Yani para,
+     *       sonuc gercekten teslim edildiginde el degistirir.
+     */
+    function executeDisclosure(uint256 requestId) external nonReentrant {
+        DisclosureRequest storage request = _requests[requestId];
+        if (request.requester == address(0)) revert UnknownRequest(requestId);
+        if (!request.finalized) revert NotFinalized(requestId);
+        if (request.revoked) revert DisclosureRevoked(requestId);
+        if (request.executed) revert AlreadyFinalized(requestId);
+
+        if (block.number < request.challengeEndsAtBlock) {
+            revert ChallengePeriodOpen(requestId, request.challengeEndsAtBlock);
+        }
+
+        // Sure dolmus olsa bile COZULMEMIS bir itiraz varsa yetki verilmez.
+        //
+        // Bu kontrol sart: itiraz, surenin son blogunda acilabilir ve oylamasi
+        // surenin otesine tasar. Yalnizca sureye bakilsaydi, itiraz edilen bir
+        // acilim oylama daha bitmeden yurutulur ve `FHE.allow` geri
+        // alinamayacagi icin itiraz anlamsizlasirdi.
+        if (stakingModule != address(0) && IVeriarfyStaking(stakingModule).isBlocked(requestId)) {
+            revert ChallengeUnresolved(requestId);
+        }
+
+        request.executed = true;
 
         // Cozum yetkisi ARASTIRMACIYA verilir — rapor §2.5.2 adim 6:
         // "Cozulen sonuc yalnizca arastirmacinin cuzdan adresine iletilir."
@@ -928,14 +2017,36 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         // her kurumun sonucu gormesi demekti ve raporun akisiyla celisiyordu.
         FHE.allow(request.snapshot, request.requester);
 
-        // Ki-kare icin 6 hucrenin tamami cozulebilmeli; tek tek izin verilir.
-        for (uint8 g = 0; g < GROUP_COUNT; ++g) {
-            for (uint8 level = 0; level < DOSAGE_LEVELS; ++level) {
-                FHE.allow(request.contingencySnapshot[g][level], request.requester);
-            }
+        // Ki-kare icin her SNP'nin 6 hucresi cozulebilmeli; tek tek izin verilir.
+        for (uint32 snp = request.snpFrom; snp < request.snpTo; ++snp) {
+            ContingencyStats.grant(request.contingencySnapshot, snp, request.requester);
+        }
+
+        // Welch t-testi icin metrik basina 6 sayi cozulebilmeli.
+        if (request.metricTo > request.metricFrom) {
+            IVeriarfyBiomarkers(biomarkerModule).grantFor(requestId, request.requester);
         }
 
         emit DisclosureGranted(requestId, request.snapshotCount);
+    }
+
+    /**
+     * @notice Kabul edilen bir itiraz uzerine acilimi iptal eder.
+     *
+     * @dev Yalnizca stake sozlesmesi cagirabilir (rapor §2.7.1). Yetki HENUZ
+     *      verilmemis olmalidir; verilmis bir izni geri almak teknik olarak
+     *      mumkun degildir ve oyle davranmak yaniltici olurdu.
+     */
+    function revokeDisclosure(uint256 requestId) external nonReentrant {
+        if (msg.sender != stakingModule) revert NotStakingModule(msg.sender);
+
+        DisclosureRequest storage request = _requests[requestId];
+        if (request.requester == address(0)) revert UnknownRequest(requestId);
+        if (request.executed) revert AlreadyFinalized(requestId);
+        if (request.revoked) revert DisclosureRevoked(requestId);
+
+        request.revoked = true;
+        emit DisclosureRevokedByChallenge(requestId);
     }
 
     /// @notice Talebin durumu (sifreli goruntu haric).
@@ -986,9 +2097,40 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     function disclosureContingency(
         uint256 requestId
     ) external view returns (euint32[3][2] memory) {
+        // Geriye donuk kisayol: penceredeki ILK SNP. Tek SNP'lik calismalarda
+        // eskisiyle ayni davranir.
+        return disclosureContingencyAt(requestId, _requests[requestId].snpFrom);
+    }
+
+    /// @notice Talep penceresindeki BELIRLI bir SNP'nin sifreli tablosu.
+    function disclosureContingencyAt(
+        uint256 requestId,
+        uint32 snp
+    ) public view returns (euint32[3][2] memory) {
         DisclosureRequest storage request = _requests[requestId];
         if (request.requester == address(0)) revert UnknownRequest(requestId);
-        return request.contingencySnapshot;
+        if (snp < request.snpFrom || snp >= request.snpTo) {
+            revert SnpOutsideWindow(snp, request.snpFrom, request.snpTo);
+        }
+        return request.contingencySnapshot[snp];
+    }
+
+    /// @notice Talebin kapsadigi SNP araligi [from, to).
+    function disclosureWindow(
+        uint256 requestId
+    ) external view returns (uint32 from, uint32 to) {
+        DisclosureRequest storage request = _requests[requestId];
+        if (request.requester == address(0)) revert UnknownRequest(requestId);
+        return (request.snpFrom, request.snpTo);
+    }
+
+    /// @notice Talebin kapsadigi metrik araligi [from, to).
+    function disclosureMetricWindow(
+        uint256 requestId
+    ) external view returns (uint32 from, uint32 to) {
+        DisclosureRequest storage request = _requests[requestId];
+        if (request.requester == address(0)) revert UnknownRequest(requestId);
+        return (request.metricFrom, request.metricTo);
     }
 
     /**
@@ -997,7 +2139,15 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      * @dev Panel ve izleme icin. Cozmek yine esikli onaya baglidir.
      */
     function contingencyTable() external view returns (euint32[3][2] memory) {
-        return _contingency;
+        // Geriye donuk kisayol: panelin ILK SNP'si. Tek SNP'lik calismalarda
+        // eskisiyle ayni davranir.
+        return _contingency[0];
+    }
+
+    /// @notice Belirli bir SNP'nin guncel kontenjans tablosu.
+    function contingencyTableAt(uint32 snp) external view returns (euint32[3][2] memory) {
+        if (snp >= snpCount) revert TooManySnps(snp + 1, snpCount);
+        return _contingency[snp];
     }
 
     /// @notice Talebi onaylayan dugumler.
