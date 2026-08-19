@@ -5,13 +5,21 @@ import { CONTRACTS, explorerAddress, isProtocolDeployed } from "../config";
 import {
   QUERY_TYPE,
   claimReward,
+  confirmRarity,
   describeQueryTypes,
   formatToken,
   grantAccess,
+  rarityMultiplierBps,
   readDashboard,
+  readPersistence,
+  readRarity,
+  requestRarityAssessment,
   revokeAccess,
   type DashboardState,
+  type PersistenceState,
+  type RarityState,
 } from "../lib/protocol";
+import { publicDecryptRaw } from "../lib/fhe";
 import { connectWallet, ensureSepolia, hasWallet } from "../lib/wallet";
 
 /**
@@ -32,6 +40,8 @@ export function PrivacyPanel() {
   const [provider, setProvider] = useState<BrowserProvider | null>(null);
   const [address, setAddress] = useState<string | null>(null);
   const [state, setState] = useState<DashboardState | null>(null);
+  const [rarity, setRarity] = useState<RarityState | null>(null);
+  const [persistence, setPersistence] = useState<PersistenceState | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +57,13 @@ export function PrivacyPanel() {
       setLoading(true);
       setError(null);
       try {
-        setState(await readDashboard(p, who));
+        const [dashboard, rarityState] = await Promise.all([
+          readDashboard(p, who),
+          readRarity(p, who),
+        ]);
+        setState(dashboard);
+        setRarity(rarityState);
+        setPersistence(await readPersistence(p, dashboard.vault.cidDigest));
       } catch (err: any) {
         setError(err?.shortMessage ?? err?.message ?? "Zincirden okunamadi.");
       } finally {
@@ -104,6 +120,27 @@ export function PrivacyPanel() {
     },
     [provider, address, refresh],
   );
+
+  /**
+   * Esikli cozumu tamamlar: relayer'dan duz biti ve KMS imzalarini alir,
+   * ikisini birlikte zincire yazar.
+   *
+   * Imzalar zincirde dogrulandigi icin bu adimi KIM yaptigi onemli degildir —
+   * uydurulmus bir sonuc kabul edilmez.
+   */
+  const runRarityDecrypt = useCallback(async () => {
+    if (!rarity || !address) return;
+    await run("Esikli cozum", async () => {
+      const result = await publicDecryptRaw([rarity.handle]);
+      const signer = await provider!.getSigner();
+      await confirmRarity(
+        signer,
+        address,
+        result.abiEncodedClearValues,
+        result.decryptionProof,
+      );
+    });
+  }, [rarity, address, provider, run]);
 
   if (!isProtocolDeployed) {
     return (
@@ -212,10 +249,124 @@ export function PrivacyPanel() {
               <span className="eyebrow">SIFRELI DOZAJ HAVUZDA</span>
               <span className="mono">{state?.vault.hasAggregated ? "Evet" : "Hayir"}</span>
             </div>
+            <div className="card__row">
+              <span className="eyebrow">KALICILIK (FILECOIN)</span>
+              <span className="mono">
+                {!persistence?.tracked
+                  ? "IPFS pinli — Filecoin anlasmasi yok"
+                  : `${persistence.replicas} saglayici${
+                      persistence.adequate ? "" : " (esik alti)"
+                    }${persistence.dueForRenewal ? " · yenileme gerekli" : ""}`}
+              </span>
+            </div>
+            {persistence?.tracked && (
+              /*
+               * Iddianin KAYNAGINI gizlememek onemli: replika sayisi
+               * zincirde zorlanan bir olgu degil, bir tanigin beyanidir
+               * (bkz. MK-0010). Kullaniciya "3 saglayici" deyip bunun nereden
+               * geldigini soylememek, olmayan bir kesinlik satmak olurdu.
+               */
+              <p style={{ fontSize: 12, color: "var(--color-smoke)", marginTop: 8 }}>
+                Bu sayı bir <strong>tanık beyanıdır</strong>; anlaşmalar Filecoin
+                zincirinde yaşar ve Ethereum onları doğrudan göremez. Kayıtlar
+                anlaşma kimliğiyle birlikte tutulur, böylece Filecoin'in herkese
+                açık RPC'sinden <em>bağımsız olarak</em> doğrulanabilir — bu
+                denetim günlük olarak otomatik koşar.
+              </p>
+            )}
             <p style={{ fontSize: 12, color: "var(--color-smoke)", marginTop: 12 }}>
               Panelinizin kendisi zincire hic yazilmaz. Taahhut tek yonludur; salt
               bilinmedikce panel geri cikarilamaz.
             </p>
+          </>
+        )}
+      </div>
+
+      {/* --- Nadirlik Carpani (rapor §4.3) -------------------------------- */}
+      <div className="card">
+        <h3 style={{ marginBottom: 4 }}>Nadirlik Carpani</h3>
+        <p style={{ fontSize: 13, color: "var(--color-smoke)", marginBottom: 16 }}>
+          Nadir bir varyant tasiyorsaniz veriniz daha degerlidir ve payiniz{" "}
+          <strong>R = log₂(1 + havuz / tasiyici)</strong> kati olur. Bunu olcmek
+          icin genomunuz <em>acilmaz</em>: yalnizca “nadir mi?” sorusunun{" "}
+          <strong>tek bitlik</strong> sifreli yaniti, KMS dugumlerinin esikli
+          onayiyla cozulur.
+        </p>
+
+        {!state?.vault.hasAggregated ? (
+          <p style={{ color: "var(--color-smoke)", fontSize: 14 }}>
+            Once sifreli dozajinizi havuza gonderin.
+          </p>
+        ) : !rarity ? (
+          <p style={{ color: "var(--color-smoke)", fontSize: 14 }}>Okunuyor…</p>
+        ) : (
+          <>
+            <div className="card__row">
+              <span className="eyebrow">DURUM</span>
+              <span className="mono">
+                {rarity.confirmed
+                  ? rarity.isCarrier
+                    ? "NADIR TASIYICI"
+                    : "YAYGIN VARYANT"
+                  : rarity.requested
+                    ? "ESIKLI COZUM BEKLENIYOR"
+                    : "DEGERLENDIRILMEDI"}
+              </span>
+            </div>
+            <div className="card__row">
+              <span className="eyebrow">HAVUZ / TASIYICI</span>
+              <span className="mono">
+                {rarity.poolCount} / {rarity.carriers}
+              </span>
+            </div>
+            <div className="card__row">
+              <span className="eyebrow">GUNCEL CARPAN</span>
+              <span className="mono">
+                {rarity.carriers > 0
+                  ? `${(rarityMultiplierBps(rarity.poolCount, rarity.carriers) / 10_000).toFixed(2)}×`
+                  : "—"}
+              </span>
+            </div>
+            <div className="card__row">
+              <span className="eyebrow">KURUCU KATKICI (+%50)</span>
+              <span className="mono">{rarity.isFounding ? "Evet" : "Hayir"}</span>
+            </div>
+
+            {!rarity.confirmed && (
+              <>
+                <div
+                  className="notice notice--warn"
+                  style={{ marginTop: 16, fontSize: 13 }}
+                >
+                  <strong>Bunu bilerek secin.</strong> Degerlendirme sonucu
+                  zincire yazilir ve herkese aciktir: bu adresin nadir varyant
+                  tasiyip tasimadigi gorunur olur. Bu kacinilmazdir — yuksek pay
+                  alan bir adresin tasiyici oldugu zaten odemeden anlasilir.
+                  Acilan sey <strong>yalnizca bu tek bittir</strong>; dozajiniz,
+                  paneliniz ve genomunuz kapali kalir. Degerlendirme
+                  istemezseniz carpaniniz 1,00× olarak surer.
+                </div>
+
+                <button
+                  className="btn"
+                  style={{ marginTop: 12 }}
+                  disabled={busy !== null}
+                  onClick={() =>
+                    rarity.requested
+                      ? void runRarityDecrypt()
+                      : void run("Nadirlik degerlendirmesi", async () =>
+                          requestRarityAssessment(await provider!.getSigner()),
+                        )
+                  }
+                >
+                  {busy
+                    ? "Islem suruyor…"
+                    : rarity.requested
+                      ? "Esikli cozumu tamamla"
+                      : "Nadirlik degerlendirmesini baslat"}
+                </button>
+              </>
+            )}
           </>
         )}
       </div>
