@@ -1,0 +1,37 @@
+[
+  {
+    "features": 4096,
+    "fit_s": 0.11,
+    "compile_s": 0.21,
+    "fhe_s": 0.71,
+    "peak_mb": 669.0
+  },
+  {
+    "features": 16384,
+    "fit_s": 0.23,
+    "compile_s": 0.26,
+    "fhe_s": 1.74,
+    "peak_mb": 1384.7
+  },
+  {
+    "features": 65536,
+    "fit_s": 0.52,
+    "compile_s": 0.36,
+    "fhe_s": 6.22,
+    "peak_mb": 4307.9
+  },
+  {
+    "features": 262144,
+    "fit_s": 1.64,
+    "compile_s": 1.41,
+    "fhe_s": 29.62,
+    "peak_mb": 6264.1
+  },
+  {
+    "features": 1048576,
+    "fit_s": 8.33,
+    "compile_s": 15.94,
+    "fhe_s": 823.05,
+    "peak_mb": 11097.0
+  }
+]
