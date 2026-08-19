@@ -36,3 +36,7 @@ opt-level = "z"
 lto = true
 codegen-units = 1
 panic = "abort"
+
+[dev-dependencies]
+# Yalnizca test: gercek 1000 Genomes .vcf.gz dosyasini acmak icin.
+flate2 = "1"
