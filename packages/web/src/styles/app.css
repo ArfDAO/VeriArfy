@@ -744,3 +744,336 @@
   font-weight: 500;
   font-feature-settings: "calt" 0, "liga" 0;
 }
+
+/* --------------------------------------------------------------------------
+ * Katki akisi ve dogrulama konsolu
+ * ------------------------------------------------------------------------ */
+
+.contribute {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--spacing-24);
+  align-items: start;
+}
+@media (max-width: 1020px) {
+  .contribute {
+    grid-template-columns: 1fr;
+  }
+}
+
+.contribute__flow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-16);
+}
+
+/* Konsol uzun akislarda ekranda kalir: adim atarken kanit gorunur olmali. */
+.contribute__trace {
+  position: sticky;
+  top: var(--spacing-24);
+}
+@media (max-width: 1020px) {
+  .contribute__trace {
+    position: static;
+  }
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-12);
+  flex-wrap: wrap;
+}
+
+.select {
+  font-family: var(--font-fellix);
+  font-size: 14px;
+  color: var(--color-ink);
+  background: var(--color-paper);
+  border: 1px solid rgba(34, 34, 34, 0.12);
+  border-radius: var(--radius-pill);
+  padding: 13px 18px;
+  outline: none;
+}
+.select:focus {
+  border-color: var(--color-ink);
+}
+
+/* --- Rozetler --- */
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-8);
+  margin-bottom: var(--spacing-16);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: var(--tracking-mono);
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(34, 34, 34, 0.05);
+  color: var(--color-smoke);
+  white-space: nowrap;
+}
+.badge--ok {
+  background: var(--color-seafoam);
+  color: #1f5a44;
+}
+.badge--warn {
+  background: var(--color-meringue);
+  color: var(--color-slate-plum);
+}
+.badge--fail {
+  background: #fde0e0;
+  color: #8e2b2b;
+}
+
+/* --- Anahtar/deger listesi --- */
+.kv {
+  display: flex;
+  flex-direction: column;
+}
+.kv__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-16);
+  padding: 10px 0;
+  border-top: 1px solid rgba(34, 34, 34, 0.06);
+  font-size: 13px;
+}
+.kv__row .mono {
+  font-size: 12px;
+  text-align: right;
+  word-break: break-all;
+}
+
+/* --- Tablo --- */
+.table {
+  display: flex;
+  flex-direction: column;
+  overflow-x: auto;
+}
+.table__head,
+.table__row {
+  display: grid;
+  grid-template-columns: 1.4fr 0.9fr 1.3fr 0.8fr;
+  gap: var(--spacing-12);
+  padding: 9px 0;
+  min-width: 420px;
+}
+.table__head {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: var(--tracking-mono);
+  color: var(--color-smoke);
+  border-bottom: 1px solid rgba(34, 34, 34, 0.12);
+}
+.table__row {
+  border-top: 1px solid rgba(34, 34, 34, 0.06);
+  font-size: 12px;
+}
+
+/* --- Ilerleme --- */
+.progress {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: rgba(34, 34, 34, 0.08);
+  overflow: hidden;
+}
+.progress__fill {
+  height: 100%;
+  background: var(--gradient-iris);
+  transition: width 0.2s ease;
+}
+
+/* --- Metrik formu --- */
+.metrics {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--spacing-8);
+}
+.metric {
+  display: grid;
+  grid-template-columns: 1fr 200px;
+  gap: var(--spacing-16);
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid rgba(34, 34, 34, 0.06);
+}
+@media (max-width: 620px) {
+  .metric {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-8);
+  }
+}
+.metric__label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.metric__code {
+  font-size: 13px;
+}
+.metric__input {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-8);
+}
+.metric__input input {
+  width: 110px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-ink);
+  background: var(--color-paper);
+  border: 1px solid rgba(34, 34, 34, 0.12);
+  border-radius: var(--radius-input);
+  padding: 9px 11px;
+  outline: none;
+}
+.metric__input input:focus {
+  border-color: var(--color-ink);
+}
+.metric__input input.input--bad {
+  border-color: #c26060;
+}
+.metric__state {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-smoke);
+}
+.metric__state--ok {
+  color: #1f5a44;
+}
+.metric__state--bad {
+  color: #8e2b2b;
+}
+
+/* --------------------------------------------------------------------------
+ * Dogrulama konsolu
+ * ------------------------------------------------------------------------ */
+
+.trace__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.trace__step {
+  padding: var(--spacing-12) 0;
+  border-top: 1px solid rgba(34, 34, 34, 0.06);
+}
+.trace__step:first-child {
+  border-top: none;
+}
+
+.trace__head {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-8);
+}
+
+.trace__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: rgba(34, 34, 34, 0.2);
+}
+.trace__dot--running {
+  background: var(--color-iris);
+  animation: trace-pulse 1s ease-in-out infinite;
+}
+.trace__dot--ok {
+  background: #3f9d7c;
+}
+.trace__dot--fail {
+  background: #c25151;
+}
+
+@keyframes trace-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trace__dot--running {
+    animation: none;
+  }
+}
+
+.trace__label {
+  font-size: 14px;
+  flex: 1;
+  min-width: 0;
+}
+.trace__status {
+  flex: none;
+}
+
+.trace__detail {
+  margin: 6px 0 0 16px;
+  font-size: 13px;
+  color: var(--color-smoke);
+  line-height: 1.45;
+}
+.trace__detail--fail {
+  color: #8e2b2b;
+}
+
+.trace__evidence {
+  margin: var(--spacing-8) 0 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: var(--spacing-8) var(--spacing-12);
+  background: var(--color-bone);
+  border-radius: var(--radius-xl);
+}
+
+.trace__ev {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--spacing-12);
+  font-size: 12px;
+}
+.trace__ev-label {
+  color: var(--color-smoke);
+  white-space: pre;
+}
+.trace__ev-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  text-align: right;
+  word-break: break-all;
+}
+
+.trace__link {
+  color: var(--color-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: rgba(34, 34, 34, 0.25);
+}
+.trace__link:hover {
+  text-decoration-color: var(--color-ink);
+}
+
+.trace__verified {
+  color: #3f9d7c;
+  font-size: 12px;
+  flex: none;
+}
