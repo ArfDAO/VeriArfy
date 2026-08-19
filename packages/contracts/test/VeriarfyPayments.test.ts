@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { expect } from "chai";
 import { ethers, fhevm } from "hardhat";
 import type { Signer } from "ethers";
+import { protocolFactory } from "./helpers/factories";
 
 /**
  * Hesaplama basina odeme ve gelir paylasimi.
@@ -45,7 +46,13 @@ describe("VeriarfyPayments", () => {
   );
   const PROVENANCE_ZKEY = join(CIRCUITS, "build", "data_provenance_final.zkey");
 
-  const PANEL = [0, 1, 2, 1, 0, 0, 2, 1, 1, 0, 2, 2, 0, 1, 0, 1];
+  /**
+   * Test paneli devrenin `PANEL_SIZE`'indan turetilir; sabit uzunluk yazilmaz.
+   *
+   * Panel buyudugunde sabit dizi "uzunluk uyusmuyor" ile duserdi. Testin
+   * dogruladigi sey uzunluk degil DAVRANISTIR; boyuta bagimli olmamali.
+   */
+  let PANEL: number[];
 
   /** USDC ile ayni: 6 ondalik. 10 tUSD taban, katilimci basina 1 tUSD. */
   const BASE_FEE = 10_000_000n;
@@ -64,6 +71,10 @@ describe("VeriarfyPayments", () => {
     }
     circuits = await import("@veriarfy/circuits");
     provenanceLib = await import("@veriarfy/circuits/provenance");
+    PANEL = Array.from(
+      { length: provenanceLib.PANEL_SIZE },
+      (_: unknown, i: number) => [0, 1, 2, 1, 0, 2][i % 6],
+    );
     snarkjs = await import("snarkjs");
 
     ({ institution, registry: institutionRegistry } =
@@ -115,7 +126,7 @@ describe("VeriarfyPayments", () => {
     const provVerifier = await ProvVerifier.deploy();
     await provVerifier.waitForDeployment();
 
-    const Protocol = await ethers.getContractFactory("VeriarfyProtocol");
+    const Protocol = await protocolFactory();
     // minParticipants = 1: k-anonimlik bu dosyanin konusu degil, odeme akisi.
     // Esik davranisi `VeriarfyProtocol.test.ts` ve `GwasChiSquare.test.ts`
     // icinde ayrica dogrulanir.
@@ -201,6 +212,9 @@ describe("VeriarfyPayments", () => {
 
     const q = await payments.query(queryId);
     await protocol.connect(nodeA).approveDisclosure(q.disclosureRequestId);
+    // Rapor §2.7.1: esik saglanir, sonra itiraz suresi. Burada sure 0 oldugu
+    // icin acilim hemen yurutulebilir; suresi olan hal ayrica test edilir.
+    await protocol.executeDisclosure(q.disclosureRequestId);
 
     await payments.settleQuery(queryId);
     return queryId;
