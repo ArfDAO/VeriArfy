@@ -1,0 +1,18 @@
+{
+  "panelId": "veriarfy-demo-v1",
+  "version": 1,
+  "assembly": "GRCh38",
+  "note": "Koordinatlar Ensembl REST (rest.ensembl.org/variation/human) uzerinden dogrulanmistir. ETKI ALELI KURALI: her varyantta etki aleli, dbSNP'nin bildirdigi ILK ALTERNATIF aleldir; referans alel 'other' alanindadir. Bu bir tasarim secimidir ve risk yonu hakkinda hicbir iddia tasimaz — panelin tamami zaten ozetle sabitlenir.",
+  "variants": [
+    { "rsid": "rs4977574", "chrom": "9",  "pos": 22098575,  "effect": "G", "other": "A" },
+    { "rsid": "rs1801133", "chrom": "1",  "pos": 11796321,  "effect": "A", "other": "G" },
+    { "rsid": "rs4988235", "chrom": "2",  "pos": 135851076, "effect": "A", "other": "G" },
+    { "rsid": "rs1815739", "chrom": "11", "pos": 66560624,  "effect": "T", "other": "C" },
+    { "rsid": "rs9939609", "chrom": "16", "pos": 53786615,  "effect": "A", "other": "T" },
+    { "rsid": "rs1051730", "chrom": "15", "pos": 78601997,  "effect": "A", "other": "G" },
+    { "rsid": "rs429358",  "chrom": "19", "pos": 44908684,  "effect": "C", "other": "T" },
+    { "rsid": "rs7412",    "chrom": "19", "pos": 44908822,  "effect": "T", "other": "C" },
+    { "rsid": "rs4680",    "chrom": "22", "pos": 19963748,  "effect": "A", "other": "G" },
+    { "rsid": "rs662799",  "chrom": "11", "pos": 116792991, "effect": "A", "other": "G" }
+  ]
+}
