@@ -20,7 +20,7 @@ Halo2'ye gecisi bunun sonucu olarak konumlandiriyor. Olculen gercek:
 | | Kisit sayisi | Kanit uretimi |
 |---|---|---|
 | Rapordaki RSA-2048 tasarimi | ~1.500.000 (beyan) | 14 s -> 3,2 s (hedef) |
-| **Kurulan EdDSA tasarimi** | **20.088 (olculen)** | **~850 ms (olculen)** |
+| **Kurulan EdDSA tasarimi** | **23.762 (olculen)** | **~770 ms (olculen)** |
 
 Fark yapisal: EdDSA'nin calistigi Baby Jubjub egrisi, devrenin calistigi
 BN254 skaler alaniyla uyumludur — nokta aritmetigi dogrudan alan islemleridir.
@@ -141,14 +141,21 @@ istatistikseldir, kriptografik degil. Bu yuzden **kural**: iki devre ayni
 ## Olculen degerler
 
 ```
-devre               : DataProvenance(PANEL=16, LEVELS=20)
-kisit               : 20.088   (researcher_identity: 11.435)
+devre               : DataProvenance(PANEL=1000, LEVELS=20)
+kisit               : 23.762   (researcher_identity: 11.435)
 ptau                : 2^15 = 32.768
-kanit uretimi       : ~850 ms  (Node.js, dizustu)
-kanit boyutu        : 723 bayt (JSON), Groth16 sabit
+kanit uretimi       : ~770 ms  (Node.js, dizustu)
+kanit boyutu        : ~720 bayt (JSON), Groth16 sabit
 acik sinyal         : 7
 ```
 
-PANEL=16 secimi tesaduf degil: Concrete devresinin dogrulanmis panel tavani da
-16. Paketleme (2 bit x eleman) sayesinde 125'e kadar buyutmek devre yapisini
-degil yalnizca sabiti degistirir — ama yeniden kurulum (setup) gerektirir.
+PANEL=1000 — GUNCELLENDI. Eskiden 16'ydi ve gerekce "Concrete devresinin
+dogrulanmis tavani da 16" idi. O tavanin yanlis teshis oldugu ortaya cikti
+(bkz. [MK-0011](0011-panel-tavani.md)) ve iki taraf da acildi.
+
+Panel 62 kat buyudu; bedeli %18 kisit ve %6 kanit uretim suresi. Kanit boyutu
+ve zincirdeki dogrulama maliyeti DEGISMEDI — Groth16 sabit boyutludur.
+
+Paketleme artik PARCALIDIR: her 125 dozaj bir alan elemanina girer, taahhut
+parcalarin uzerinden alinir. Ust sinir 1875 (15 parca x 125) ve devrede
+`assert` ile zorlanir; oncesinde asan paneller sessizce yanlis derleniyordu.
