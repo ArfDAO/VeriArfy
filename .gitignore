@@ -22,6 +22,8 @@ packages/circuits/bin/
 
 # web — devre ciktilari build sirasinda kopyalanir (npm run web:prepare)
 packages/web/public/circuits/
+# Zama SDK wasm — npm run prepare-fhe-wasm ile uretilir
+packages/web/public/fhe/
 
 # kurator calisma durumu (katilimci agaci)
 packages/curator/data/
