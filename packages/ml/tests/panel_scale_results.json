@@ -1,0 +1,92 @@
+[
+  {
+    "panel": 16,
+    "roc_auc": 0.9511579206701157,
+    "quantized_accuracy": 0.9321357285429142,
+    "fhe_accuracy": 1.0,
+    "compile_seconds": 0.5905175829539075,
+    "fhe_latency_seconds": 0.5339152910746634,
+    "total_seconds": 5.7,
+    "exit_code": 0
+  },
+  {
+    "panel": 32,
+    "roc_auc": 0.9788433111603843,
+    "quantized_accuracy": 0.9700598802395209,
+    "fhe_accuracy": 1.0,
+    "compile_seconds": 0.36233966692816466,
+    "fhe_latency_seconds": 0.35065645806025714,
+    "total_seconds": 5.2,
+    "exit_code": 0
+  },
+  {
+    "panel": 64,
+    "roc_auc": 0.9888724644822207,
+    "quantized_accuracy": 0.9800399201596807,
+    "fhe_accuracy": 1.0,
+    "compile_seconds": 0.37313220906071365,
+    "fhe_latency_seconds": 0.3484128339914605,
+    "total_seconds": 5.2,
+    "exit_code": 0
+  },
+  {
+    "panel": 128,
+    "roc_auc": 0.9905764966740576,
+    "quantized_accuracy": 0.9800399201596807,
+    "fhe_accuracy": 1.0,
+    "compile_seconds": 0.3505501670297235,
+    "fhe_latency_seconds": 0.3586079580709338,
+    "total_seconds": 4.9,
+    "exit_code": 0
+  },
+  {
+    "panel": 256,
+    "roc_auc": 0.9939127042785579,
+    "quantized_accuracy": 0.9820359281437125,
+    "fhe_accuracy": 1.0,
+    "compile_seconds": 0.36500991706270725,
+    "fhe_latency_seconds": 0.39912833308335394,
+    "total_seconds": 5.1,
+    "exit_code": 0
+  },
+  {
+    "panel": 512,
+    "roc_auc": 0.9958015110454135,
+    "quantized_accuracy": 0.9840319361277445,
+    "fhe_accuracy": 1.0,
+    "compile_seconds": 0.37207008292898536,
+    "fhe_latency_seconds": 0.40370570798404515,
+    "total_seconds": 5.1,
+    "exit_code": 0
+  },
+  {
+    "panel": 1024,
+    "roc_auc": 0.996150529687115,
+    "quantized_accuracy": 0.9860279441117764,
+    "fhe_accuracy": 1.0,
+    "compile_seconds": 0.3282135829795152,
+    "fhe_latency_seconds": 0.5188334169797599,
+    "total_seconds": 5.0,
+    "exit_code": 0
+  },
+  {
+    "panel": 2048,
+    "roc_auc": 0.9959246940954258,
+    "quantized_accuracy": 0.9860279441117764,
+    "fhe_accuracy": 1.0,
+    "compile_seconds": 0.3885843330062926,
+    "fhe_latency_seconds": 0.5388923329301178,
+    "total_seconds": 5.3,
+    "exit_code": 0
+  },
+  {
+    "panel": 3892,
+    "roc_auc": 0.9961813254496181,
+    "quantized_accuracy": 0.9820359281437125,
+    "fhe_accuracy": 1.0,
+    "compile_seconds": 0.502609791001305,
+    "fhe_latency_seconds": 0.6313614579848945,
+    "total_seconds": 5.7,
+    "exit_code": 0
+  }
+]
