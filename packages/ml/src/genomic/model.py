@@ -36,8 +36,20 @@ from pathlib import Path
 from typing import Iterable
 
 import numpy as np
-from concrete.ml.deployment import FHEModelDev
+
+# IMPORT SIRASI ONEMLI — DEGISTIRMEYIN.
+#
+# `concrete.ml.sklearn` MUTLAKA `concrete.ml.deployment`'tan ONCE gelmelidir.
+# Ters sirada Concrete'in yerel/LLVM baslatmasi bozuluyor ve derleme, devre
+# belli bir karmasikligi asinca **surec olumuyle** (SIGABRT, "Pure virtual
+# function called") duşuyor. Python istisnasi olmadigi icin yakalanamaz.
+#
+# Bu, uzun sure "panel >= 20'de LLVM cokuyor" diye YANLIS TESHIS edildi ve
+# `VERIFIED_MAX_PANEL_SIZE = 16` olarak kayda gecti. Gercek sebep bu iki
+# satirin sirasiydi: sira duzeltilince ayni veriyle panel 3892'ye kadar
+# derleniyor (bkz. `tests/panel_scale_probe.py`).
 from concrete.ml.sklearn import LogisticRegression
+from concrete.ml.deployment import FHEModelDev
 from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn.model_selection import train_test_split
 
@@ -70,18 +82,26 @@ LABEL_POSITIVE = os.environ.get("VERIARFY_LABEL_POSITIVE", "AFR")
 #: Sifreli devreye girecek varyant sayisi.
 PANEL_SIZE = int(os.environ.get("VERIARFY_PANEL_SIZE", "16"))
 
-#: Bu veriyle derlenebildigi ÖLCÜLEN en buyuk panel.
+#: Bu veriyle derlenebildigi OLCULEN en buyuk panel.
 #:
-#: concrete-ml 1.9.0 + gercek chrMT dozajlariyla panel >= 20 oldugunda
-#: Concrete'in LLVM arka ucu **cokuyor** (Python istisnasi degil, surec
-#: olumu — bu yuzden try/except ile yakalanamaz). Cokme; n_bits (8/6/4),
-#: L2 duzenlileştirme (C=1/0.1/0.01), birebir ayni kolonlarin atilmasi ve
-#: derleme kumesi boyutu (2002/200/100 satir) degisikliklerinden bagimsiz
-#: olarak tekrarlandi. Ayni sekil rastgele veriyle 64 ozellikte sorunsuz
-#: derlendigi icin sorun veriye ozgudur.
+#: ESKI DEGER 16'YDI VE YANLIS TESHISE DAYANIYORDU.
 #:
-#: Pratikte kayip kucuk: panel 16'da AUC 0.951, panel 24'te 0.964.
-VERIFIED_MAX_PANEL_SIZE = 16
+#: Kayitli gerekce suydu: "panel >= 20'de Concrete'in LLVM arka ucu surec
+#: olumuyle cokuyor, n_bits/duzenlilestirme/derleme kumesi degisikliklerinden
+#: bagimsiz". Cokme gercekti; ama sebebi panel boyutu DEGILDI — yukaridaki iki
+#: import satirinin SIRASIYDI. Sira duzeltilince ayni veri, ayni surum ve ayni
+#: parametrelerle chrMT'nin TAMAMI derleniyor.
+#:
+#: Olculen (tests/panel_scale_probe.py, tam boru hatti + gercek FHE cikarimi):
+#:
+#:     panel    AUC     derleme   FHE gecikmesi
+#:        16   0.951      0.6 sn      0.53 sn
+#:       256   0.994      0.4 sn      0.40 sn
+#:      3892   0.996      0.5 sn      0.63 sn
+#:
+#: 3892 = chrMT'deki toplam varyant sayisi, yani VERININ siniri — derleyicinin
+#: degil. Daha buyuk panel icin nukleer kromozom verisi gerekir.
+VERIFIED_MAX_PANEL_SIZE = int(os.environ.get("VERIARFY_MAX_PANEL_SIZE", "3892"))
 
 #: Zama kuantizasyon genisligi.
 N_BITS = int(os.environ.get("VERIARFY_N_BITS", "8"))
