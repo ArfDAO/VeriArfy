@@ -13,6 +13,12 @@ export const CONTRACTS = deployment.contracts as {
   PaymentToken: string;
   VeriArfyRegistry: string;
   AnxietyStudy: string;
+  /** Rapor §2.7 — kripto-ekonomik guvenlik modulu. */
+  VeriarfyStaking?: string;
+  /** Rapor §2.9.2 — Filecoin kalicilik defteri. */
+  VeriarfyStorage?: string;
+  /** Veri kategorisi 2 — surekli biyobelirtec kanali. */
+  VeriarfyBiomarkers?: string;
 };
 
 /** Kontratlar deploy edilmis mi? */
