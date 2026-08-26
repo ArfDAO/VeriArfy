@@ -25,6 +25,10 @@ interface IDataProvenanceVerifier {
         uint256[2] calldata pA,
         uint256[2][2] calldata pB,
         uint256[2] calldata pC,
-        uint256[7] calldata pubSignals
+        // 12 sinyal: [root, nullifierHash, commitment, coverage[0..4],
+        //             externalNullifier, cidHigh, cidLow, signalHash]
+        // Kapsama kelimeleri devrenin ciktisidir; sayilari PANEL/240 ile
+        // belirlenir (PANEL=1000 -> 5).
+        uint256[13] calldata pubSignals
     ) external view returns (bool);
 }
