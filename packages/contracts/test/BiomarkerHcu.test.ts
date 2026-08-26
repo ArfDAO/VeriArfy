@@ -80,7 +80,7 @@ describe("Biyobelirtec kanali — parti tavani (HCU)", () => {
       try {
         const tx = await biomarkers
           .connect(participant)
-          .contributeBiomarkers(enc.handles, enc.inputProof);
+          .contributeBiomarkers(enc.handles, (1n << BigInt(batch)) - 1n, enc.inputProof);
         const receipt = await tx.wait();
         return Number(receipt!.gasUsed);
       } catch (err: any) {
