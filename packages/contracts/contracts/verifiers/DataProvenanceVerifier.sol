@@ -213,7 +213,7 @@ contract DataProvenanceVerifier {
             let pMem := mload(0x40)
             mstore(0x40, add(pMem, pLastMem))
 
-            // Validate that all evaluations ∈ F
+            // Validate that all evaluations in F
             
             checkField(calldataload(add(_pubSignals, 0)))
             

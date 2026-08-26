@@ -20,18 +20,18 @@ pragma solidity ^0.8.24;
  *       kisi yalan soyleyebilir. `verifyDecryptionEIP712KMSSignatures`,
  *       "bu handle gercekten bu degere cozuluyor" iddiasinin KMS esigi
  *       tarafindan imzalandigini dogrular. Boylece sonucu KIMIN getirdigi
- *       onemsizlesir — dogrulama zincirde yapilir.
+ *       onemsizlesir - dogrulama zincirde yapilir.
  *
  *       Adres `ZamaConfig` uzerinden chainId'ye gore gelir; elle yazilmaz.
  *
- *       Arayuz surumu: KMSVerifier 0.10.0 — fhevm mock-utils paketiyle ayni.
+ *       Arayuz surumu: KMSVerifier 0.10.0 - fhevm mock-utils paketiyle ayni.
  */
 interface IKMSVerifier {
     /**
      * @param handlesList     Cozulen sifreli deger handle'lari (sirali).
      * @param decryptedResult Duz degerlerin ABI kodlamasi.
      * @param decryptionProof KMS dugumlerinin EIP-712 imzalari.
-     * @return true — imzalar gecerli ve esik saglandi.
+     * @return true - imzalar gecerli ve esik saglandi.
      */
     function verifyDecryptionEIP712KMSSignatures(
         bytes32[] memory handlesList,

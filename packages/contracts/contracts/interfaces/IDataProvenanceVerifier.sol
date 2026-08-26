@@ -17,7 +17,7 @@ pragma solidity ^0.8.24;
  *        [6] signalHash        uint256(uint160(yukleyen))
  *
  *      Circom'da CIKTILAR once, sonra acik GIRDILER bildirim sirasiyla gelir.
- *      Bu sira degisirse kontrat sessizce yanlis alanlari karsilastirir —
+ *      Bu sira degisirse kontrat sessizce yanlis alanlari karsilastirir -
  *      derleyici uyarmaz. Devre degistirilirse burasi da guncellenmelidir.
  */
 interface IDataProvenanceVerifier {

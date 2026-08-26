@@ -13,7 +13,7 @@ import {FHE, ebool, euint8, euint32} from "@fhevm/solidity/lib/FHE.sol";
  *       `delegatecall` ile cagrilir; `address(this)` protokol olarak kaldigi
  *       icin fhEVM'in ACL kayitlari dogru kontrata yazilir.
  *
- *       IKI KATEGORI, IKI ISTATISTIK — ayrimin sebebi budur:
+ *       IKI KATEGORI, IKI ISTATISTIK - ayrimin sebebi budur:
  *
  *         veri kategorisi 1 (genomik)     dozaj KATEGORIK (0/1/2)
  *                                         -> kontenjans tablosu -> ki-kare
@@ -21,7 +21,7 @@ import {FHE, ebool, euint8, euint32} from "@fhevm/solidity/lib/FHE.sol";
  *                                         -> (n, Sum x, Sum x^2) -> Welch t
  *
  *       Ikisinde de zincirde yalnizca SAYIMLAR birikir; testin kendisi
- *       (ki-kare ya da t) bolme icerdigi icin duz metinde yapilir — sifreli
+ *       (ki-kare ya da t) bolme icerdigi icin duz metinde yapilir - sifreli
  *       bolme TFHE'de pratik degildir.
  */
 library ContingencyStats {

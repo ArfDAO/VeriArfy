@@ -6,29 +6,29 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 /**
  * @title   VeriarfyStorage
  * @notice  Filecoin depolama anlasmalarinin zincir uzerindeki defteri ve
- *          kalicilik politikasi — rapor §2.9.2 ve WBS 2.3.
+ *          kalicilik politikasi - rapor 2.9.2 ve WBS 2.3.
  *
  * @dev
  * # Neden var
  *
  * IPFS veriyi ADRESLER, saklamayi GARANTI ETMEZ: pinlenmemis bir blok garbage
- * collection ile silinir. Rapor §2.9.2'nin dedigi gibi tibbi arastirmada bu
+ * collection ile silinir. Rapor 2.9.2'nin dedigi gibi tibbi arastirmada bu
  * kabul edilemez. Filecoin, ustune ekonomik tesvik katmani koyar: madenciler
  * veriyi sildiklerini gizleyemez (PoSt/PoRep), silerlerse FIL yakilir.
  *
  * Bugun sistemde blob'lar IPFS'e pinleniyor (Pinata) ama **hicbir Filecoin
  * anlasmasi yok**. Bu sozlesme o boslugun zincirdeki yarisini kapatir.
  *
- * # NEYIN GARANTI EDILDIGI — durustce
+ * # NEYIN GARANTI EDILDIGI - durustce
  *
  * Bu sozlesme iki farkli seyi yapar ve ikisinin guven modeli AYRIDIR:
  *
- *   1. **Politika — guvensiz (trustless).** "En az 3 farkli saglayici",
+ *   1. **Politika - guvensiz (trustless).** "En az 3 farkli saglayici",
  *      "en az 180 gun", "ayni anlasma iki kez sayilamaz", "yenileme ne zaman
  *      gerekir" kurallarinin tamami burada zorlanir. Kimse bu kurallari
  *      esneterek bir CID'i yeterince cogaltilmis gosteremez.
  *
- *   2. **Olgu — tanikli (attested).** "Filecoin'de gercekten boyle bir
+ *   2. **Olgu - tanikli (attested).** "Filecoin'de gercekten boyle bir
  *      anlasma var mi" sorusu Filecoin zincirinde yasar; Ethereum bunu
  *      goremez. Anlasmalari bir tanik (`attestor`) kaydeder.
  *
@@ -42,7 +42,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
  * # Filecoin epoch'u neden oracle gerektirmiyor
  *
  * Filecoin epoch'lari SABIT 30 saniyedir ve genesis zaman damgasi bilinir.
- * Dolayisiyla guncel epoch `block.timestamp`'ten aritmetikle turetilir —
+ * Dolayisiyla guncel epoch `block.timestamp`'ten aritmetikle turetilir -
  * hicbir oracle'a, hicbir tanik beyanina gerek yoktur. Genesis ve epoch
  * suresi `immutable` olarak verilir ki Calibration test agi da
  * kullanilabilsin.
@@ -80,19 +80,19 @@ contract VeriarfyStorage is Ownable {
     event ReplicationRestored(bytes32 indexed cidDigest, uint32 activeReplicas);
 
     // ---------------------------------------------------------------------------------
-    // Politika sabitleri — rapor WBS 2.3
+    // Politika sabitleri - rapor WBS 2.3
     // ---------------------------------------------------------------------------------
 
     /**
      * @notice En az kac farkli saglayicida durmali (rapor WBS 2.3: "en az 3").
      * @dev Rapor ayrica "farkli cografi bolgelerde" diyor. Cografya zincirde
-     *      DOGRULANAMAZ — saglayici kimligi bir aktor numarasidir, konum degil.
+     *      DOGRULANAMAZ - saglayici kimligi bir aktor numarasidir, konum degil.
      *      Zorlanan sey saglayicilarin FARKLI olmasidir; cografi dagilim
      *      anlasma yapilirken saglayici secimiyle saglanir.
      */
     uint32 public constant MIN_REPLICATION = 3;
 
-    /// @notice Filecoin epoch suresi (saniye) — protokol sabiti.
+    /// @notice Filecoin epoch suresi (saniye) - protokol sabiti.
     uint64 public constant EPOCH_SECONDS = 30;
 
     /**
@@ -103,7 +103,7 @@ contract VeriarfyStorage is Ownable {
 
     /**
      * @notice Yenileme penceresi: bitise 30 gun kala yenileme gerekir.
-     * @dev Anlasma bitene kadar beklemek gec olurdu — yeni anlasma yapmak,
+     * @dev Anlasma bitene kadar beklemek gec olurdu - yeni anlasma yapmak,
      *      veriyi saglayiciya aktarmak ve sektorun muhurlenmesi zaman alir.
      */
     uint64 public constant RENEWAL_WINDOW_EPOCHS = 86_400;
@@ -118,7 +118,7 @@ contract VeriarfyStorage is Ownable {
      * @dev Ana ag: 1.598.306.400 (24 Agustos 2020, 22:00 UTC). Calibration
      *      test aginin genesis'i farklidir; bu yuzden sabit degil `immutable`.
      *      Yanlis verilirse epoch hesabi kayar ve yenileme uyarilari yanlis
-     *      zamanda cikar — dagitimda dogrulanmasi gereken bir degerdir.
+     *      zamanda cikar - dagitimda dogrulanmasi gereken bir degerdir.
      */
     uint64 public immutable filecoinGenesis;
 
@@ -132,11 +132,11 @@ contract VeriarfyStorage is Ownable {
     struct Deal {
         /// @dev Filecoin saglayici aktor numarasi (f0xxxx -> xxxx).
         uint64 providerId;
-        /// @dev Filecoin market anlasma numarasi — herkese acik RPC ile dogrulanir.
+        /// @dev Filecoin market anlasma numarasi - herkese acik RPC ile dogrulanir.
         uint64 dealId;
         uint64 startEpoch;
         uint64 endEpoch;
-        /// @dev Filecoin "piece CID" (commP) ozeti — anlasmanin neyi kapsadigi.
+        /// @dev Filecoin "piece CID" (commP) ozeti - anlasmanin neyi kapsadigi.
         bytes32 pieceCidDigest;
         /// @dev Saglayici sektoru dusurduyse / cezalandirildiysa true.
         bool terminated;
@@ -150,7 +150,7 @@ contract VeriarfyStorage is Ownable {
     /// @notice Anlasma numarasi daha once kaydedildi mi (tekrar sayimi engeller)?
     mapping(uint64 dealId => bytes32 cidDigest) public dealToCid;
 
-    /// @notice Kayitli en az bir anlasmasi olan CID sayisi — panel icin.
+    /// @notice Kayitli en az bir anlasmasi olan CID sayisi - panel icin.
     uint256 public trackedCidCount;
 
     // ---------------------------------------------------------------------------------
@@ -170,7 +170,7 @@ contract VeriarfyStorage is Ownable {
     }
 
     // ---------------------------------------------------------------------------------
-    // 1) Epoch — oracle'siz
+    // 1) Epoch - oracle'siz
     // ---------------------------------------------------------------------------------
 
     /**
@@ -195,7 +195,7 @@ contract VeriarfyStorage is Ownable {
      *
      * @dev  Zorlanan kurallar (hepsi rapor WBS 2.3'ten):
      *       - anlasma en az 180 gun surmeli,
-     *       - ayni saglayici ayni CID icin iki kez sayilamaz — aksi halde
+     *       - ayni saglayici ayni CID icin iki kez sayilamaz - aksi halde
      *         tek bir madenciye 3 anlasma yapip "3 replika" gostermek mumkun
      *         olurdu ve cogaltmanin amaci (tek nokta hatasi) yok olurdu,
      *       - ayni `dealId` iki farkli CID'e baglanamaz.
@@ -358,7 +358,7 @@ contract VeriarfyStorage is Ownable {
         return _deals[cidDigest][index];
     }
 
-    /// @notice Bir CID'in tum anlasmalari — dogrulama betigi bunu okur.
+    /// @notice Bir CID'in tum anlasmalari - dogrulama betigi bunu okur.
     function dealsOf(bytes32 cidDigest) external view returns (Deal[] memory) {
         return _deals[cidDigest];
     }

@@ -16,9 +16,9 @@ interface IVeriarfyBiomarkerCoverage {
 
     function metricCoverageTotal(uint32[] calldata metricIds) external view returns (uint256);
 
-    /// @notice Bu metrige gercek veri vermis kisi sayisi — KITLIK fiyatinin girdisi.
+    /// @notice Bu metrige gercek veri vermis kisi sayisi - KITLIK fiyatinin girdisi.
     function metricCoverageCount(uint32 metricId) external view returns (uint32);
-    /// @notice Istenen metriklerin hangilerinde olcumu oldugu — bit maskesi.
+    /// @notice Istenen metriklerin hangilerinde olcumu oldugu - bit maskesi.
     function metricCoverageMask(address participant, uint32[] calldata metricIds)
         external
         view
@@ -30,7 +30,7 @@ interface IVeriarfyBiomarkerCoverage {
 
 interface IVeriarfyProtocol {
     function participantIndex(address account) external view returns (uint32);
-    /// @notice Havuzun tamami ve dogrulanmis nadir tasiyici sayisi (rapor §4.3).
+    /// @notice Havuzun tamami ve dogrulanmis nadir tasiyici sayisi (rapor 4.3).
     function rarityStats() external view returns (uint32 poolCount, uint32 carriers);
     /// @notice Bu arastirmaciya izin veren nadir tasiyici sayisi.
     function consentRareCount(address researcher) external view returns (uint32);
@@ -40,7 +40,7 @@ interface IVeriarfyProtocol {
     function consentRareFoundingCount(address researcher) external view returns (uint32);
     /// @notice Ilk 10.000 saglayicidan biri mi?
     function isFoundingContributor(address account) external view returns (bool);
-    /// @notice Acilim talebi acar; esik sorgu tipine gore belirlenir (rapor §2.6).
+    /// @notice Acilim talebi acar; esik sorgu tipine gore belirlenir (rapor 2.6).
     function requestDisclosure(address researcher, uint8 queryType)
         external
         returns (uint256 requestId);
@@ -55,9 +55,9 @@ interface IVeriarfyProtocol {
         returns (uint32);
     /// @notice Istenen SNP'lerin kapsama sayaclari toplami.
     function snpCoverageTotal(uint32[] calldata snpIds) external view returns (uint256);
-    /// @notice Bu SNP'ye gercek veri vermis kisi sayisi — KITLIK fiyatinin girdisi.
+    /// @notice Bu SNP'ye gercek veri vermis kisi sayisi - KITLIK fiyatinin girdisi.
     function snpCoverageCount(uint32 snpId) external view returns (uint32);
-    /// @notice Istenen SNP'lerin hangilerinde verisi oldugu — bit maskesi.
+    /// @notice Istenen SNP'lerin hangilerinde verisi oldugu - bit maskesi.
     function snpCoverageMask(address participant, uint32[] calldata snpIds)
         external
         view
@@ -116,13 +116,13 @@ interface IResearcherRegistry {
  *
  * # Neden utility token yok
  *
- * Rapor §3.5: ilac sirketleri bilancolarinda volatil token tutmayi reddediyor.
+ * Rapor 3.5: ilac sirketleri bilancolarinda volatil token tutmayi reddediyor.
  * Bu kontrat herhangi bir ERC-20 ile calisir; uretimde USDC adresi verilir.
  * Kendi tokenimiz YOKTUR ve basilmaz.
  *
- * # Raporun formulunden sapma — bilincli
+ * # Raporun formulunden sapma - bilincli
  *
- * Rapor §4.2 su formulu veriyor:
+ * Rapor 4.2 su formulu veriyor:
  *
  *     R_LP = (F_query x 0.80) x (User_Data_Used / Total_Data_Queried)
  *
@@ -135,17 +135,17 @@ interface IResearcherRegistry {
  *     havuz      = ucret x 0.80
  *     kisi basi  = havuz x (kisinin agirligi / toplam agirlik)
  *
- * # Agirliklar — rapor §4.3
+ * # Agirliklar - rapor 4.3
  *
  * Agirlik iki carpandan olusur ve baz puan cinsindendir (10.000 = 1,00x):
  *
  *     Nadirlik Carpani  R = log2(1 + N_havuz / N_tasiyici)   (yalnizca tasiyicilar)
  *     Kurucu Katkici    +%50 kalici                          (ilk 10.000 saglayici)
  *
- * Hicbiri gecerli degilse agirlik 1,00x'tir ve dagitim esit boluse doner —
+ * Hicbiri gecerli degilse agirlik 1,00x'tir ve dagitim esit boluse doner -
  * yani nadirlik ozelligi eski davranisin ustune eklenmistir, yerine gecmemistir.
  *
- * # Raporun O(N) sorunu — cozuldu
+ * # Raporun O(N) sorunu - cozuldu
  *
  * Rapor "her sorgu sonrasi kullanicilarin hak ettigi gelir dahili bakiye
  * olarak kaydedilir" diyor. Bu, sorgu basina N adet depolama yazimi demektir
@@ -210,16 +210,16 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
     /// @notice Odeme yapilan stablecoin (uretimde USDC).
     IERC20 public immutable token;
 
-    /// @notice Sifreli havuzu tutan protokol — katilimci verisi buradan okunur.
+    /// @notice Sifreli havuzu tutan protokol - katilimci verisi buradan okunur.
     IVeriarfyProtocol public immutable protocol;
 
-    /// @notice Arastirmaci kimlik kaydi — yalnizca ZK ile dogrulanmislar sorgu acabilir.
+    /// @notice Arastirmaci kimlik kaydi - yalnizca ZK ile dogrulanmislar sorgu acabilir.
     IResearcherRegistry public immutable researchers;
 
     /**
      * @notice Katilimcilara giden pay (baz puan; 8000 = %80).
      *
-     * @dev Rapor §4.2'de sabit %80 olarak veriliyor. Burada sabit degil ama
+     * @dev Rapor 4.2'de sabit %80 olarak veriliyor. Burada sabit degil ama
      *      DEGISTIRILEMEZ: `immutable`. Sebep: dagitim orani, kullanicilarin
      *      veri yuklerken kabul ettigi ekonomik sozlesmenin parcasidir;
      *      sonradan dusurulebilir olsaydi guven varsayimi degisirdi.
@@ -256,7 +256,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
      *
      *       Artik carpan, istenen alanlarin KAPSAMA TOPLAMIDIR: her alan
      *       icin o alana gercekten veri vermis kisi sayisi. Bu, odemenin
-     *       dagitildigi paydayla (`coverageTotal`) BIREBIR ayni sayidir —
+     *       dagitildigi paydayla (`coverageTotal`) BIREBIR ayni sayidir -
      *       yani arastirmacinin odedigi ile katilimcinin hak ettigi ayni
      *       olcuye dayanir.
      */
@@ -265,7 +265,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
     /**
      * @notice Kitlik carpaninin TAVANI (baz puan). Varsayilan 100.000 = 10x.
      *
-     * @dev  TAVAN, TOPLAM FIYATI SINIRLAMAZ — bunu belirtmek onemli
+     * @dev  TAVAN, TOPLAM FIYATI SINIRLAMAZ - bunu belirtmek onemli
      *
      *       Ilk bakista tavan bir "guvenlik sinir" gibi gorunur. Degildir:
      *       alan ucreti zaten kendiliginden sinirlidir.
@@ -280,7 +280,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
      *       TAVANIN GERCEK ISLEVI: kitlik ayrimin NEREDE DURACAGI
      *
      *       Tavan `C` iken, kapsamasi `havuz/C` degerinin ALTINDA olan tum
-     *       alanlar AYNI kisi basi fiyati alir — ayrim orada durur.
+     *       alanlar AYNI kisi basi fiyati alir - ayrim orada durur.
      *
      *         C = 4x  -> %25'in altindaki her alan ayni fiyatta (kaba ayrim)
      *         C = 10x -> %10'a kadar ayrim surer   (varsayilan)
@@ -312,7 +312,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
      *       (nadirlik, kurucu katkici) kullanim sayisiyla CARPMAK matematiksel
      *       olarak mumkun ama paydasi O(1) hesaplanamaz:
      *
-     *           Σ_kisi [ eslesme(kisi) x bonus(kisi) ]
+     *           Sum_kisi [ eslesme(kisi) x bonus(kisi) ]
      *
      *       ayrisamaz. Tum katilimcilari dolasmak ise binlerce kiside
      *       imkansizdir.
@@ -356,7 +356,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
          * @dev Sorgunun acildigi blok.
          *
          * Hakedis bu bloga gore belirlenir: "izin SU AN gecerli mi" sorusu
-         * yanlis olurdu — sorgudan sonra izni iptal eden katilimci hak ettigi
+         * yanlis olurdu - sorgudan sonra izni iptal eden katilimci hak ettigi
          * payi kaybederdi.
          */
         uint256 openedAtBlock;
@@ -365,19 +365,19 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
         /// @dev Protokoldeki BSKK-44 acilim talebinin kimligi.
         uint256 disclosureRequestId;
         /**
-         * @dev Talep anindaki KAPSAMA TOPLAMI — kullanim havuzunun paydasi.
+         * @dev Talep anindaki KAPSAMA TOPLAMI - kullanim havuzunun paydasi.
          *
          * Istenen alanlarin her birine gercek veri vermis kisi sayilarinin
          * toplami. Katilimci sayisi gibi DONDURULUR: sorgu acildiktan sonra
          * yeni katilimcilar gelmeye devam eder, ama bu sorgunun paydasi
-         * degismemelidir — aksi halde daha once hesaplanan paylar toplami
+         * degismemelidir - aksi halde daha once hesaplanan paylar toplami
          * havuzu asabilirdi.
          */
         uint256 coverageTotal;
         /**
-         * @dev KITLIKLA AGIRLIKLANDIRILMIS kapsama toplami — kullanim payinin PAYDASI.
+         * @dev KITLIKLA AGIRLIKLANDIRILMIS kapsama toplami - kullanim payinin PAYDASI.
          *
-         * `Σ (o alani verenler x kitlik(alan))`. Ucretin alan bileseniyle
+         * `Sum (o alani verenler x kitlik(alan))`. Ucretin alan bileseniyle
          * ayni formul; boylece arastirmacinin odedigi ile katilimcilarin
          * toplam hakedisi ayni olcuye dayanir.
          *
@@ -388,7 +388,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
         /**
          * @dev Ucret HENUZ dagitilmadi mi?
          *
-         * Rapor §2.6: sorgu, yetkili kurumlarin coklu imza onayi olmadan
+         * Rapor 2.6: sorgu, yetkili kurumlarin coklu imza onayi olmadan
          * "yurutulemez". Ucret bu yuzden emanette (escrow) tutulur; onay
          * gelmeden ne katilimcilara ne hazineye gecer.
          */
@@ -425,7 +425,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
     uint256 public treasuryBalance;
 
     /**
-     * @notice Sistemden bugune kadar GECEN toplam ucret — rapor §2.7.1
+     * @notice Sistemden bugune kadar GECEN toplam ucret - rapor 2.7.1
      *         formulundeki `TotalDataValue`.
      *
      * @dev Hazine bakiyesinden farklidir: hazine cekildikce azalir, bu sayac
@@ -463,7 +463,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
         // Sahip tarafindan degistirilebilir; ikisi de tam hesaplanabilir.
         usageShareBps = 7_000;
 
-        // Varsayilan kitlik tavani 10x — ayrim havuzun %10'una kadar surer.
+        // Varsayilan kitlik tavani 10x - ayrim havuzun %10'una kadar surer.
         // Kitligi tamamen kapatmak icin BPS_DENOMINATOR (1x) verilebilir.
         maxScarcityBps = 100_000;
 
@@ -501,7 +501,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
     /**
      * @notice ISTENEN ALANLARIN ucreti.
      *
-     * @dev  FIYAT NEYE GORE — uc bilesen
+     * @dev  FIYAT NEYE GORE - uc bilesen
      *
      *       1. TABAN. Sorgu basina sabit; zincir uzerindeki dogrulama ve
      *          esikli onay maliyetini karsilar. Alan sayisindan bagimsizdir.
@@ -511,7 +511,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
      *          kisi veri vermisse, satin alinan sey 42 kayittir.
      *
      *          Havuzda kac kisi oldugu ONEMSIZDIR. Istenen alanda verisi
-     *          olmayan kisi icin odeme yapilmaz — cunku o kisiden bir sey
+     *          olmayan kisi icin odeme yapilmaz - cunku o kisiden bir sey
      *          alinmiyor. Bu sayi, odemenin dagitildigi paydayla
      *          (`coverageTotal`) BIREBIR ayni: arastirmacinin odedigi ile
      *          katilimcinin hak ettigi ayni olcuye dayanir.
@@ -528,13 +528,13 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
      *          bilincli: "hangi veri degerli" karari birinin insafina
      *          birakilsaydi, fiyat piyasanin degil sahibin karari olurdu.
      *
-     *       SINIR — durustce: kitlik, degerin MUKEMMEL bir vekili degildir.
+     *       SINIR - durustce: kitlik, degerin MUKEMMEL bir vekili degildir.
      *       Az doldurulmus onemsiz bir alan da pahali gorunur. Gercek klinik
      *       deger (kanser kohortu vb.) ancak calisma panelinin nasil
      *       tanimlandigiyla gelir; fiyat oradan devralir.
      *
      * @return fee     Toplam ucret.
-     * @return records Satin alinan kayit sayisi (kisi x alan) — kitliktan ONCE.
+     * @return records Satin alinan kayit sayisi (kisi x alan) - kitliktan ONCE.
      */
     function quoteForFields(
         uint32[] memory snpIds,
@@ -573,7 +573,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
     /**
      * @notice Bir alanin kitlik carpani (baz puan). Kimsede yoksa SIFIR.
      *
-     * @dev  ODEMENIN DE AGIRLIGI — fiyatla AYNI sayi
+     * @dev  ODEMENIN DE AGIRLIGI - fiyatla AYNI sayi
      *
      *       Bu carpan yalnizca fiyatta kullanilsaydi mimari kendi icinde
      *       celisirdi: arastirmaci nadir alan icin 10 kat oderdi ama o alanin
@@ -603,7 +603,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
      *
      * @dev `quoteForFields` ile ayni formuldur ama ek olarak agirliklari
      *      saklar. Iki ayri gecis yazilsaydi biri degisip digeri unutulabilir,
-     *      ve fiyat ile pay sessizce ayrisabilirdi — sessiz ayrisma, paranin
+     *      ve fiyat ile pay sessizce ayrisabilirdi - sessiz ayrisma, paranin
      *      yanlis yere gitmesi demektir.
      */
     function _snapshotPricing(
@@ -639,13 +639,13 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
         }
     }
 
-    /// @dev `[0, 1, ... n-1]` — varsayilan alan listesi.
+    /// @dev `[0, 1, ... n-1]` - varsayilan alan listesi.
     function _defaultIds(uint32 n) private pure returns (uint32[] memory ids) {
         ids = new uint32[](n);
         for (uint32 i = 0; i < n; ++i) ids[i] = i;
     }
 
-    /// @dev Protokolun varsayilan SNP penceresi — `requestDisclosure` ile AYNI.
+    /// @dev Protokolun varsayilan SNP penceresi - `requestDisclosure` ile AYNI.
     function _defaultSnpWindow() private view returns (uint32) {
         uint32 total = protocol.snpCount();
         uint32 cap = protocol.MAX_DISCLOSURE_WINDOW();
@@ -692,7 +692,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
     /**
      * @notice Ucreti EMANETE alir ve BSKK-44 acilim talebini acar.
      *
-     * @dev  Rapor §2.6: sorgu, yetkili kurum dugumlerinin coklu imza onayi
+     * @dev  Rapor 2.6: sorgu, yetkili kurum dugumlerinin coklu imza onayi
      *       olmadan "yurutulemez". Bu yuzden ucret burada dagitilMAZ; onay
      *       gelene kadar kontratta emanette bekler.
      *
@@ -704,7 +704,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
      *       hak etmedikleri odemeyi cekebilirdi.
      *
      * @param queryType Sorgu hassasiyeti (GWAS | ML | STATISTICS). Gereken
-     *        onay orani buna gore belirlenir — rapor §2.6.
+     *        onay orani buna gore belirlenir - rapor 2.6.
      */
     /**
      * @notice Sorguyu SECILEN ALANLAR icin acar.
@@ -751,7 +751,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
         // etmek, ucretin tamaminin hazineye gitmesi demek olurdu.
         if (participants == 0) revert PoolEmpty();
 
-        // SIRA DEGISTI — once talep, sonra tahsilat.
+        // SIRA DEGISTI - once talep, sonra tahsilat.
         //
         // Ucret artik ISTENEN ALANLARIN kapsamasindan hesaplaniyor. Alan
         // secilmeyen yolda alanlari protokol belirler, yani liste ancak
@@ -771,8 +771,8 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
         // gibi standarda tam uymayan uygulamalar mevcut).
         token.safeTransferFrom(msg.sender, address(this), fee);
 
-        // Nadirlik anlik goruntusu (rapor §4.3). Carpanin girdisi HAVUZUN
-        // TAMAMIDIR; izin verenlerin sayisi degil — nadirlik, varyantin
+        // Nadirlik anlik goruntusu (rapor 4.3). Carpanin girdisi HAVUZUN
+        // TAMAMIDIR; izin verenlerin sayisi degil - nadirlik, varyantin
         // populasyondaki gercek seyrekligidir.
         (uint32 poolCount, uint32 carriers) = protocol.rarityStats();
 
@@ -821,7 +821,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
 
         treasuryBalance += q.fee - liquidityPot;
 
-        // Rapor §2.7.1'deki "TotalDataValue" — progresif teminatin girdisi.
+        // Rapor 2.7.1'deki "TotalDataValue" - progresif teminatin girdisi.
         // Iade edilen sorgular sayilmaz: iade, sistemden deger gecmedigi
         // anlamina gelir. Bu yuzden sayac `openQuery`'de degil BURADA artar.
         cumulativeFees += q.fee;
@@ -875,7 +875,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
      *      Ikinci kosul neden blok bazli: "izin su an gecerli mi" denseydi,
      *      sorgudan sonra iznini iptal eden katilimci hak ettigi payi
      *      kaybederdi. Tersi de gecerli: sorgudan sonra izin veren biri, o
-     *      sorgudan pay alamaz — verisi hesaplamaya girmemistir.
+     *      sorgudan pay alamaz - verisi hesaplamaya girmemistir.
      */
     function claim(uint256 queryId) external nonReentrant returns (uint256 amount) {
         Query storage q = _queries[queryId];
@@ -894,7 +894,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
 
         // Tutar `claimable` ile AYNI ifadeden gelmelidir. Iki yerde ayri ayri
         // yazilsaydi (bir kere burada, bir kere gorunumde) panelde gosterilen
-        // ile odenen sessizce ayrisirdi — nitekim nadirlik agirliklari
+        // ile odenen sessizce ayrisirdi - nitekim nadirlik agirliklari
         // eklenirken tam bu oldu ve test yakaladi.
         amount = claimable(queryId, msg.sender);
 
@@ -907,11 +907,11 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
 
     /** @notice Bir adresin belirli bir sorgudan cekebilecegi tutar (0 = uygun degil). */
     /**
-     * @dev Talepte istenen alanlarin KAPSAMA TOPLAMI — kullanim havuzunun
+     * @dev Talepte istenen alanlarin KAPSAMA TOPLAMI - kullanim havuzunun
      *      paydasi.
      *
      *      Genomik ve surekli olcum kanallari AYRI kontratlarda; toplam
-     *      ikisinden derlenir. Maliyet O(istenen alan sayisi) — katilimci
+     *      ikisinden derlenir. Maliyet O(istenen alan sayisi) - katilimci
      *      sayisindan bagimsiz.
      */
     function _coverageTotal(uint256 requestId) private view returns (uint256 total) {
@@ -988,7 +988,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
             metricIds
         );
 
-        // Metrik agirliklari, SNP'lerden SONRA gelir — `_snapshotPricing`
+        // Metrik agirliklari, SNP'lerden SONRA gelir - `_snapshotPricing`
         // ile ayni sira.
         uint256 offset = snpIds.length;
         for (uint256 i = 0; i < metricIds.length; ++i) {
@@ -999,7 +999,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
     /**
      * @notice Havuzun kullanim ve bonus bilesenleri.
      *
-     * @dev KAPSAMA TOPLAMI SIFIRSA kullanim havuzu dagitilamaz — istenen
+     * @dev KAPSAMA TOPLAMI SIFIRSA kullanim havuzu dagitilamaz - istenen
      *      alanlarin hicbirine kimse veri vermemis demektir. O tutar
      *      kilitlenmez, BONUS havuzuna eklenir; aksi halde para sozlesmede
      *      olu kalirdi.
@@ -1022,7 +1022,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
         // Onceden bu siniri izin kapisi ORTUK olarak sagliyordu: izin ancak
         // havuza girdikten sonra verilebiliyordu, dolayisiyla `grantedAtBlock
         // <= openedAtBlock` kontrolu ayni ise yariyordu. Izin kalkinca sinir
-        // aciga cikti ve ACIKCA yazilmasi gerekti — yoksa sonradan katilan da
+        // aciga cikti ve ACIKCA yazilmasi gerekti - yoksa sonradan katilan da
         // pay alir, paylarin toplami dondurulmus paydayi asardi.
         //
         // Katilimci indeksi 1 TABANLIDIR ve tam bunun icin oyle tasarlandi:
@@ -1042,7 +1042,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
             ? 0
             : (usagePot * weightedCoverage(queryId, account)) / q.weightedTotal;
 
-        // BONUS: nadirlik ve kurucu katkici carpani — hangi alani verdiginden
+        // BONUS: nadirlik ve kurucu katkici carpani - hangi alani verdiginden
         // bagimsiz. Payda sifir olamaz: `snapshotCount > 0` ise en az bir izin
         // veren vardir ve her agirlik en az `ONE_BPS`'tir.
         uint256 bonus = (bonusPot * weightOf(queryId, account)) / q.totalWeightBps;
@@ -1057,7 +1057,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
      *
      *       Sebep: paydayi olusturan sayaclar sorgu acilirken dondurulur.
      *       Biri sorgu acildiktan SONRA nadirligini dogrularsa, bireysel
-     *       agirligi buyur ama payda ayni kalir — paylarin toplami havuzu
+     *       agirligi buyur ama payda ayni kalir - paylarin toplami havuzu
      *       ASAR. `rareBefore` ikisini tanim geregi esitler.
      */
     function weightOf(uint256 queryId, address account) public view returns (uint256) {
@@ -1076,14 +1076,14 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Anlik goruntudeki toplam agirlik — payin paydasi.
+     * @notice Anlik goruntudeki toplam agirlik - payin paydasi.
      *
      * @dev  Katilimcilar DOLASILMAZ. Dort sayac dort ayrik kumeyi verir ve
      *       toplam bu kumelerin agirliklarinin toplamidir:
      *
      *         N  = havuzdaki toplam         (`participantCount`)
      *         C  = nadir tasiyici           (`rareCarrierCount`)
-     *         F  = Kurucu katkici           (min(N, FOUNDING_LIMIT) — sayilmaz)
+     *         F  = Kurucu katkici           (min(N, FOUNDING_LIMIT) - sayilmaz)
      *         CF = nadir + Kurucu           (`rareFoundingCount`)
      *
      *         duz            = N - C - F + CF   agirlik 1,00x
@@ -1092,7 +1092,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
      *         ikisi birden   = CF               agirlik R x 1,5
      *
      *       Kumeler ayrik ve tam oldugu icin toplam, `weightOf`'un tum
-     *       katilimcilar uzerindeki toplamina BIREBIR esittir — ayni yardimci
+     *       katilimcilar uzerindeki toplamina BIREBIR esittir - ayni yardimci
      *       fonksiyonlar kullanildigi surece yuvarlama farki da olusmaz.
      *
      *       KURUCU SAYISI SAYILMAZ, HESAPLANIR: kuruculuk indeks tabanlidir
@@ -1117,7 +1117,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
 
         // ISLEM SIRASI ONEMLI: `N - C - F + CF` matematiksel olarak dogru ama
         // ara adimda negatife duser (ornek: N=2, C=1, F=2, CF=1 -> "2-1-2").
-        // Solidity'de bu bir tasma paniğidir. Once eklenir, sonra cikarilir.
+        // Solidity'de bu bir tasma panigidir. Once eklenir, sonra cikarilir.
         uint256 plain = uint256(consenting) + both - rare - founding;
 
         return
@@ -1128,7 +1128,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Sorgunun nadirlik anlik goruntusu — panel ve denetim icin.
+     * @notice Sorgunun nadirlik anlik goruntusu - panel ve denetim icin.
      * @dev `multiplierBps` bu sorguda tasiyicilara uygulanan carpandir.
      */
     function queryWeights(uint256 queryId)
@@ -1155,7 +1155,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
      * @notice Bir adresin TUM sorgulardan cekebilecegi toplam ve uygun sorgu kimlikleri.
      *
      * @dev Panel bunu tek cagriyla gosterebilsin diye var. `view` oldugu icin
-     *      gaz harcamaz; zincir uzerinde CAGRILMAMALIDIR — sorgu sayisi
+     *      gaz harcamaz; zincir uzerinde CAGRILMAMALIDIR - sorgu sayisi
      *      arttikca dongusu buyur.
      */
     function pendingRewards(address account)
@@ -1231,7 +1231,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
     /**
      * @notice Hazine bakiyesini cikarir.
      *
-     * @dev Rapor §4.2.1: bu pay Filecoin depolama, coprocessor giderleri ve
+     * @dev Rapor 4.2.1: bu pay Filecoin depolama, coprocessor giderleri ve
      *      Ar-Ge icin kullanilir. Sahip URETIMDE cok imzali bir cuzdan olmalidir.
      */
     function withdrawTreasury(address to) external onlyOwner nonReentrant returns (uint256 amount) {

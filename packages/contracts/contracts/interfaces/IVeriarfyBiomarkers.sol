@@ -7,7 +7,7 @@ pragma solidity ^0.8.24;
  *
  * @dev Kasitli olarak dardir: onay ve acilim dongusu protokolde KALIR, modul
  *      yalnizca veriyi tutar. Modul kendi basina kimseye cozum yetkisi
- *      veremez — `grantFor` yalnizca protokolden cagrilabilir.
+ *      veremez - `grantFor` yalnizca protokolden cagrilabilir.
  */
 interface IVeriarfyBiomarkers {
     /// @notice Varsayilan acilim listesinin buyuklugu (metrik sayisi, tavanla sinirli).

@@ -35,13 +35,13 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
  *       3. Havuzun cozulmesini tek bir kuruma birakmaz: yetkili dugumlerin
  *          M-of-N onayi olmadan hicbir adres cozum yetkisi alamaz.
  *
- *       ZAMA fhEVM — API NOTU
+ *       ZAMA fhEVM - API NOTU
  *       Kullanilan surum: fhevm/solidity 0.11.x. `FHE` kutuphanesi,
  *       `externalEuint8` girdi tipi ve `FHE.fromExternal(...)`. Eski `TFHE.sol`
  *       / `einput` / `TFHE.asEuint8(einput, proof)` API'si (fhevm <= 0.6)
  *       bu surumde YOKTUR; karistirilirsa derlenmez.
  *
- *       SURUM SABITLEMESI — ZINCIR ADRESLERI BURADAN GELIR
+ *       SURUM SABITLEMESI - ZINCIR ADRESLERI BURADAN GELIR
  *       `ZamaEthereumConfig`, chainId'ye gore ACL/Coprocessor/KMSVerifier
  *       adreslerini kendisi secer. Bu adresler surume GOMULUDUR. Zama
  *       Sepolia'daki yigini bir kez yeniden dagitti ve eski nesil (solidity
@@ -51,7 +51,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
  *       bir dagitim" olarak ortaya cikar. Istemci tarafiyla ayni nesli
  *       kullandigimizi `scripts/live-check.ts` gercek agda dogrular.
  *
- *       ACL — EN SIK YAPILAN HATA
+ *       ACL - EN SIK YAPILAN HATA
  *       fhEVM'de bir sifreli deger, acikca izin verilmedikce bir sonraki
  *       islemde kullanilamaz. Depolanan her handle icin `FHE.allowThis(...)`
  *       cagrilir; aksi halde ikinci `aggregateDosage` cagrisi revert eder.
@@ -77,7 +77,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *
      * @dev Devre `attested = 0` iken koku zorla sifirlar. Sifir olmayan bir
      *      kok gormek, cagrinin devrenin urettigi sinyallerle uyusmadigi
-     *      anlamina gelir — kanit dogrulamasi zaten dusurur ama hata mesaji
+     *      anlamina gelir - kanit dogrulamasi zaten dusurur ama hata mesaji
      *      "kanit gecersiz" yerine sebebi soylesin diye once burada yakalanir.
      */
     error UnattestedRootNotZero();
@@ -147,7 +147,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     /// @dev Koken kaniti ile DOGRULANMIS kapsama; uydurulamaz.
     event CoverageProven(address indexed participant, uint32 covered);
     event AccreditedRootUpdated(uint256 indexed newRoot, uint256 previousRoot);
-    /// @dev Katilimci havuzdan cikti — bundan sonraki acilimlarda pay olusmaz.
+    /// @dev Katilimci havuzdan cikti - bundan sonraki acilimlarda pay olusmaz.
     event LeftPool(address indexed participant, uint256 atBlock);
     event QueryGatewayUpdated(address indexed gateway);
     event DosageAggregated(address indexed participant, uint32 participantCount);
@@ -171,7 +171,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     event Heartbeat(address indexed node, uint256 atBlock);
     event Enrolled(address indexed participant);
     /// @dev `covered`: bu partide ILK KEZ kapsanan alan sayisi. Ayri bir
-    ///      sayac yerine olayda tasinir — toplam, olaylardan turetilebilir ve
+    ///      sayac yerine olayda tasinir - toplam, olaylardan turetilebilir ve
     ///      zincirde bir depolama yuvasi daha tutmaya degmez.
     event DosagesContributed(
         address indexed participant,
@@ -216,7 +216,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     /**
      * @notice Bu kontratin kapsam ayraci (devredeki `externalNullifier`).
      *
-     * @dev ALAN AYRIMI — kasitli olarak `VeriArfyRegistry.EXTERNAL_NULLIFIER`
+     * @dev ALAN AYRIMI - kasitli olarak `VeriArfyRegistry.EXTERNAL_NULLIFIER`
      *      (= 1) degerinden FARKLIDIR. Iki devre ayni nullifier bicimini
      *      kullanir: `Poseidon(externalNullifier, gizliDeger)`. Kapsam degeri
      *      ayrisMAZsa, iki devrenin nullifier'lari ayni uzaya duser ve birinin
@@ -235,7 +235,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     uint256 public constant COVERAGE_BITS_PER_WORD = 240;
 
     /**
-     * @notice Kanittaki kapsama kelimesi sayisi — devrenin PANEL'ine baglidir.
+     * @notice Kanittaki kapsama kelimesi sayisi - devrenin PANEL'ine baglidir.
      *
      * @dev PANEL=1000 icin ceil(1000/240) = 5. Devre yeniden derlenirse bu
      *      deger ve dogrulayicinin sinyal sayisi BIRLIKTE degismelidir.
@@ -250,7 +250,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      * @notice Eski kokun gecerli kalma suresi.
      *
      * @dev Kok, akredite kurum eklendikce degisir. Bu pencere olmasa, kanit
-     *      uretirken kok guncellenen her kullanici basarisiz olurdu — kanit
+     *      uretirken kok guncellenen her kullanici basarisiz olurdu - kanit
      *      uretimi ~1 saniye surer ama islem madenciye ulasana kadar gecen sure
      *      belirsizdir.
      */
@@ -262,7 +262,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     /// @notice Kok -> yazildigi zaman. Gecerlilik penceresi bundan hesaplanir.
     mapping(uint256 root => uint256 timestamp) public accreditedRootTimestamp;
 
-    /// @notice Harcanmis koken nullifier'lari — ayni imzali kayit iki kez giremez.
+    /// @notice Harcanmis koken nullifier'lari - ayni imzali kayit iki kez giremez.
     mapping(uint256 nullifierHash => bool spent) public provenanceNullifierSpent;
 
     /**
@@ -277,7 +277,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     /**
      * @notice Katilimci -> kaydi KURUM IMZALI mi.
      *
-     * @dev  IKI KATMAN — neden var
+     * @dev  IKI KATMAN - neden var
      *
      *       Bugun akredite kurum entegrasyonumuz yok; kullanici kendi tuketici
      *       dosyasini (23andMe, AncestryDNA) yukluyor ve o dosyanin kurumsal
@@ -286,8 +286,8 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *
      *       Bu yuzden iki katman var ve AYIRT EDILEBILIR olmalari sart:
      *
-     *         true  — akredite kurum paneli imzaladi (devre imzayi dogruladi)
-     *         false — kullanici kendi yukledi; kapsama yine kanitli, KOKEN degil
+     *         true  - akredite kurum paneli imzaladi (devre imzayi dogruladi)
+     *         false - kullanici kendi yukledi; kapsama yine kanitli, KOKEN degil
      *
      *       Ikisi de bugun ayni odeme agirligini alir; ayrim SAKLANIR ki
      *       kurumsal entegrasyon geldiginde agirlik farki gecmise donuk
@@ -302,7 +302,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     // Sifreli havuz
     // ---------------------------------------------------------------------------------
 
-    /// @notice Tum katilimcilarin dozaj toplami — sifreli, hicbir zaman acilmadi.
+    /// @notice Tum katilimcilarin dozaj toplami - sifreli, hicbir zaman acilmadi.
     euint32 private _dosagePool;
 
     /// @notice Havuza katkida bulunan katilimci sayisi (acik: ortalama icin gerekli).
@@ -325,7 +325,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     mapping(address => uint32) public participantIndex;
 
     // ---------------------------------------------------------------------------------
-    // Gizlilik Paneli — kurum bazli erisim izinleri (rapor §3.4)
+    // Gizlilik Paneli - kurum bazli erisim izinleri (rapor 3.4)
     // ---------------------------------------------------------------------------------
 
     uint8 public constant QUERY_TYPE_GWAS = 1;
@@ -339,14 +339,14 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *
      *       Cikmadan ONCE acilan sorgulardan hak edilen paylar korunmalidir.
      *       Yalnizca "cikti mi" sorulsaydi, cikan kisi gecmis hakedisini de
-     *       kaybederdi — cikmak cezalandirma olmamali.
+     *       kaybederdi - cikmak cezalandirma olmamali.
      */
     mapping(address => uint256) public leftPoolAtBlock;
 
     /**
      * @notice Gecerli dozaj ust siniri.
      * @dev Panel `0 | 1 | 2` uretir. Kotu niyetli bir istemci 255 gonderip
-     *      toplami bozabilecegi icin deger homomorfik olarak kirpilir —
+     *      toplami bozabilecegi icin deger homomorfik olarak kirpilir -
      *      kirpma sifreliyken yapilir, yani degeri kimse gormez.
      */
     uint8 public constant MAX_DOSAGE = 2;
@@ -357,14 +357,14 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      * @dev  NEDEN 0 DEGIL
      *
      *       Eksik bir varyanti 0 yazmak sessiz bir yalandir: 0, "homozigot
-     *       referans" demektir — yani "bu mutasyonu tasimiyor". Oysa dogru
+     *       referans" demektir - yani "bu mutasyonu tasimiyor". Oysa dogru
      *       ifade "bilmiyoruz"dur. Tuketici cipleri (23andMe, AncestryDNA)
      *       panelin tamamini kapsamaz; 0 yazmak alel frekanslarini sistematik
      *       olarak asagi ceker ve GWAS sonuclarini bozar.
      *
      *       3 secilmesi BEDAVADIR: tablo zaten `dozaj == 0|1|2` sorularini
      *       soruyor. 3 hicbirine uymaz, dolayisiyla o katilimci O SNP'nin
-     *       tablosuna hic girmez — istenen davranis tam olarak budur.
+     *       tablosuna hic girmez - istenen davranis tam olarak budur.
      *
      *       Kirpma da buna gore: arali disi bir deger (kotu niyetli 255 dahil)
      *       3'e kirpilir, yani "eksik" sayilir. Tabloyu bozmak yerine
@@ -373,7 +373,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     uint8 public constant DOSAGE_MISSING = 3;
 
     // ---------------------------------------------------------------------------------
-    // GWAS — sifreli kontenjans tablosu (rapor §3.3)
+    // GWAS - sifreli kontenjans tablosu (rapor 3.3)
     // ---------------------------------------------------------------------------------
 
     /// @notice Kontrol (saglikli) grubu.
@@ -393,7 +393,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *
      * @dev SNP basina 6 handle kopyalanir ve her biri ACL yazimi gerektirir.
      *      Sinirsiz birakmak, buyuk panelde talebi blok gaz limitine
-     *      carptirir — yani sinir zaten fiziksel; kodda acikca durmasi
+     *      carptirir - yani sinir zaten fiziksel; kodda acikca durmasi
      *      hatanin anlasilir olmasini saglar.
      */
     uint32 public constant MAX_DISCLOSURE_WINDOW = 32;
@@ -406,7 +406,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *       `_dosagePool` yalnizca allel frekansini verir
      *       (`havuz / (2 * katilimci)`). GWAS'in sordugu soru ise farklidir:
      *       "bu varyant hasta grubunda kontrol grubundan anlamli olcude daha
-     *       sik mi?" Bunu yanitlamak icin iki grubun dozaj DAGILIMI gerekir —
+     *       sik mi?" Bunu yanitlamak icin iki grubun dozaj DAGILIMI gerekir -
      *       tek bir toplam bu bilgiyi tasimaz.
      *
      *       Tablo doldurulurken ne grup ne de dozaj acilir: her hucre icin
@@ -415,17 +415,17 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *
      *       KI-KARE NEDEN ZINCIRDE HESAPLANMIYOR
      *
-     *       χ² = Σ (G−B)²/B formulu **bolme** icerir. Sifreli bolme TFHE'de
+     *       chi^2 = Sum (G-B)^2/B formulu **bolme** icerir. Sifreli bolme TFHE'de
      *       pratik degildir (her islem bir bootstrapping zinciri gerektirir).
      *       Bu yuzden zincirde yalnizca 6 SAYIM biriktirilir; esikli acilimla
-     *       bu 6 sayi cozulur ve χ² ile p-degeri duz metinde hesaplanir.
+     *       bu 6 sayi cozulur ve chi^2 ile p-degeri duz metinde hesaplanir.
      *
      *       Gizlilik bozulmaz: cozulen sey bireyin verisi degil, grup
-     *       toplamlaridir — ve `minParticipants` (k-anonimlik) esigi altinda
+     *       toplamlaridir - ve `minParticipants` (k-anonimlik) esigi altinda
      *       acilim zaten baslatilamaz.
      *
-     *       Rapor §2.1.1 "PBS ile esik karsilastirmasi yapilabilir" diyor; bu
-     *       dogru ama χ²'nin TAMAMINI sifreli hesaplamak gereksiz pahalidir.
+     *       Rapor 2.1.1 "PBS ile esik karsilastirmasi yapilabilir" diyor; bu
+     *       dogru ama chi^2'nin TAMAMINI sifreli hesaplamak gereksiz pahalidir.
      */
     mapping(uint32 snp => euint32[3][2]) private _contingency;
 
@@ -461,13 +461,13 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      * @notice Katilimcinin su ana kadar gonderdigi SNP sayisi.
      *
      * @dev Katkilar SIRALIDIR: bir sonraki parti tam olarak bu indeksten
-     *      baslar. Boylece ne bosluk kalir ne de ayni SNP iki kez sayilir —
+     *      baslar. Boylece ne bosluk kalir ne de ayni SNP iki kez sayilir -
      *      ikisi de tabloyu sessizce bozardi.
      */
     mapping(address => uint32) public submittedSnps;
 
     /**
-     * @notice Nadirlik bitinin hangi SNP'ye ait oldugu (rapor §4.3).
+     * @notice Nadirlik bitinin hangi SNP'ye ait oldugu (rapor 4.3).
      *
      * @dev Cok SNP'li panelde "nadir tasiyici" sorusu bir varyanta ozgudur;
      *      hangisi oldugu acikca belirtilmelidir. Ilk katkidan sonra
@@ -478,7 +478,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     /**
      * @notice Calismanin varyant listesinin ozeti (keccak256).
      *
-     * @dev  NEDEN ZORUNLU — sessiz bozulmayi onler
+     * @dev  NEDEN ZORUNLU - sessiz bozulmayi onler
      *
      *       Zincir yalnizca SIRALI dozajlar gorur: `[d0, d1, ... dk]`. Bu
      *       dizinin hangi varyantlara karsilik geldigi zincirde YAZILI DEGILDIR.
@@ -505,7 +505,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     mapping(uint32 => bool) private _snpInitialized;
 
     // ---------------------------------------------------------------------------------
-    // Kapsama — kimin hangi alanda GERCEK verisi var (acik, sifresiz)
+    // Kapsama - kimin hangi alanda GERCEK verisi var (acik, sifresiz)
     // ---------------------------------------------------------------------------------
 
     /**
@@ -526,38 +526,38 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
 
 
     // ---------------------------------------------------------------------------------
-    // Surekli biyobelirtec kanali (veri kategorisi 2) — AYRI MODUL
+    // Surekli biyobelirtec kanali (veri kategorisi 2) - AYRI MODUL
     // ---------------------------------------------------------------------------------
 
     /**
      * @notice Surekli olcum modulu (`VeriarfyBiomarkers`); 0 ise calisma
      *         yalnizca genomiktir.
      *
-     * @dev  NEDEN AYRI KONTRAT — EIP-170
+     * @dev  NEDEN AYRI KONTRAT - EIP-170
      *
      *       Metrik kanali bu kontrata eklendiginde derlenmis boyut 26.299
      *       bayta cikti; EIP-170 siniri 24.576'dir. Yani kontrat DAGITILAMAZ
      *       hale geldi. Optimizasyon ayarlari yetmedi (`runs: 1` ile 26.507,
-     *       `viaIR` ile 28.483 — daha kotu) ve kod kutuphaneye tasimak da
+     *       `viaIR` ile 28.483 - daha kotu) ve kod kutuphaneye tasimak da
      *       yetmedi: `delegatecall` icin gereken ABI kodlamasi, tasinan kodun
      *       kendisi kadar yer tutuyor.
      *
      *       Ayrim ayrica DOGRU olan: veri kategorileri birbirinden bagimsiz
      *       kanallardir ve her yeni kategori (3: klinik etiketler) ayni duvara
-     *       carpardi. Onay/acilim dongusu TEK yerde — burada — kalir; modul
+     *       carpardi. Onay/acilim dongusu TEK yerde - burada - kalir; modul
      *       yalnizca veriyi tutar.
      */
     address public biomarkerModule;
 
 
     // ---------------------------------------------------------------------------------
-    // Nadirlik Carpani — rapor §4.3
+    // Nadirlik Carpani - rapor 4.3
     // ---------------------------------------------------------------------------------
 
     /**
      * @notice Nadir tasiyiciligi temsil eden dozaj seviyesi.
      *
-     * @dev Rapor §4.3 sunu yaziyor: `ebool result = TFHE.eq(patient_SNP,
+     * @dev Rapor 4.3 sunu yaziyor: `ebool result = TFHE.eq(patient_SNP,
      *      SMA_mutant_code)`. Bizim dozaj olcegimizde (0/1/2 = tasinan minor
      *      allel sayisi) bunun karsiligi HOMOZIGOT MUTANT, yani 2'dir.
      *      Heterozigot (1) tasiyicilar cok daha yaygindir ve nadirlik
@@ -566,7 +566,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     uint8 public constant RARE_DOSAGE = 2;
 
     /**
-     * @notice "Kurucu Katkici" siniri — rapor §4.3: ilk 10.000 veri saglayici.
+     * @notice "Kurucu Katkici" siniri - rapor 4.3: ilk 10.000 veri saglayici.
      * @dev Bonus kalicidir; carpani `VeriarfyPayments` uygular (+%50).
      */
     uint32 public constant FOUNDING_CONTRIBUTOR_LIMIT = 10_000;
@@ -575,7 +575,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      * @notice Katilimcinin sifreli nadirlik biti (`dozaj == RARE_DOSAGE`).
      *
      * @dev Bu bit `aggregateDosage` sirasinda ZATEN hesaplanan
-     *      `FHE.eq(dosage, 2)` karsilastirmasindan alinir — ek FHE maliyeti
+     *      `FHE.eq(dosage, 2)` karsilastirmasindan alinir - ek FHE maliyeti
      *      yoktur. Sifreli kalir; yalnizca katilimci `requestRarityAssessment`
      *      derse acilabilir hale gelir.
      */
@@ -590,7 +590,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      * @dev  BILINCLI VE KACINILMAZ IFSA
      *
      *       Bu alan HERKESE ACIKTIR ve "bu adres nadir varyant tasiyor"
-     *       bilgisini sizdirir. Bu bir uygulama hatasi degil, rapor §4.3'un
+     *       bilgisini sizdirir. Bu bir uygulama hatasi degil, rapor 4.3'un
      *       ekonomisinin dogrudan sonucudur: nadirlik carpani odemeye
      *       yansidigi anda, 11 kat pay alan bir adresin tasiyici oldugu zaten
      *       zincirden okunur. Alani gizli tutmak yalnizca yanilsama yaratirdi.
@@ -623,20 +623,20 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *         kurucu  = min(participantCount, FOUNDING_CONTRIBUTOR_LIMIT)
      *         nadir   = rareCarrierCount
      *
-     *       Kesisim hesaplanamaz — sayilmasi gerekir. `confirmRarity` icinde
+     *       Kesisim hesaplanamaz - sayilmasi gerekir. `confirmRarity` icinde
      *       artar, cunku nadirlik ancak orada kesinlesir.
      */
     uint32 public rareFoundingCount;
 
     // ---------------------------------------------------------------------------------
-    // BSKK-44 — yetkili dugumler ve esikli erisim
+    // BSKK-44 - yetkili dugumler ve esikli erisim
     // ---------------------------------------------------------------------------------
 
     /// @notice Konsensus uyesi dugumler.
     mapping(address => bool) public isAuthorizedNode;
 
     /**
-     * @notice Kripto-ekonomik guvenlik modulu (rapor §2.7).
+     * @notice Kripto-ekonomik guvenlik modulu (rapor 2.7).
      *
      * @dev Atanmissa, onay verebilmek icin dugumun YETERLI TEMINATI olmasi
      *      gerekir; atanmamissa yetkilendirme tek basina yeter. Bos
@@ -646,11 +646,11 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     address public stakingModule;
 
     // ---------------------------------------------------------------------------------
-    // Dead Man's Switch — varis dugumler (rapor §2.6.1)
+    // Dead Man's Switch - varis dugumler (rapor 2.6.1)
     // ---------------------------------------------------------------------------------
 
     /**
-     * @notice Varis (fallback) dugumler — ana dugumler susarsa yetki bunlara gecer.
+     * @notice Varis (fallback) dugumler - ana dugumler susarsa yetki bunlara gecer.
      *
      * @dev Varis olmak yetki VERMEZ; yalnizca devir halinde yetki dogar. Ana
      *      dugum ile varis ayni adres olmamalidir, ama kod bunu zorlamaz:
@@ -666,7 +666,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *
      * @dev  NEDEN TEK SAYAC, DUGUM BASINA DEGIL
      *
-     *       Rapor "ana dugumlerin belirli bir sure yanit vermemesi" diyor —
+     *       Rapor "ana dugumlerin belirli bir sure yanit vermemesi" diyor -
      *       yani TAMAMININ susmasi. Bir dugum bile hayattaysa ag ayakta
      *       demektir. Tek sayac bu tanimi birebir karsilar ve kontrolu O(1)
      *       yapar; dugum basina zaman damgasi tutmak, devir kontrolunde tum
@@ -690,27 +690,27 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     /**
      * @notice Yonetimin ELLE ilan ettigi devir.
      *
-     * @dev  NEDEN GEREKLI — raporun kapatmadigi bosluk:
+     * @dev  NEDEN GEREKLI - raporun kapatmadigi bosluk:
      *
      *       Sessizlik tespiti yalnizca dugumlerin SUSMASINI gorur. Rapor
-     *       §2.6.1 mekanizmanin "ana dugumler dusman tarafindan hacklenirse"
+     *       2.6.1 mekanizmanin "ana dugumler dusman tarafindan hacklenirse"
      *       de devreye girdigini soyluyor; ama ele gecirilmis bir dugum
-     *       susmaz — saldirgan yasam isareti gondermeye devam eder ve devri
+     *       susmaz - saldirgan yasam isareti gondermeye devam eder ve devri
      *       sonsuza kadar erteleyebilir.
      *
      *       Bu, sessizlik tabanli hicbir tasarimin cozemeyecegi bir sorundur.
      *       Ele gecirme durumu icin acik bir yonetisim karari gerekir; burada
-     *       o karar ayri ve gorunur bir islemdir. Kendi kendine kalkmaz —
+     *       o karar ayri ve gorunur bir islemdir. Kendi kendine kalkmaz -
      *       yasam isareti gelmesi bunu temizlemez.
      */
     bool public failoverDeclared;
 
-    /// @notice Varis esigi — rapor §2.6.1: 9/12.
+    /// @notice Varis esigi - rapor 2.6.1: 9/12.
     uint8 public constant HEIR_THRESHOLD_NUMERATOR = 9;
     uint8 public constant HEIR_THRESHOLD_DENOMINATOR = 12;
 
     /**
-     * @notice Itiraz suresi (blok) — rapor §2.7.1 "Challenge Period".
+     * @notice Itiraz suresi (blok) - rapor 2.7.1 "Challenge Period".
      *
      * @dev Esige ulasan bir acilim, bu sure boyunca FIILEN verilmez. Sure
      *      dolmadan `executeDisclosure` reddedilir.
@@ -730,7 +730,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     /**
      * @notice Sorgu tipi -> gereken onay orani (10 uzerinden).
      *
-     * @dev RAPOR §2.6 — kademeli yetkilendirme, birebir:
+     * @dev RAPOR 2.6 - kademeli yetkilendirme, birebir:
      *
      *        genel istatistik sorgulari      -> 4/10
      *        bireysel mutasyon arastirmalari -> 7/10
@@ -753,9 +753,9 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     /**
      * @notice Sorgu talebini acmaya yetkili kapi (odeme sozlesmesi).
      *
-     * @dev Rapor §2.5.2'de bu rol "Gateway" olarak geciyor: arastirmacinin
+     * @dev Rapor 2.5.2'de bu rol "Gateway" olarak geciyor: arastirmacinin
      *      yetkisini dogrulayan ve talebi ileten bilesen. Bizde bu is odeme
-     *      sozlesmesindedir — cunku yetki kontrolu (kayitli arastirmaci mi)
+     *      sozlesmesindedir - cunku yetki kontrolu (kayitli arastirmaci mi)
      *      ve ucret tahsili orada yapilir.
      */
     address public queryGateway;
@@ -771,29 +771,29 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
 
     struct DisclosureRequest {
         /**
-         * @dev Talebi acan ARASTIRMACI (rapor §2.6: "Access Request
-         *      Transaction"). Onceki surumde burasi bir dugumdu; rapor §2.5.2
+         * @dev Talebi acan ARASTIRMACI (rapor 2.6: "Access Request
+         *      Transaction"). Onceki surumde burasi bir dugumdu; rapor 2.5.2
          *      ise cozulen sonucun arastirmaciya iletildigini soyluyor.
          */
         address requester;
-        /// @dev Sorgu hassasiyeti; gereken esigi bu belirler (rapor §2.6).
+        /// @dev Sorgu hassasiyeti; gereken esigi bu belirler (rapor 2.6).
         uint8 queryType;
         /// @dev Talep aninda hesaplanan onay sayisi. Sonradan dugum eklenip
         ///      cikarilsa bile bu talebin esigi degismez.
         uint32 requiredApprovals;
         /**
-         * @dev Devir halinde gecerli olacak esik (rapor §2.6.1).
+         * @dev Devir halinde gecerli olacak esik (rapor 2.6.1).
          *
          * Talep aninda AYRICA hesaplanir. Sebep: devir, talep acildiktan
          * SONRA da olabilir. Tek esik saklansaydi, ana dugumler talep
-         * asamasinda susarsa o talep sonsuza kadar onaylanamaz — havuz kalici
+         * asamasinda susarsa o talep sonsuza kadar onaylanamaz - havuz kalici
          * olarak erisilemez hale gelirdi.
          */
         uint32 heirRequiredApprovals;
         /// @dev Ana dugumlerden gelen onay sayisi.
         uint32 mainApprovals;
         /**
-         * @dev Varis dugumlerden gelen onay sayisi — AYRI sayilir.
+         * @dev Varis dugumlerden gelen onay sayisi - AYRI sayilir.
          *
          * Devir aninda ana dugumlerin onaylari varislerinkine EKLENMEZ:
          * devir zaten "ana dugumlere guvenilmiyor" demektir. Karistirmak,
@@ -806,9 +806,9 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         /// @dev Esige ULASILDI mi? Tek basina cozum yetkisi VERMEZ (bkz. asagi).
         bool finalized;
         /**
-         * @dev Itiraz suresinin BITTIGI blok — esige ulasildiginda hesaplanir.
+         * @dev Itiraz suresinin BITTIGI blok - esige ulasildiginda hesaplanir.
          *
-         * Rapor §2.7.1: coklu imza onayindan sonra bir "Itiraz Suresi"
+         * Rapor 2.7.1: coklu imza onayindan sonra bir "Itiraz Suresi"
          * (Challenge Period) baslar.
          *
          * Sure, baslangic blogu degil BITIS blogu olarak saklanir: sahip
@@ -840,24 +840,24 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
          * sayilar olmazdi.
          *
          * SINIRLI PENCERE: tum panelin goruntusu alinmaz. 1000 SNP'lik bir
-         * panelde bu 6000 handle kopyasi demektir — hem gaz acisindan imkansiz
+         * panelde bu 6000 handle kopyasi demektir - hem gaz acisindan imkansiz
          * hem de gereksiz: bir arastirmaci genelde belirli varyantlarla
          * ilgilenir. Talep, ilgilendigi araligi bildirir ve yalnizca o aralik
          * dondurulur.
          */
         mapping(uint32 => euint32[3][2]) contingencySnapshot;
         /**
-         * @dev Goruntunun kapsadigi SNP'ler — ARALIK DEGIL, LISTE.
+         * @dev Goruntunun kapsadigi SNP'ler - ARALIK DEGIL, LISTE.
          *
          * Gercek arastirma "SNP 0-9" istemez; "rs4977574, rs429358, rs4680"
          * ister. Bitisik pencere, arastirmaciyi ilgilenmedigi varyantlari da
-         * acmaya zorluyordu — hem gereksiz maliyet hem gereksiz aciklik.
+         * acmaya zorluyordu - hem gereksiz maliyet hem gereksiz aciklik.
          *
          * `uint32` dizisi slot basina 8 eleman paketler; 32 SNP yalnizca 4
          * depolama yuvasi tutar.
          */
         uint32[] snpIds;
-        /// @dev Goruntunun kapsadigi metrikler — liste. Toplamlarin kendisi
+        /// @dev Goruntunun kapsadigi metrikler - liste. Toplamlarin kendisi
         ///      `biomarkerModule` icinde dondurulur.
         uint32[] metricIds;
         address[] approvers;
@@ -899,7 +899,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         minParticipants = minParticipants_;
         provenanceVerifier = IDataProvenanceVerifier(provenanceVerifier_);
 
-        // Rapor §2.6'daki kademeli esikler.
+        // Rapor 2.6'daki kademeli esikler.
         thresholdFraction[QUERY_TYPE_STATISTICS] = 4;
         thresholdFraction[QUERY_TYPE_ML] = 7;
         thresholdFraction[QUERY_TYPE_GWAS] = 9;
@@ -919,7 +919,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
 
         // Kontenjans tablosu artik SNP basina ayri; kurucuda hepsini
         // baslatmak mumkun degil (panel binlerce olabilir). Hucreler ilk
-        // dokunusta tembel baslatilir — bkz. `_ensureSnpInitialized`.
+        // dokunusta tembel baslatilir - bkz. `_ensureSnpInitialized`.
     }
 
     /**
@@ -943,12 +943,12 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     /**
      * @dev Kanitlanmis kapsama bitlerini yazar.
      *
-     *      AYRI FONKSIYON — sebep derleyici: govde `submitRecord` icindeyken
+     *      AYRI FONKSIYON - sebep derleyici: govde `submitRecord` icindeyken
      *      solc "Stack too deep" veriyor; Groth16 bilesenleri yigini zaten
      *      dolduruyor.
      *
      *      Kanit gecerliyse bu bitler TAAHHUDE giren dozajlardan turetilmistir;
-     *      uydurulamaz. Bu, imzasiz katmanda da gecerlidir — degisen tek sey
+     *      uydurulamaz. Bu, imzasiz katmanda da gecerlidir - degisen tek sey
      *      dozajlarin kaynagina kimin kefil oldugudur, bitlerin dogrulugu
      *      degil. Her kelime kendi ofsetinden yazilir.
      */
@@ -1008,17 +1008,17 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      * @dev  NEDEN KANIT SART
      *       Sifreli bir verinin icerigi okunamaz. Kanit olmadan, kotu niyetli
      *       bir kullanici rastgele baytlar yukleyip gelir havuzundan pay
-     *       alabilirdi (rapor §1.5, "cop veri" krizi).
+     *       alabilirdi (rapor 1.5, "cop veri" krizi).
      *
-     *       IKI KATMAN — `attested`
+     *       IKI KATMAN - `attested`
      *
-     *       true  (KURUM IMZALI) — kanit su dortunu ayni anda baglar:
+     *       true  (KURUM IMZALI) - kanit su dortunu ayni anda baglar:
      *         1. Panelin duz metni akredite bir kurumun EdDSA imzasini tasir,
      *         2. Panel bicim kurallarina uyar (dozaj 0 | 1 | 2 | 3),
-     *         3. Kanit `msg.sender`'a baglidir — baskasinin kaniti calinamaz,
+     *         3. Kanit `msg.sender`'a baglidir - baskasinin kaniti calinamaz,
      *         4. Kanit TAM OLARAK bu `cidDigest`e baglidir.
      *
-     *       false (KENDI YUKLEDIGI) — 1. madde DUSER, digerleri kalir. Bugun
+     *       false (KENDI YUKLEDIGI) - 1. madde DUSER, digerleri kalir. Bugun
      *       kullanilan yol budur: tuketici dosyalarinin (23andMe, AncestryDNA)
      *       kurumsal imzasi yoktur, olamaz da; imzayi zorunlu tutmak B2C
      *       yolunu tamamen kapatirdi.
@@ -1028,7 +1028,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *       imkansizdir. KAPATMADIGI sey uydurma bir dosya yuklemektir; onu
      *       ancak imzalayan bir kurum kapatabilir ve ZK kapatamaz.
      *
-     *       KAPSAM SINIRI — dikkat
+     *       KAPSAM SINIRI - dikkat
      *       Kanit "panelin duz metni imzalidir" der; "bu CID'deki sifreli metin
      *       tam olarak o paneli sifreler" DEMEZ. O bag (Proof of Correct
      *       Encryption) bu devrede kurulu degildir. `aggregateDosage` yolunda
@@ -1041,12 +1041,12 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *                     `attested = false` iken SIFIR olmak zorundadir.
      * @param nullifierHash Poseidon(PROVENANCE_SCOPE, commitment).
      * @param commitment   Poseidon(paketlenmis panel, salt).
-     * @param coverage     KAPSAMA KELIMELERI — devrenin ACIK CIKTISI.
+     * @param coverage     KAPSAMA KELIMELERI - devrenin ACIK CIKTISI.
      *
      *        Bit i = "o alanda gercek veri var" (dozaj != 3). Odeme buna gore
      *        dagitilir. Istemciden gelseydi uydurulabilirdi: "bende bu alan
      *        var" deyip bos gondermek, veri vermeden pay almak demekti.
-     *        Burada kanitin PARCASI oldugu icin uydurulamaz — dozajlar zaten
+     *        Burada kanitin PARCASI oldugu icin uydurulamaz - dozajlar zaten
      *        kurumun imzaladigi taahhude giriyor, kapsama ayni dozajlardan
      *        turetiliyor.
      *
@@ -1081,7 +1081,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
             revert UnattestedRootNotZero();
         }
 
-        // CID BAGLAMA — kritik satir.
+        // CID BAGLAMA - kritik satir.
         //
         // Yarilar KANITTAN degil, cagrida verilen digest'ten turetilir. Boylece
         // gecerli bir kanit baska bir bloba ilistirilemez: kanit farkli bir CID
@@ -1094,7 +1094,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
 
         // SINYAL SIRASI DEVREDEKIYLE BIREBIR: circom once CIKTILARI, sonra
         // acik GIRDILERI yazar. Kapsama kelimeleri bu yuzden ARADA durur.
-        // Sira kayarsa hata olusmaz — kanit sessizce reddedilir.
+        // Sira kayarsa hata olusmaz - kanit sessizce reddedilir.
         uint256[13] memory publicSignals = [
             root,
             nullifierHash,
@@ -1128,7 +1128,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
 
         emit RecordSubmitted(msg.sender, cidDigest, replaced, attested);
 
-        // KAPSAMA — artik KANITLI. Ayrinti `_recordProvenCoverage` icinde.
+        // KAPSAMA - artik KANITLI. Ayrinti `_recordProvenCoverage` icinde.
         _recordProvenCoverage(coverage);
     }
 
@@ -1141,7 +1141,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *
      * @dev  Akis:
      *       1. `FHE.fromExternal` girdinin gecerli bir sifreli metin oldugunu
-     *          ZK girdi kanitiyla dogrular — rastgele bir handle enjekte edilemez.
+     *          ZK girdi kanitiyla dogrular - rastgele bir handle enjekte edilemez.
      *       2. `FHE.min` ile 0..2 araligina homomorfik kirpma yapilir.
      *       3. `euint8` toplam, `euint32` havuza eklenir (genisleme kutuphanede
      *          tanimli: `add(euint32, euint8)`), boylece 255'te tasma olmaz.
@@ -1226,7 +1226,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         //
         // fhEVM'de erisim izni kontrat bazlidir: `VeriarfyBiomarkers` bu
         // handle uzerinde islem yapamazsa metrikleri gruplara ayiramaz. Izin
-        // kayit aninda verilir cunku sonradan verilemez — katilimci ikinci bir
+        // kayit aninda verilir cunku sonradan verilemez - katilimci ikinci bir
         // islem imzalamak zorunda kalirdi. Bu yuzden modul, ILK KAYITTAN ONCE
         // baglanmis olmak zorundadir; `setBiomarkerModule` bunu zorlar.
         if (biomarkerModule != address(0)) FHE.allow(group, biomarkerModule);
@@ -1273,11 +1273,11 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
             _dosagePool = FHE.add(_dosagePool, dosage);
             FHE.allowThis(_dosagePool);
 
-            // Kontenjans tablosu — ayrinti `ContingencyStats` icinde.
+            // Kontenjans tablosu - ayrinti `ContingencyStats` icinde.
             //
-            // Nadirlik biti (rapor §4.3) burada BEDAVA gelir: aranan
+            // Nadirlik biti (rapor 4.3) burada BEDAVA gelir: aranan
             // karsilastirma `dozaj == 2`, tablo icin zaten yapiliyor.
-            // Yalnizca `rareSnpIndex` icin saklanir — cok SNP'li panelde
+            // Yalnizca `rareSnpIndex` icin saklanir - cok SNP'li panelde
             // "nadir tasiyici" sorusu bir varyanta ozgudur.
             ebool isRare = ContingencyStats.accumulate(
                 _contingency,
@@ -1296,7 +1296,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
 
         submittedSnps[msg.sender] = end;
 
-        // KAPSAMA — hangi alanlarda gercek veri var.
+        // KAPSAMA - hangi alanlarda gercek veri var.
         //
         // IKI YOL VAR ve hangisinin gecerli oldugu KAYDIN VARLIGINA baglidir.
         //
@@ -1340,12 +1340,12 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         if (end == snpCount) {
             participantCount += 1;
 
-            // 1 TABANLI indeks — 0 "katilimci degil" anlamina gelir.
+            // 1 TABANLI indeks - 0 "katilimci degil" anlamina gelir.
             //
             // Gelir paylasimi bunu kullanir: bir sorgu, acildigi andaki katilimci
             // sayisini (`snapshotCount`) dondurur. Indeksi bu sayidan kucuk esit
             // olan herkes o sorguya dahildir. Boylece odeme sozlesmesi katilimci
-            // listesini dolasmak zorunda kalmaz — pay hesabi O(1) olur.
+            // listesini dolasmak zorunda kalmaz - pay hesabi O(1) olur.
             participantIndex[msg.sender] = participantCount;
 
             emit DosageAggregated(msg.sender, participantCount);
@@ -1353,7 +1353,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Calismanin SNP panelini yapilandirir (rapor §3.3).
+     * @notice Calismanin SNP panelini yapilandirir (rapor 3.3).
      *
      * @dev  ILK KATKIDAN SONRA DEGISTIRILEMEZ.
      *
@@ -1394,13 +1394,13 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         return CoverageBits.weight(_snpCoverage, participant, snpIds);
     }
 
-    /// @notice Istenen SNP'lerin kapsama sayaclarinin toplami — odemenin PAYDASI.
+    /// @notice Istenen SNP'lerin kapsama sayaclarinin toplami - odemenin PAYDASI.
     function snpCoverageTotal(uint32[] calldata snpIds) external view returns (uint256) {
         return CoverageBits.total(snpCoverageCount, snpIds);
     }
 
     /**
-     * @notice Istenen SNP'lerin hangilerinde verisi oldugu — BIT MASKESI.
+     * @notice Istenen SNP'lerin hangilerinde verisi oldugu - BIT MASKESI.
      *
      * @dev Bit i, `snpIds[i]` alanina karsilik gelir. Odeme sozlesmesi
      *      kitliga gore agirliklandirma yaparken alan basina ayri bir cagri
@@ -1442,7 +1442,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *       Sebep `_enroll` icinde anlatiliyor: sifreli grup etiketinin
      *       kullanim izni kayit aninda verilir. Modul sonradan baglansaydi,
      *       once kaydolmus katilimcilarin etiketini kullanamaz ve o
-     *       katilimcilar metrik gonderemezdi — sessiz, kismi bir bozulma.
+     *       katilimcilar metrik gonderemezdi - sessiz, kismi bir bozulma.
      *       Degistirilebilseydi ayni sorun tersine olurdu: eski modulun
      *       biriktirdigi toplamlar erisilemez kalirdi.
      */
@@ -1462,11 +1462,11 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     }
 
     // ---------------------------------------------------------------------------------
-    // 3) Gizlilik Paneli — havuzdan cikis
+    // 3) Gizlilik Paneli - havuzdan cikis
     // ---------------------------------------------------------------------------------
 
     /**
-     * @notice HAVUZDAN CIK — bundan sonraki calismalarda verim kullanilmasin.
+     * @notice HAVUZDAN CIK - bundan sonraki calismalarda verim kullanilmasin.
      *
      * @dev  NEDEN "IZIN VER" DEGIL DE "CIK"
      *
@@ -1489,7 +1489,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *       kurallarini ve k-anonimlik esigini gorup girer; panel ozeti
      *       zincirde sabittir ve degistirilemez.
      *
-     *       DURUST SINIR — CIKMAK GECMISI SILMEZ. Toplama karisan geri
+     *       DURUST SINIR - CIKMAK GECMISI SILMEZ. Toplama karisan geri
      *       cikarilamaz; bu bir uygulama eksigi degil, homomorfik toplamanin
      *       dogasidir. Cikis BUNDAN SONRASI icindir ve panel bunu boyle yazar.
      */
@@ -1550,7 +1550,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     }
 
     // ---------------------------------------------------------------------------------
-    // 3) Nadirlik Carpani — rapor §4.3
+    // 3) Nadirlik Carpani - rapor 4.3
     // ---------------------------------------------------------------------------------
 
     /**
@@ -1565,12 +1565,12 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     /**
      * @notice Sifreli nadirlik bitinin esikli cozumune izin verir.
      *
-     * @dev  Rapor §4.3: "KMS dugumleri, hastanin tum genomunu degil, yalnizca
+     * @dev  Rapor 4.3: "KMS dugumleri, hastanin tum genomunu degil, yalnizca
      *       bu tek bitlik boolean sonucunu threshold decryption ile cozer."
      *
      *       Bu cagri BITI ACMAZ; yalnizca acilabilir kilar. Gercek cozum
      *       KMS dugumlerinin esigini gerektirir ve zincir disinda olur.
-     *       Cagriyi KATILIMCININ KENDISI yapar — ifsa takasi onun secimidir
+     *       Cagriyi KATILIMCININ KENDISI yapar - ifsa takasi onun secimidir
      *       (bkz. `isRareCarrier` aciklamasi).
      *
      *       Donen `handle` ile relayer'a `publicDecrypt([handle])` cagrilir;
@@ -1592,14 +1592,14 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     /**
      * @notice Esikli cozulmus nadirlik bitini zincire yazar.
      *
-     * @dev  HERKES CAGIRABILIR — ve bu guvenlik acigi DEGIL, tasarimdir.
+     * @dev  HERKES CAGIRABILIR - ve bu guvenlik acigi DEGIL, tasarimdir.
      *
      *       Sonucun dogrulugu cagiranin durustluguna degil, KMS dugumlerinin
      *       EIP-712 imzalarina baglidir: `verifyDecryptionEIP712KMSSignatures`
      *       "bu handle bu degere cozulur" iddiasini zincirde dogrular. Yanlis
      *       bir deger imzalanamayacagi icin sonucu kimin tasidigi onemsizdir.
      *
-     *       Rapor §4.3 "sonuc 1 ise kullaniciya Nadirlik Carpani OTOMATIK
+     *       Rapor 4.3 "sonuc 1 ise kullaniciya Nadirlik Carpani OTOMATIK
      *       tanimlanir" diyor. fhEVM 0.11.x'te sozlesmeye geri donen bir oracle
      *       geri cagrisi bulunmadigindan (bkz. `IKMSVerifier`), otomatiklik
      *       "izinsiz/permissionless" olmakla saglanir: tanimayi baslatmak icin
@@ -1649,9 +1649,9 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Nadirlik carpaninin paydasi ve payi — `R = log2(1 + N/C)` girdisi.
+     * @notice Nadirlik carpaninin paydasi ve payi - `R = log2(1 + N/C)` girdisi.
      *
-     * @dev Odeme sozlesmesi bunu sorgu aninda anlik goruntuye alir. Rapor §4.3
+     * @dev Odeme sozlesmesi bunu sorgu aninda anlik goruntuye alir. Rapor 4.3
      *      `N_total`'i HAVUZUN TAMAMI olarak tanimlar (izin verenler degil):
      *      nadirlik, varyantin populasyondaki gercek seyrekligidir.
      */
@@ -1733,18 +1733,18 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *      (bunun icin ayrica `minParticipants` siniri vardir).
      */
     /**
-     * @notice Arastirmaci adina bir acilim talebi acar (rapor §2.6:
+     * @notice Arastirmaci adina bir acilim talebi acar (rapor 2.6:
      *         "Access Request Transaction").
      *
-     * @dev  YETKI — neden dogrudan arastirmaci degil de kapi cagiriyor
-     *       Rapor §2.5.2'de bu adimi "Gateway" yapar: arastirmacinin
+     * @dev  YETKI - neden dogrudan arastirmaci degil de kapi cagiriyor
+     *       Rapor 2.5.2'de bu adimi "Gateway" yapar: arastirmacinin
      *       yetkisini dogrular ve talebi iletir. Bizde kapi, odeme
      *       sozlesmesidir; kayitli arastirmaci kontrolu ve ucret emaneti
      *       orada yapilir. Bu kontratin arastirmaci kayit defterini
      *       tanimasina gerek kalmaz.
      *
      * @param researcher Talebi acan arastirmaci; esik saglandiginda cozum
-     *        yetkisi BU ADRESE verilir (rapor §2.5.2 adim 6).
+     *        yetkisi BU ADRESE verilir (rapor 2.5.2 adim 6).
      * @param queryType  Sorgu hassasiyeti; gereken esik buna gore hesaplanir.
      */
     function requestDisclosure(
@@ -1761,7 +1761,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         );
     }
 
-    /// @dev `[0, 1, ... n-1]` — varsayilan alan listesi.
+    /// @dev `[0, 1, ... n-1]` - varsayilan alan listesi.
     function _defaultIds(uint32 n) private pure returns (uint32[] memory ids) {
         ids = new uint32[](n);
         for (uint32 i = 0; i < n; ++i) ids[i] = i;
@@ -1774,7 +1774,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *
      *       Her arastirmaci ayni veriyle calismaz: birine `rs4977574` ve
      *       VO2 max lazimdir, digerine bambaska bir kume. Bitisik pencere
-     *       arastirmaciyi ilgilenmedigi alanlari da acmaya zorluyordu — hem
+     *       arastirmaciyi ilgilenmedigi alanlari da acmaya zorluyordu - hem
      *       gereksiz maliyet hem GEREKSIZ ACIKLIK.
      *
      *       Odeme de buna baglanir (bkz. `CoverageBits`): secilen alanlara
@@ -1827,7 +1827,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         // erisim izni de ayrica verilmelidir.
         FHE.allowThis(request.snapshot);
 
-        // Kontenjans tablosu da dondurulur — GWAS'in ki-kare girdisi budur.
+        // Kontenjans tablosu da dondurulur - GWAS'in ki-kare girdisi budur.
         //
         // Yalnizca ISTENEN ARALIK kopyalanir. Tum panel kopyalansaydi 1000
         // SNP'de 6000 handle yazimi olurdu: gaz acisindan imkansiz ve
@@ -1847,7 +1847,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         // Biyobelirtec toplamlari da ayni anda dondurulur.
         //
         // Bos metrik listesi GECERLIDIR ve "bu talep metrik istemiyor"
-        // demektir — yalnizca genomik calismalarda ve arastirmacinin sadece
+        // demektir - yalnizca genomik calismalarda ve arastirmacinin sadece
         // GWAS istedigi durumlarda olur. SNP listesi icin ayni sey gecerli
         // DEGILDIR: orada bos liste anlamsizdir cunku her calismanin en az
         // bir SNP'si vardir.
@@ -1866,7 +1866,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         // ONEMLI: talebi acan artik onay VERMEZ.
         //
         // Onceki surumde talebi bir dugum aciyor ve ilk onayi kendisi
-        // veriyordu. Rapor §2.6'ya gore talebi arastirmaci acar; onay
+        // veriyordu. Rapor 2.6'ya gore talebi arastirmaci acar; onay
         // yetkisi yalnizca kurumsal dugumlerdedir. Arastirmacinin kendi
         // talebini onaylamasi, mekanizmanin tamamini anlamsiz kilardi.
     }
@@ -1874,9 +1874,9 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     /**
      * @notice Bir sorgu tipi icin su an gereken onay sayisi.
      *
-     * @dev Rapor §2.6 esikleri "X/10" oranidir; gercek dugum sayisina
+     * @dev Rapor 2.6 esikleri "X/10" oranidir; gercek dugum sayisina
      *      olceklenir. Yukari yuvarlanir: 7/10 orani 3 dugumde 2,1 degil
-     *      3 onay ister — asagi yuvarlamak esigi sessizce gevsetirdi.
+     *      3 onay ister - asagi yuvarlamak esigi sessizce gevsetirdi.
      */
     function requiredApprovals(uint8 queryType) public view returns (uint32) {
         uint8 fraction = thresholdFraction[queryType];
@@ -1890,14 +1890,14 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Devir halinde gereken varis onayi sayisi (rapor §2.6.1: 9/12).
+     * @notice Devir halinde gereken varis onayi sayisi (rapor 2.6.1: 9/12).
      *
      * @dev  IKI KURALIN BUYUGU ALINIR.
      *
      *       Rapor devir esigini tek bir oran olarak veriyor (9/12 = %75) ama
-     *       §2.6'daki kademeli esikler de yururlukte: populasyon genetigi
+     *       2.6'daki kademeli esikler de yururlukte: populasyon genetigi
      *       sorgusu 9/10 = %90 ister. Yalnizca 9/12 uygulansaydi, en hassas
-     *       sorgu KRIZ ANINDA daha KOLAY gecerdi — mekanizmanin amacinin tam
+     *       sorgu KRIZ ANINDA daha KOLAY gecerdi - mekanizmanin amacinin tam
      *       tersi. Bu yuzden iki esikten buyugu gecerlidir.
      */
     function heirRequiredApprovals(uint8 queryType) public view returns (uint32) {
@@ -1916,7 +1916,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Yetki su anda varis dugumlerde mi (rapor §2.6.1)?
+     * @notice Yetki su anda varis dugumlerde mi (rapor 2.6.1)?
      *
      * @dev Iki yoldan biriyle aktiflesir:
      *      1. ana dugumler `livenessTimeout` boyunca SUSTU (otomatik),
@@ -1944,7 +1944,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         emit Heartbeat(msg.sender, block.number);
     }
 
-    /// @notice Varis dugum atar (rapor §2.6.1 "Fallback Nodes").
+    /// @notice Varis dugum atar (rapor 2.6.1 "Fallback Nodes").
     function authorizeHeirNode(address node) external onlyOwner {
         if (node == address(0)) revert ZeroAddress();
         if (isHeirNode[node]) revert AlreadyAuthorized(node);
@@ -1972,7 +1972,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Devri elle ilan eder — ele gecirme hali (rapor §2.6.1).
+     * @notice Devri elle ilan eder - ele gecirme hali (rapor 2.6.1).
      * @dev Yasam isareti gelmesi bunu TEMIZLEMEZ; yalnizca `clearFailover`.
      */
     function declareFailover() external onlyOwner {
@@ -1995,19 +1995,19 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         emit QueryGatewayUpdated(gateway);
     }
 
-    /// @notice Kripto-ekonomik guvenlik modulunu baglar (rapor §2.7).
+    /// @notice Kripto-ekonomik guvenlik modulunu baglar (rapor 2.7).
     function setStakingModule(address module) external onlyOwner {
         stakingModule = module; // sifir adres: modulu devre disi birakir
         emit StakingModuleUpdated(module);
     }
 
     /**
-     * @notice Itiraz suresini blok cinsinden ayarlar (rapor §2.7.1).
+     * @notice Itiraz suresini blok cinsinden ayarlar (rapor 2.7.1).
      *
      * @dev Sure UZUN olmali ki dogrulayicilar inceleyebilsin, ama sonsuz
      *      olmamali ki arastirmaci rehin kalmasin. Zaten acilmis taleplerin
      *      suresi degismez: `executeDisclosure` her cagrildiginda guncel
-     *      degeri okur, bu yuzden ayar yalnizca ileriye donuk uygulanmalidir —
+     *      degeri okur, bu yuzden ayar yalnizca ileriye donuk uygulanmalidir -
      *      bu nedenle yalnizca sahip degistirebilir ve degisiklik olay olarak
      *      yayilir.
      */
@@ -2021,7 +2021,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *
      * @dev Esige ulasmak yetmez: itiraz suresi de dolmus ve
      *      `executeDisclosure` cagrilmis olmalidir. Odeme sozlesmesi ucreti
-     *      buna bakarak dagitima acar — yani para, sonuc gercekten teslim
+     *      buna bakarak dagitima acar - yani para, sonuc gercekten teslim
      *      edildiginde el degistirir.
      */
     function isDisclosureGranted(uint256 requestId) external view returns (bool) {
@@ -2046,7 +2046,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     /**
      * @notice Talebi onaylar; esige ulasilinca itiraz suresi baslar.
      *
-     * @dev  KIM ONAYLAYABILIR, DEVIR DURUMUNA BAGLIDIR (rapor §2.6.1):
+     * @dev  KIM ONAYLAYABILIR, DEVIR DURUMUNA BAGLIDIR (rapor 2.6.1):
      *
      *       - normal halde  -> yalnizca ANA dugumler
      *       - devir halinde -> yalnizca VARIS dugumler
@@ -2074,8 +2074,8 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
             lastMainHeartbeat = block.number;
         }
 
-        // Rapor §2.7: onay vermek EKONOMIK SORUMLULUK gerektirir. Modul
-        // atanmissa teminati yetersiz dugum oy kullanamaz — aksi halde
+        // Rapor 2.7: onay vermek EKONOMIK SORUMLULUK gerektirir. Modul
+        // atanmissa teminati yetersiz dugum oy kullanamaz - aksi halde
         // slashing'in yaptirim gucu olmazdi. Varis dugumler de bu kurala
         // tabidir; kriz ani sorumsuzlugu mesrulastirmaz.
         if (stakingModule != address(0) && !IVeriarfyStaking(stakingModule).canApprove(msg.sender)) {
@@ -2117,12 +2117,12 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
 
         emit DisclosureApproved(requestId, msg.sender, approvals);
 
-        // Esik, TALEP ANINDA sorgu tipine gore sabitlenmistir (rapor §2.6).
+        // Esik, TALEP ANINDA sorgu tipine gore sabitlenmistir (rapor 2.6).
         if (approvals < required) return;
 
-        // Esik saglandi — ama cozum yetkisi HENUZ VERILMEZ.
+        // Esik saglandi - ama cozum yetkisi HENUZ VERILMEZ.
         //
-        // Rapor §2.7.1: coklu imza onayindan sonra bir Itiraz Suresi baslar.
+        // Rapor 2.7.1: coklu imza onayindan sonra bir Itiraz Suresi baslar.
         // Izin bu noktada verilseydi itiraz suresi susleme olurdu: `FHE.allow`
         // geri alinamaz ve arastirmaci zincir disinda aninda cozerdi.
         request.finalized = true;
@@ -2166,7 +2166,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
 
         request.executed = true;
 
-        // Cozum yetkisi ARASTIRMACIYA verilir — rapor §2.5.2 adim 6:
+        // Cozum yetkisi ARASTIRMACIYA verilir - rapor 2.5.2 adim 6:
         // "Cozulen sonuc yalnizca arastirmacinin cuzdan adresine iletilir."
         //
         // Onceki surumde izin onaylayan dugumlere veriliyordu; bu, onaylayan
@@ -2194,7 +2194,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     /**
      * @notice Kabul edilen bir itiraz uzerine acilimi iptal eder.
      *
-     * @dev Yalnizca stake sozlesmesi cagirabilir (rapor §2.7.1). Yetki HENUZ
+     * @dev Yalnizca stake sozlesmesi cagirabilir (rapor 2.7.1). Yetki HENUZ
      *      verilmemis olmalidir; verilmis bir izni geri almak teknik olarak
      *      mumkun degildir ve oyle davranmak yaniltici olurdu.
      */
@@ -2267,7 +2267,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      * @notice Talepte SECILEN bir SNP'nin sifreli tablosu.
      *
      * @dev Uyelik listede aranir. Liste en fazla `MAX_DISCLOSURE_WINDOW`
-     *      uzunlugunda ve bu bir `view` — dolayisiyla dogrusal arama bedava.
+     *      uzunlugunda ve bu bir `view` - dolayisiyla dogrusal arama bedava.
      *      Ayri bir uyelik haritasi tutmak, her talepte fazladan depolama
      *      yazimi demek olurdu.
      */

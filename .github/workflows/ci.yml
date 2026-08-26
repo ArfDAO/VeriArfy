@@ -134,6 +134,14 @@ jobs:
           name: circuit-build
           path: packages/circuits/build
 
+      # Depodaki dogrulayicilarin UZERINE yazar. Sart: zkey ile dogrulayici
+      # ayni torenden gelmezse uretilen her kanit reddedilir.
+      - name: Dogrulayici sozlesmelerini al
+        uses: actions/download-artifact@v4
+        with:
+          name: circuit-verifiers
+          path: packages/contracts/contracts/verifiers
+
       - name: Devre ciktilari yerinde mi
         run: |
           test -f packages/circuits/build/data_provenance_final.zkey
@@ -259,6 +267,29 @@ jobs:
             !packages/circuits/build/*.r1cs
           retention-days: 1
 
+      # ---------------------------------------------------------------------
+      # DOGRULAYICI SOZLESMELERI de devredilmek ZORUNDA
+      # ---------------------------------------------------------------------
+      #
+      # Toren her kosuda FARKLI bir zkey uretiyor; entropi zamana bagli:
+      #
+      #     zKey.contribute(zkey0, zkeyFinal, "veriarfy-dev", `veriarfy-${Date.now()}`)
+      #
+      # Yani depoya islenmis `verifiers/*.sol`, CI'nin taze urettigi zkey ile
+      # ASLA uyusmaz. Yalnizca zkey devredilirse sozlesme testleri taze kanit
+      # uretip eski dogrulayiciya sorar ve hepsi `InvalidProof()` ile duser —
+      # tam olarak yasanan buydu (17 test).
+      #
+      # `circuits:build` dogrulayicilari zaten yeniden yaziyor; onlari da
+      # devretmek, zkey ile dogrulayicinin AYNI torenden gelmesini garanti
+      # eder. Ayri artefakt cunku ortak ust klasorleri yok.
+      - name: Dogrulayici sozlesmelerini devret
+        uses: actions/upload-artifact@v4
+        with:
+          name: circuit-verifiers
+          path: packages/contracts/contracts/verifiers
+          retention-days: 1
+
   # ---------------------------------------------------------------------------
   # Node ve TypeScript — istatistik motoru ve arayuz
   # ---------------------------------------------------------------------------
@@ -363,9 +394,26 @@ jobs:
   # kontrolu, overflow) tarar. FHE'ye ozgu islemler (euint8, FHE.add) kapsam
   # disidir; o katmanin guvenligi Zama'nin kendi denetimine dayanir.
   #
-  # `continue-on-error` bilincli: fhEVM import yollari Slither'in solc
-  # cozumlemesini henuz tam gecmiyor. Bulgular rapor edilir ama yesil/kirmizi
-  # kararini bloke etmez. Bu gevsetme, import sorunu cozulunce kaldirilmalidir.
+  # NEDEN AYRI BIR "KAYNAK HIZALAMA" ADIMI VAR
+  #
+  # Slither aylarca hic calismadi; her kosuda parse asamasinda cokuyordu:
+  #
+  #     InvalidCompilation: Source map for '@fhevm/solidity/config/ZamaConfig.sol'
+  #     falls outside the cached source.
+  #
+  # Sebep fhEVM hardhat eklentisi. Eklenti, derlemeden once @fhevm
+  # kaynaklarini `fhevmTemp/` altina KOPYALAYIP DEGISTIRIYOR: goreli
+  # import'lari paket import'una ceviriyor ve mock KMS adreslerini yaziyor.
+  # solc bu degistirilmis dosyayi derliyor, dolayisiyla kaynak haritasi ona
+  # gore. Slither ise ayni yolu `node_modules` altina cozuyor ve orada 26
+  # bayt daha kisa bir dosya buluyor — ofsetler tasiyor, arac cokuyor.
+  #
+  # Cozum, Slither'a solc'un GERCEKTEN derledigi kaynagi gostermek: eklentinin
+  # urettigi dosyalari `node_modules` uzerine kopyalamak. Bu satirdan sonra
+  # arac 50 sozlesmeyi 102 dedektorle tariyor.
+  #
+  # `continue-on-error` yine de duruyor: bulgu sayisi (~1000, cogu bilgi
+  # duzeyi) triyaj edilmeden yesil/kirmizi karari verdirmemeli.
   slither:
     name: Slither (danisma)
     runs-on: ubuntu-latest
@@ -380,7 +428,24 @@ jobs:
 
       - run: npm ci
 
+      # Derleme BURADA yapilir (action'in kendi derlemesi degil): `fhevmTemp`
+      # ancak derleme sirasinda olusur ve bir sonraki adim ona ihtiyac duyar.
+      - name: Derle
+        run: npm run contracts:compile
+
+      - name: fhEVM kaynaklarini derlenen haliyle hizala
+        working-directory: packages/contracts
+        run: |
+          if [ -d fhevmTemp ]; then
+            cp -R fhevmTemp/. node_modules/
+            echo "fhevmTemp -> node_modules hizalandi"
+          else
+            echo "fhevmTemp yok — eklenti kaynak degistirmemis olabilir"
+          fi
+
       - uses: crytic/slither-action@v0.4.0
         with:
           target: packages/contracts
+          # Zaten derledik; action yeniden derlerse hizalama bozulur.
+          ignore-compile: true
           fail-on: none

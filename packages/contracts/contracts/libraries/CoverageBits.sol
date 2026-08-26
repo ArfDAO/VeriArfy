@@ -3,14 +3,14 @@ pragma solidity ^0.8.24;
 
 /**
  * @title   CoverageBits
- * @notice  Kimin HANGI ALANDA gercek verisi oldugunu tutar — acik, sifresiz.
+ * @notice  Kimin HANGI ALANDA gercek verisi oldugunu tutar - acik, sifresiz.
  *
  * @dev  NEDEN ACIK
  *
  *       Odeme, kullanilan alana gore dagitilir: bir arastirmaci
  *       {rs4977574, VO2MAX} isterse, o alanlara gercekten veri vermis olanlar
  *       pay alir. Bunu hesaplayabilmek icin kapsama duz metin olmak
- *       ZORUNDADIR — sifreli bir bitmap'ten pay dagitilamaz.
+ *       ZORUNDADIR - sifreli bir bitmap'ten pay dagitilamaz.
  *
  *       SIZAN SEY DEGER DEGIL, VARLIK. "Bu adresin rs4977574 olcumu var"
  *       bilgisi aciga cikar; dozajin 0 mi 1 mi 2 mi oldugu cikmaz. Genomikte
@@ -20,11 +20,11 @@ pragma solidity ^0.8.24;
  *       KULLANICI BEYAN ETMEZ, SISTEM CIKARIR
  *
  *       Siradan bir kullanici dosyasinin icinde hangi varyantlarin
- *       oldugunu bilmez — doktor degildir, dosyanin TURUNU bilir. Bu yuzden
+ *       oldugunu bilmez - doktor degildir, dosyanin TURUNU bilir. Bu yuzden
  *       bitmap istemcideki ayristiricidan gelir (`alignToPanel` zaten hangi
  *       alanin bulundugunu doner), kullaniciya sorulmaz.
  *
- *       GUVEN SINIRI — ACIKCA
+ *       GUVEN SINIRI - ACIKCA
  *
  *       Sozlesme bitmap'in sifreli veriyle ORTUSTUGUNU dogrulayamaz; sifreli
  *       olmasinin anlami budur. Yani bir istemci "bende bu alan var" deyip
@@ -39,7 +39,7 @@ pragma solidity ^0.8.24;
  *       BU YOL ARTIK VARSAYILAN DEGIL. `data_provenance` devresi bitmap'i ACIK
  *       CIKTI olarak veriyor; `submitRecord` ile yazilan kapsama uydurulamaz.
  *       Kaydi olan bir katilimcinin beyani ise yalnizca kanitin ALT KUMESI
- *       olabilir (`withinProven`) — yani yukaridaki yalan, kanit yolunu
+ *       olabilir (`withinProven`) - yani yukaridaki yalan, kanit yolunu
  *       kullanan herkes icin KAPALIDIR.
  *
  *       Acik kalan tek durum: hic kanit gondermemis katilimci. Arayuz her
@@ -94,7 +94,7 @@ library CoverageBits {
      *       kaydi olan bir katilimcinin sifreli dozaj gonderdigi andir:
      *       kapsama zaten kanittan yazilmistir, istemcinin ayrica beyan
      *       ettigi maske yeni alan EKLEYEMEMELIDIR. Ekleyebilseydi kanit
-     *       yolu bos yere kurulmus olurdu — saldirgan once dar bir kanit
+     *       yolu bos yere kurulmus olurdu - saldirgan once dar bir kanit
      *       gonderip sonra maskeyle genisletirdi.
      *
      *       Doner deger `true` ise beyan kanitin ALT KUMESIDIR.
@@ -135,7 +135,7 @@ library CoverageBits {
      *       Tavanlar maskeye SIGAR (32 ve 16, ikisi de 256'nin altinda), bu
      *       yuzden tek bir `uint256` her seyi tasir.
      *
-     *       Bit i, `fields[i]` alanina karsilik gelir — alan indeksine degil
+     *       Bit i, `fields[i]` alanina karsilik gelir - alan indeksine degil
      *       LISTEDEKI SIRAYA. Agirlik dizisi de ayni sirada tutulur.
      */
     function maskOf(
@@ -168,7 +168,7 @@ library CoverageBits {
         }
     }
 
-    /// @notice Istenen alanlarin kapsama sayaclarinin toplami — odemenin PAYDASI.
+    /// @notice Istenen alanlarin kapsama sayaclarinin toplami - odemenin PAYDASI.
     function total(
         mapping(uint32 => uint32) storage counts,
         uint32[] memory fields

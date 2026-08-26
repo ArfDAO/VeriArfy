@@ -18,7 +18,7 @@ interface IVeriarfyProtocolGroups {
 
 /**
  * @title   VeriarfyBiomarkers
- * @notice  Veri kategorisi 2 — surekli biyobelirtec ve fizyolojik telemetri.
+ * @notice  Veri kategorisi 2 - surekli biyobelirtec ve fizyolojik telemetri.
  *
  * @dev  NE ISLER
  *
@@ -31,7 +31,7 @@ interface IVeriarfyProtocolGroups {
  *       Zincirde grup basina yalnizca UC sayi birikir: n, Sum x, Sum x^2.
  *       Bireyin olcumu hicbir zaman zincire yazilmaz. Testin kendisi bolme
  *       icerdigi icin (sifreli bolme TFHE'de pratik degildir) duz metinde
- *       yapilir — `packages/study` icindeki `compareGroups`.
+ *       yapilir - `packages/study` icindeki `compareGroups`.
  *
  *       NEDEN AYRI KONTRAT
  *
@@ -87,21 +87,21 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     // Sabitler
     // ---------------------------------------------------------------------------------
 
-    /// @notice Kontrol (saglikli) grubu — protokoldeki degerle AYNI olmalidir.
+    /// @notice Kontrol (saglikli) grubu - protokoldeki degerle AYNI olmalidir.
     uint8 public constant GROUP_CONTROL = 0;
 
     /// @notice Vaka (hasta) grubu.
     uint8 public constant GROUP_CASE = 1;
 
     /**
-     * @notice Eksik olcum isareti — SIFIR.
+     * @notice Eksik olcum isareti - SIFIR.
      *
      * @dev  NEDEN 0 GUVENLE "EKSIK" DEMEK
      *
      *       Genomik tarafta 0 gecerli bir dozajdir ("homozigot referans"), bu
      *       yuzden eksik veri icin ayri bir isaret (`DOSAGE_MISSING = 3`)
      *       gerekti. Burada durum tersidir: metrikler FIZYOLOJIK olcumlerdir
-     *       ve olcekli sifir hicbirinde gecerli degildir — VO2 max 0, kalp
+     *       ve olcekli sifir hicbirinde gecerli degildir - VO2 max 0, kalp
      *       hizi 0 ya da laktat 0 canli bir insanda olcum degil, olcumun
      *       YOKLUGUDUR.
      *
@@ -120,7 +120,7 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     /**
      * @notice Bir metrigin alabilecegi en buyuk OLCEKLI deger (2^20 - 1).
      *
-     * @dev  NEDEN SINIR VAR — SIFRELI ARITMETIK TASMADA REVERT ETMEZ
+     * @dev  NEDEN SINIR VAR - SIFRELI ARITMETIK TASMADA REVERT ETMEZ
      *
      *       Homomorfik toplama sessizce sarar (wrap): `euint64` tasarsa hata
      *       alinmaz, yalnizca yanlis sonuc birikir. Dolayisiyla tasmama,
@@ -147,7 +147,7 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      * @notice Tek bir acilim talebinin kapsayabilecegi en fazla metrik.
      *
      * @dev Metrik basina 6 handle (2 grup x {toplam, kareler toplami, sayim})
-     *      kopyalanir — protokoldeki SNP penceresiyle ayni buyukluk, ayni
+     *      kopyalanir - protokoldeki SNP penceresiyle ayni buyukluk, ayni
      *      gerekce: sinirsiz birakmak talebi blok gaz limitine carptirir.
      */
     uint32 public constant MAX_METRIC_WINDOW = 16;
@@ -173,14 +173,14 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *       donusumunu dogrulayabilsin.
      */
     struct MetricSpec {
-        /// @dev Metrik kimligi (ornegin LOINC kodu) — tam tanim `metricsUri`'de.
+        /// @dev Metrik kimligi (ornegin LOINC kodu) - tam tanim `metricsUri`'de.
         bytes32 code;
         /// @dev Birim etiketi, ornegin `"ml/kg/min"`. Insan ve istemci icin.
         bytes32 unit;
         /// @dev Olcek: kodlanmis = gercek * scale + offset. Sifir olamaz.
         uint32 scale;
         /**
-         * @dev SIFIR NOKTASI — isaretli buyukluklerin kodlanmasi.
+         * @dev SIFIR NOKTASI - isaretli buyukluklerin kodlanmasi.
          *
          * Kodlanmis degerler `uint32`'dir ve `minValue >= 1` zorunlulugu
          * yuzunden NEGATIF olamaz. Ama gercek verinin bir kismi isaretlidir:
@@ -190,7 +190,7 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
          * Cozum kaydirma: `kodlanmis = gercek * scale + offset`. Yalnizca
          * pozitif metrikler icin `offset = 0`.
          *
-         * ISTATISTIGE ETKISI YOK — ve bu tesaduf degil:
+         * ISTATISTIGE ETKISI YOK - ve bu tesaduf degil:
          *
          *     ortalama(kodlanmis) = ortalama(gercek) * scale + offset
          *     varyans(kodlanmis)  = varyans(gercek) * scale^2   (offset DUSER)
@@ -202,13 +202,13 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
          * araligi geri cevrilmelidir.
          */
         uint32 offset;
-        /// @dev Gecerli olcekli alt sinir (dahil). EN AZ 1 — bkz. `BIOMARKER_MISSING`.
+        /// @dev Gecerli olcekli alt sinir (dahil). EN AZ 1 - bkz. `BIOMARKER_MISSING`.
         uint32 minValue;
         /// @dev Gecerli olcekli ust sinir (dahil). En fazla `MAX_METRIC_VALUE`.
         uint32 maxValue;
     }
 
-    /// @notice Protokol — grup etiketi ve yetki oradan gelir.
+    /// @notice Protokol - grup etiketi ve yetki oradan gelir.
     IVeriarfyProtocolGroups public immutable protocol;
 
     /// @dev Calismanin metrik listesi; sira ANLAM TASIR (indeks = metrik kimligi).
@@ -220,7 +220,7 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     /// @dev `[talep][metrik][grup]` -> dondurulmus toplamlar.
     mapping(uint256 requestId => mapping(uint32 => BiomarkerStats.Accumulator[2])) private _frozen;
 
-    /// @dev Talepte SECILEN metrikler — aralik degil liste.
+    /// @dev Talepte SECILEN metrikler - aralik degil liste.
     mapping(uint256 requestId => uint32[]) private _snapshotIds;
 
     /// @dev Metrigin akumulatorleri baslatildi mi?
@@ -259,7 +259,7 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *      SINIRLARIN degil, TANIMIN kanitidir: olcum protokolu (hangi test,
      *      hangi kosulda), birim tanimi, LOINC eslesmeleri. Iki calisma ayni
      *      araligi ilan edip farkli protokolle olcerse sayilar yine
-     *      karsilastirilamaz — ozet bu farki gorunur kilar.
+     *      karsilastirilamaz - ozet bu farki gorunur kilar.
      */
     bytes32 public metricsHash;
 
@@ -310,7 +310,7 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
             // araligin disinda kalmasi gerekir (bkz. `BIOMARKER_MISSING`).
             //
             // `min > max` de yasak: oyle bir metrik hicbir degeri kabul etmez
-            // ve HER olcumu sessizce "eksik" sayardi — panel dogru gorunurken
+            // ve HER olcumu sessizce "eksik" sayardi - panel dogru gorunurken
             // o sutun bos kalirdi.
             if (
                 spec.minValue == 0 ||
@@ -348,13 +348,13 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         return CoverageBits.weight(_metricCoverage, participant, metricIds);
     }
 
-    /// @notice Istenen metriklerin kapsama sayaclari toplami — odemenin PAYDASI.
+    /// @notice Istenen metriklerin kapsama sayaclari toplami - odemenin PAYDASI.
     function metricCoverageTotal(uint32[] calldata metricIds) external view returns (uint256) {
         return CoverageBits.total(metricCoverageCount, metricIds);
     }
 
     /**
-     * @notice Istenen metriklerin hangilerinde olcumu oldugu — BIT MASKESI.
+     * @notice Istenen metriklerin hangilerinde olcumu oldugu - BIT MASKESI.
      *
      * @dev Bit i, `metricIds[i]` alanina karsilik gelir. Genomik taraftaki
      *      `snpCoverageMask` ile ayni amac: kitliga gore agirliklandirma
@@ -384,20 +384,20 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     /**
      * @notice Bir sonraki metrik dilimi icin sifreli olcumleri gonderir.
      *
-     * @dev  NEDEN PARTILI — HCU BUTCESI, GAZ DEGIL
+     * @dev  NEDEN PARTILI - HCU BUTCESI, GAZ DEGIL
      *
      *       Dozajlarda kisit blok gaziydi. Burada baglayici olan fhEVM'in
      *       ISLEM BASINA HOMOMORFIK HESAP BUTCESIDIR (HCU):
      *       `MAX_HOMOMORPHIC_COMPUTE_UNITS_PER_TX = 20.000.000`.
      *
      *       Metrik basina en pahali islem kareyi almaktir:
-     *       `mul(euint64, euint64)` tek basina 596.000 HCU'dur — dozajda boyle
+     *       `mul(euint64, euint64)` tek basina 596.000 HCU'dur - dozajda boyle
      *       bir carpma HIC yoktu.
      *
      *       OLCULEN TAVAN: islem basina 8 METRIK (`test/BiomarkerHcu.test.ts`;
      *       9-10 metrikte `HCUTransactionLimitExceeded`). Metrik basina
      *       ~653.000 gaz, yani ~2,4M HCU. Karsilastirma icin dozaj tavani 12
-     *       SNP'ydi — fark tam olarak karesini alma isleminden geliyor.
+     *       SNP'ydi - fark tam olarak karesini alma isleminden geliyor.
      *
      *       Gercek bir biyobelirtec paneli 5-40 metriktir; 40 metrik ~5 islem
      *       eder ve bu 1000 SNP'lik genomik panelin yaninda kucuktur. Parti
@@ -407,7 +407,7 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *
      *       Giyilebilir bir cihaz 1 Hz'de gunde 86.400 ornek uretir. Islem
      *       basina 8 ornek, gunluk 10.800 islem demektir: fiziksel olarak
-     *       imkansiz — ve BILIMSEL OLARAK DA GEREKSIZ. VO2 max zaten ham nefes
+     *       imkansiz - ve BILIMSEL OLARAK DA GEREKSIZ. VO2 max zaten ham nefes
      *       verisi degil, bir rampa testinden TURETILEN bir metriktir; laktat
      *       esigi bir egriden okunur; kreatin kinaz onarim hizi iki olcum
      *       arasindaki egimdir.
@@ -416,7 +416,7 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *       `web/src/lib/metrics.ts`) ve zincire donemsel metrik girer.
      *
      *       DURUST SINIR: bu indirgemenin dogru yapildigi zincirde
-     *       KANITLANMAZ. Sozlesmenin zorladigi tek sey araliktir — tipki beyan
+     *       KANITLANMAZ. Sozlesmenin zorladigi tek sey araliktir - tipki beyan
      *       edilen herhangi bir olcum gibi. Kanitli indirgeme ZK gerektirir ve
      *       kapsam disidir.
      *
@@ -438,7 +438,7 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
 
         panelFrozen = true;
 
-        // Grup karsilastirmalari PARTI BASINA BIR KEZ — metrik basina
+        // Grup karsilastirmalari PARTI BASINA BIR KEZ - metrik basina
         // tekrarlanmasi gereksiz iki bootstrapping olurdu.
         euint8 group = protocol.participantGroup(msg.sender);
         ebool[2] memory inGroup;
@@ -456,7 +456,7 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Kapsama yazimi AYRI fonksiyonda — sebep yine derleyici.
+     * @dev Kapsama yazimi AYRI fonksiyonda - sebep yine derleyici.
      *
      *      Govde cagiran fonksiyonun icindeyken solc "Stack too deep" veriyor:
      *      EVM'in 16 slotluk erisilebilir yigin penceresi doluyor.
@@ -486,7 +486,7 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      * @dev Tek metrigin islenmesi AYRI bir fonksiyondadir.
      *
      *      Sebep derleyicidir, uslup degil: dongunun govdesi cagiran fonksiyonun
-     *      icindeyken solc "Stack too deep" veriyor — EVM'in 16 slotluk
+     *      icindeyken solc "Stack too deep" veriyor - EVM'in 16 slotluk
      *      erisilebilir yigin penceresi doluyor. Govdeyi ayirmak yerel
      *      degiskenleri kendi cercevesine tasir.
      */
@@ -515,10 +515,10 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     }
 
     // ---------------------------------------------------------------------------------
-    // Acilim — yalnizca protokolden
+    // Acilim - yalnizca protokolden
     // ---------------------------------------------------------------------------------
 
-    /// @notice Varsayilan acilim penceresi — protokol bunu okur.
+    /// @notice Varsayilan acilim penceresi - protokol bunu okur.
     function disclosureWindowSize() external view returns (uint32) {
         uint32 total = metricCount();
         return total > MAX_METRIC_WINDOW ? MAX_METRIC_WINDOW : total;
@@ -590,7 +590,7 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Talebin dondurdugu toplamlar — Welch t-testinin girdisi.
+     * @notice Talebin dondurdugu toplamlar - Welch t-testinin girdisi.
      *
      * @dev Grup basina (n, Sum x, Sum x^2).
      */
