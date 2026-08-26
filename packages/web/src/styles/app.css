@@ -1077,3 +1077,65 @@
   font-size: 12px;
   flex: none;
 }
+
+/* --- Sonuc tablolari (GWAS / Welch) --- */
+.table__head--gwas,
+.table__row--gwas {
+  grid-template-columns: 1fr 1.1fr 1.1fr 0.7fr 0.9fr 0.9fr;
+  min-width: 620px;
+}
+.table__head--welch,
+.table__row--welch {
+  grid-template-columns: 1.3fr 1.5fr 1.5fr 0.6fr 0.8fr;
+  min-width: 560px;
+}
+
+/* Anlamli bulgu — FDR duzeltmesinden SONRA. */
+.table__row--gwas.is-hit {
+  background: var(--color-seafoam);
+  border-radius: var(--radius-input);
+}
+.table__row--gwas.is-hit .mono {
+  color: #1f5a44;
+}
+
+/* --- Alan secici (arastirmaci "hangi veriye ihtiyacim var" der) --- */
+.picker {
+  margin-top: var(--spacing-16);
+  padding: var(--spacing-16);
+  background: var(--color-bone);
+  border-radius: var(--radius-xl);
+}
+.picker__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-12);
+  margin-bottom: var(--spacing-8);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: var(--tracking-mono);
+  padding: 6px 11px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(34, 34, 34, 0.14);
+  background: var(--color-paper);
+  color: var(--color-smoke);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.chip:hover {
+  border-color: var(--color-ink);
+}
+.chip--on {
+  background: var(--color-ink);
+  border-color: var(--color-ink);
+  color: var(--color-paper);
+}
