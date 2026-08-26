@@ -8,12 +8,30 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 
 import {RarityMath} from "./libraries/RarityMath.sol";
 
+interface IVeriarfyBiomarkerCoverage {
+    function metricCoverageWeight(address participant, uint32[] calldata metricIds)
+        external
+        view
+        returns (uint32);
+
+    function metricCoverageTotal(uint32[] calldata metricIds) external view returns (uint256);
+
+    /// @notice Bu metrige gercek veri vermis kisi sayisi — KITLIK fiyatinin girdisi.
+    function metricCoverageCount(uint32 metricId) external view returns (uint32);
+    /// @notice Istenen metriklerin hangilerinde olcumu oldugu — bit maskesi.
+    function metricCoverageMask(address participant, uint32[] calldata metricIds)
+        external
+        view
+        returns (uint256);
+
+    /// @notice Varsayilan acilim penceresinin buyuklugu (metrik sayisi).
+    function disclosureWindowSize() external view returns (uint32);
+}
+
 interface IVeriarfyProtocol {
     function participantIndex(address account) external view returns (uint32);
     /// @notice Havuzun tamami ve dogrulanmis nadir tasiyici sayisi (rapor §4.3).
     function rarityStats() external view returns (uint32 poolCount, uint32 carriers);
-    /// @notice Izin ANINDA dondurulmus nadirlik durumu.
-    function rareAtGrant(address participant, address researcher) external view returns (bool);
     /// @notice Bu arastirmaciya izin veren nadir tasiyici sayisi.
     function consentRareCount(address researcher) external view returns (uint32);
     /// @notice Bu arastirmaciya izin veren Kurucu Katkici sayisi.
@@ -26,12 +44,54 @@ interface IVeriarfyProtocol {
     function requestDisclosure(address researcher, uint8 queryType)
         external
         returns (uint256 requestId);
+    /// @notice Talepte secilen SNP'ler.
+    function disclosureSnpIds(uint256 requestId) external view returns (uint32[] memory);
+    /// @notice Talepte secilen metrikler.
+    function disclosureMetricIds(uint256 requestId) external view returns (uint32[] memory);
+    /// @notice Katilimcinin ISTENEN SNP'lerden kacinda gercek verisi var?
+    function snpCoverageWeight(address participant, uint32[] calldata snpIds)
+        external
+        view
+        returns (uint32);
+    /// @notice Istenen SNP'lerin kapsama sayaclari toplami.
+    function snpCoverageTotal(uint32[] calldata snpIds) external view returns (uint256);
+    /// @notice Bu SNP'ye gercek veri vermis kisi sayisi — KITLIK fiyatinin girdisi.
+    function snpCoverageCount(uint32 snpId) external view returns (uint32);
+    /// @notice Istenen SNP'lerin hangilerinde verisi oldugu — bit maskesi.
+    function snpCoverageMask(address participant, uint32[] calldata snpIds)
+        external
+        view
+        returns (uint256);
+    /// @notice Panel buyuklugu ve varsayilan pencere tavani.
+    function snpCount() external view returns (uint32);
+    function MAX_DISCLOSURE_WINDOW() external view returns (uint32);
+    /// @notice Surekli olcum modulu (0 ise calisma yalnizca genomiktir).
+    function biomarkerModule() external view returns (address);
+
+    /// @notice Acilim talebini SECILEN alanlar icin acar.
+    function requestDisclosureFields(
+        address researcher,
+        uint8 queryType,
+        uint32[] calldata snpIds,
+        uint32[] calldata metricIds
+    ) external returns (uint256 requestId);
     /// @notice Talebin esigi saglandi mi (BSKK-44 onayi tamam mi)?
     function isDisclosureGranted(uint256 requestId) external view returns (bool);
-    /// @notice Bu arastirmaciya su an izin veren katilimci sayisi.
-    function consentCount(address researcher) external view returns (uint32);
-    /// @notice Izin, verilen blokta yururlukte miydi?
-    function hasAccessAt(address participant, address researcher, uint256 blockNumber)
+    /// @notice Havuzdaki toplam katilimci sayisi.
+    function participantCount() external view returns (uint32);
+    /// @notice Nadir VE kurucu olan katilimci sayisi.
+    function rareFoundingCount() external view returns (uint32);
+    /// @notice Nadir tasiyici sayisi.
+    function rareCarrierCount() external view returns (uint32);
+    /// @notice Kurucu katkici siniri.
+    function FOUNDING_CONTRIBUTOR_LIMIT() external view returns (uint32);
+    /// @notice Katilimci, verilen blokta havuzda MIYDI?
+    function wasInPoolAt(address participant, uint256 blockNumber)
+        external
+        view
+        returns (bool);
+    /// @notice Nadirligi verilen bloktan ONCE dogrulanmis miydi?
+    function rareBefore(address participant, uint256 blockNumber)
         external
         view
         returns (bool);
@@ -136,7 +196,12 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
     event QueryRefunded(uint256 indexed queryId, address indexed researcher, uint256 amount);
     event RewardClaimed(uint256 indexed queryId, address indexed participant, uint256 amount);
     event TreasuryWithdrawn(address indexed to, uint256 amount);
-    event PricingUpdated(uint256 baseFee, uint256 perParticipantFee);
+    event PricingUpdated(uint256 baseFee, uint256 perRecordFee);
+    event ScarcityCapUpdated(uint32 maxScarcityBps);
+
+    /// @notice Kitlik tavani 1x'in altina cekilemez (carpan zaten 1'in altina inmiyor).
+    error InvalidScarcityCap(uint32 maxScarcityBps);
+    event UsageShareUpdated(uint16 usageShareBps);
 
     // ---------------------------------------------------------------------------------
     // Yapilandirma
@@ -175,12 +240,110 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
     /// @notice Sorgu basina sabit taban ucret (token'in en kucuk biriminde).
     uint256 public baseFee;
 
-    /// @notice Katilimci basina ek ucret — "hesaplama basina odeme" bileseni.
-    uint256 public perParticipantFee;
+    /**
+     * @notice Bir KAYIT basina taban ucret. Kayit = (bir kisi x bir alan).
+     *
+     * @dev  NEDEN KATILIMCI BASINA DEGIL
+     *
+     *       Onceden fiyat `havuzdaki kisi sayisi` ile carpiliyordu. Iki
+     *       yonden de yanlisti:
+     *
+     *         - Arastirmaci 2 alan istese de 40 alan istese AYNI parayi
+     *           oduyordu. Oysa aldigi sey farkli.
+     *         - Istedigi alanda verisi OLMAYAN kisiler icin de oduyordu.
+     *           Havuzda 1000 kisi olup istenen alanda 12'sinde veri varsa,
+     *           satin alinan sey 12 kayittir; 1000 degil.
+     *
+     *       Artik carpan, istenen alanlarin KAPSAMA TOPLAMIDIR: her alan
+     *       icin o alana gercekten veri vermis kisi sayisi. Bu, odemenin
+     *       dagitildigi paydayla (`coverageTotal`) BIREBIR ayni sayidir —
+     *       yani arastirmacinin odedigi ile katilimcinin hak ettigi ayni
+     *       olcuye dayanir.
+     */
+    uint256 public perRecordFee;
+
+    /**
+     * @notice Kitlik carpaninin TAVANI (baz puan). Varsayilan 100.000 = 10x.
+     *
+     * @dev  TAVAN, TOPLAM FIYATI SINIRLAMAZ — bunu belirtmek onemli
+     *
+     *       Ilk bakista tavan bir "guvenlik sinir" gibi gorunur. Degildir:
+     *       alan ucreti zaten kendiliginden sinirlidir.
+     *
+     *           ucret(alan) = kayit x perRecordFee x (havuz / kayit)
+     *                       = perRecordFee x havuz
+     *
+     *       Yani carpan tavansiz olsa bile bir alanin ucreti asla
+     *       `perRecordFee x havuz` degerini asamaz. Tavani yukseltmek
+     *       kimseyi iflas ettirmez.
+     *
+     *       TAVANIN GERCEK ISLEVI: kitlik ayrimin NEREDE DURACAGI
+     *
+     *       Tavan `C` iken, kapsamasi `havuz/C` degerinin ALTINDA olan tum
+     *       alanlar AYNI kisi basi fiyati alir — ayrim orada durur.
+     *
+     *         C = 4x  -> %25'in altindaki her alan ayni fiyatta (kaba ayrim)
+     *         C = 10x -> %10'a kadar ayrim surer   (varsayilan)
+     *         C = 1x  -> kitlik tamamen kapali
+     *
+     *       10x secildi cunku gercekci nadir kohortlar (nadir hastalik,
+     *       spesifik klinik grup) tipik olarak havuzun %1-%10'udur; ayrimin
+     *       tam orada kesilmesi mekanizmayi islevsiz birakirdi.
+     *
+     *       Diger yonu: tavan DUSTUKCE seyrek alanin TOPLAM ucreti duser
+     *       (daha az veri satin aliniyor), kisi basi ucreti ise tavanda
+     *       sabitlenir. Yukseldikce seyrek alan toplamda da yaygin alana
+     *       yaklasir. Ikisi arasindaki denge urun karari; `setScarcityCap`
+     *       ile calisma aninda degistirilebilir.
+     */
+    /// @dev uint32: tavan 65.535 baz puani (6,5x) asabilmeli, uint16 yetmez.
+    uint32 public maxScarcityBps;
 
     // ---------------------------------------------------------------------------------
     // Sorgu kayitlari
     // ---------------------------------------------------------------------------------
+
+    /**
+     * @notice Katilimci havuzunun KULLANIM payina giden orani (baz puan).
+     *
+     * @dev  NEDEN IKI HAVUZ
+     *
+     *       Istenen davranis "verisi kullanildigi kadar kazansin". Bonuslari
+     *       (nadirlik, kurucu katkici) kullanim sayisiyla CARPMAK matematiksel
+     *       olarak mumkun ama paydasi O(1) hesaplanamaz:
+     *
+     *           Σ_kisi [ eslesme(kisi) x bonus(kisi) ]
+     *
+     *       ayrisamaz. Tum katilimcilari dolasmak ise binlerce kiside
+     *       imkansizdir.
+     *
+     *       Iki AYRI havuz her ikisini de TAM olarak hesaplanabilir kilar:
+     *
+     *         kullanim havuzu : eslesme(kisi) / kapsamaToplami   -> O(alan)
+     *         bonus havuzu    : agirlik(kisi) / toplamAgirlik    -> O(1)
+     *
+     *       Yaklasiklik yok, dolasma yok. Bonusun anlami da korunur: nadirlik
+     *       carpani "hangi alani verdin"den bagimsiz bir odul olarak durur.
+     */
+    uint16 public usageShareBps;
+
+    /**
+     * @notice Sorgu -> ISTENEN ALANLARIN dondurulmus kitlik agirliklari (baz puan).
+     *
+     * @dev  NEDEN DONDURULUYOR
+     *
+     *       Kitlik `havuz / o alani verenler` demektir ve ikisi de sorgudan
+     *       SONRA degismeye devam eder. Pay hesabinda guncel deger
+     *       kullanilsaydi, erken cekenle gec ceken farkli agirlik gorurdu ve
+     *       paylarin toplami dondurulmus havuzu asabilirdi.
+     *
+     *       Sira, `disclosureSnpIds` + `disclosureMetricIds` birlesimidir;
+     *       `weightedCoverage` ayni sirayi okur.
+     *
+     *       Maliyet: `uint32[]` Solidity tarafindan yuvaya 8'erli paketlenir,
+     *       yani talep tavaninda (32 + 16) yalnizca 6 yuva.
+     */
+    mapping(uint256 => uint32[]) private _fieldScarcity;
 
     struct Query {
         address researcher;
@@ -201,6 +364,27 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
         uint256 claimedTotal;
         /// @dev Protokoldeki BSKK-44 acilim talebinin kimligi.
         uint256 disclosureRequestId;
+        /**
+         * @dev Talep anindaki KAPSAMA TOPLAMI — kullanim havuzunun paydasi.
+         *
+         * Istenen alanlarin her birine gercek veri vermis kisi sayilarinin
+         * toplami. Katilimci sayisi gibi DONDURULUR: sorgu acildiktan sonra
+         * yeni katilimcilar gelmeye devam eder, ama bu sorgunun paydasi
+         * degismemelidir — aksi halde daha once hesaplanan paylar toplami
+         * havuzu asabilirdi.
+         */
+        uint256 coverageTotal;
+        /**
+         * @dev KITLIKLA AGIRLIKLANDIRILMIS kapsama toplami — kullanim payinin PAYDASI.
+         *
+         * `Σ (o alani verenler x kitlik(alan))`. Ucretin alan bileseniyle
+         * ayni formul; boylece arastirmacinin odedigi ile katilimcilarin
+         * toplam hakedisi ayni olcuye dayanir.
+         *
+         * `coverageTotal` (ham kayit sayisi) gosterim ve "dagitilacak bir sey
+         * var mi" kontrolu icin AYRICA durur.
+         */
+        uint256 weightedTotal;
         /**
          * @dev Ucret HENUZ dagitilmadi mi?
          *
@@ -259,7 +443,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
         address researchers_,
         uint16 liquidityShareBps_,
         uint256 baseFee_,
-        uint256 perParticipantFee_
+        uint256 perRecordFee_
     ) Ownable(initialOwner) {
         if (token_ == address(0) || protocol_ == address(0) || researchers_ == address(0)) {
             revert ZeroAddress();
@@ -275,9 +459,29 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
         researchers = IResearcherRegistry(researchers_);
         liquidityShareBps = liquidityShareBps_;
 
+        // Varsayilan: katilimci havuzunun %70'i KULLANIMA, %30'u bonuslara.
+        // Sahip tarafindan degistirilebilir; ikisi de tam hesaplanabilir.
+        usageShareBps = 7_000;
+
+        // Varsayilan kitlik tavani 10x — ayrim havuzun %10'una kadar surer.
+        // Kitligi tamamen kapatmak icin BPS_DENOMINATOR (1x) verilebilir.
+        maxScarcityBps = 100_000;
+
         baseFee = baseFee_;
-        perParticipantFee = perParticipantFee_;
-        emit PricingUpdated(baseFee_, perParticipantFee_);
+        perRecordFee = perRecordFee_;
+        emit PricingUpdated(baseFee_, perRecordFee_);
+    }
+
+    /**
+     * @notice Kullanim/bonus dagilimini ayarlar.
+     *
+     * @dev ACIK UCLARA IZIN VERILIR: 0 = tamamen bonus (eski davranis),
+     *      10.000 = tamamen kullanim. Ikisi de tutarli birer politikadir.
+     */
+    function setUsageShare(uint16 usageShareBps_) external onlyOwner {
+        if (usageShareBps_ > BPS_DENOMINATOR) revert InvalidShare(usageShareBps_);
+        usageShareBps = usageShareBps_;
+        emit UsageShareUpdated(usageShareBps_);
     }
 
     // ---------------------------------------------------------------------------------
@@ -285,34 +489,192 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
     // ---------------------------------------------------------------------------------
 
     /**
-     * @notice Su an bir sorgu acmanin maliyeti.
+     * @notice Su an VARSAYILAN pencereyle bir sorgu acmanin maliyeti.
      *
-     * @dev "Hesaplama basina odeme": maliyet, sorgunun dokunacagi katilimci
-     *      sayisiyla dogrusal artar. Homomorfik islem derinligi henuz fiyata
-     *      girmiyor — devre tipi tek oldugu icin sabit; farkli devreler
-     *      eklendiginde carpan buraya gelir.
+     * @dev Alan secen arastirmaci `quoteForFields` kullanmalidir; buradaki
+     *      rakam yalnizca "hicbir sey secmezsem ne oder" sorusunun yanitidir.
      */
-    function quote() public view returns (uint256 fee, uint32 participants) {
-        return quoteFor(msg.sender);
+    function quote() public view returns (uint256 fee, uint256 records) {
+        return quoteForFields(_defaultIds(_defaultSnpWindow()), _defaultIds(_defaultMetricWindow()));
     }
 
     /**
-     * @notice Belirli bir arastirmaci icin ucret.
+     * @notice ISTENEN ALANLARIN ucreti.
      *
-     * @dev Katilimci sayisi HAVUZUN TAMAMI degil, **bu arastirmaciya izin
-     *      vermis** kisi sayisidir. Rapor §3.4'un dogal sonucu: izin vermeyen
-     *      kisinin verisi kullanilmaz, dolayisiyla ucretlendirilmez ve o kisi
-     *      pay almaz.
+     * @dev  FIYAT NEYE GORE — uc bilesen
+     *
+     *       1. TABAN. Sorgu basina sabit; zincir uzerindeki dogrulama ve
+     *          esikli onay maliyetini karsilar. Alan sayisindan bagimsizdir.
+     *
+     *       2. KAYIT SAYISI. Kayit = (bir kisi x bir alan). Arastirmaci
+     *          {rs4977574, VO2MAX} isterse ve bunlara sirasiyla 12 ve 30
+     *          kisi veri vermisse, satin alinan sey 42 kayittir.
+     *
+     *          Havuzda kac kisi oldugu ONEMSIZDIR. Istenen alanda verisi
+     *          olmayan kisi icin odeme yapilmaz — cunku o kisiden bir sey
+     *          alinmiyor. Bu sayi, odemenin dagitildigi paydayla
+     *          (`coverageTotal`) BIREBIR ayni: arastirmacinin odedigi ile
+     *          katilimcinin hak ettigi ayni olcuye dayanir.
+     *
+     *       3. KITLIK. Az bulunan veri kisi basina DAHA PAHALIDIR.
+     *
+     *              carpan(alan) = havuz / o alani verenler     (tavanli)
+     *
+     *          Nadir bir hastalik kohortunun verisi havuzun %5'indeyse,
+     *          o alanin kayit fiyati tavana kadar yukselir. Yaygin bir
+     *          varyant (herkeste var) 1x kalir.
+     *
+     *          Kitlik zincirden TURETILIR, sahip tarafindan atanmaz. Bu
+     *          bilincli: "hangi veri degerli" karari birinin insafina
+     *          birakilsaydi, fiyat piyasanin degil sahibin karari olurdu.
+     *
+     *       SINIR — durustce: kitlik, degerin MUKEMMEL bir vekili degildir.
+     *       Az doldurulmus onemsiz bir alan da pahali gorunur. Gercek klinik
+     *       deger (kanser kohortu vb.) ancak calisma panelinin nasil
+     *       tanimlandigiyla gelir; fiyat oradan devralir.
+     *
+     * @return fee     Toplam ucret.
+     * @return records Satin alinan kayit sayisi (kisi x alan) — kitliktan ONCE.
      */
-    function quoteFor(address researcher) public view returns (uint256 fee, uint32 participants) {
-        participants = protocol.consentCount(researcher);
-        fee = baseFee + perParticipantFee * participants;
+    function quoteForFields(
+        uint32[] memory snpIds,
+        uint32[] memory metricIds
+    ) public view returns (uint256 fee, uint256 records) {
+        uint32 pool = protocol.participantCount();
+
+        fee = baseFee;
+
+        for (uint256 i = 0; i < snpIds.length; ++i) {
+            uint32 count = protocol.snpCoverageCount(snpIds[i]);
+            records += count;
+            fee += _fieldPrice(count, pool);
+        }
+
+        address module = protocol.biomarkerModule();
+        if (module != address(0)) {
+            for (uint256 i = 0; i < metricIds.length; ++i) {
+                uint32 count = IVeriarfyBiomarkerCoverage(module).metricCoverageCount(metricIds[i]);
+                records += count;
+                fee += _fieldPrice(count, pool);
+            }
+        }
     }
 
-    function setPricing(uint256 baseFee_, uint256 perParticipantFee_) external onlyOwner {
+    /**
+     * @notice Tek bir alanin ucreti: `kayit sayisi x taban x kitlik`.
+     *
+     * @dev Kimsede yoksa BEDAVADIR. Satilacak veri olmadan ucret almak,
+     *      ucretin tamaminin hazineye gitmesi demek olurdu.
+     */
+    function _fieldPrice(uint32 count, uint32 pool) private view returns (uint256) {
+        return (perRecordFee * count * _scarcityBps(count, pool)) / BPS_DENOMINATOR;
+    }
+
+    /**
+     * @notice Bir alanin kitlik carpani (baz puan). Kimsede yoksa SIFIR.
+     *
+     * @dev  ODEMENIN DE AGIRLIGI — fiyatla AYNI sayi
+     *
+     *       Bu carpan yalnizca fiyatta kullanilsaydi mimari kendi icinde
+     *       celisirdi: arastirmaci nadir alan icin 10 kat oderdi ama o alanin
+     *       sahibi, yaygin bir alanin sahibiyle AYNI payi alirdi. Fazla para
+     *       herkese esit dagilir, yani nadir veri sahibinin hakki kalabaligin
+     *       icinde erirdi.
+     *
+     *       Bu yuzden ayni carpan, sorgu acilirken DONDURULUR ve pay
+     *       hesabinda da kullanilir (`weightedCoverage`). Odenen ile hak
+     *       edilen tek bir formulden gelir.
+     */
+    function _scarcityBps(uint32 count, uint32 pool) private view returns (uint32) {
+        // Kimsede yoksa alan bedavadir ve agirligi da yoktur.
+        if (count == 0) return 0;
+
+        // Kitlik = havuzun kac katinda bu alan YOK. Tabani 1x'tir: bir alan
+        // herkeste varsa indirim UYGULANMAZ, yalnizca zam uygulanmaz.
+        uint256 scarcity = (uint256(pool) * BPS_DENOMINATOR) / count;
+        if (scarcity < BPS_DENOMINATOR) scarcity = BPS_DENOMINATOR;
+        if (scarcity > maxScarcityBps) scarcity = maxScarcityBps;
+
+        return uint32(scarcity);
+    }
+
+    /**
+     * @notice Sorgu acilirken fiyati hesaplar ve kitlik agirliklarini DONDURUR.
+     *
+     * @dev `quoteForFields` ile ayni formuldur ama ek olarak agirliklari
+     *      saklar. Iki ayri gecis yazilsaydi biri degisip digeri unutulabilir,
+     *      ve fiyat ile pay sessizce ayrisabilirdi — sessiz ayrisma, paranin
+     *      yanlis yere gitmesi demektir.
+     */
+    function _snapshotPricing(
+        uint256 queryId,
+        uint256 requestId,
+        uint32 pool
+    ) private returns (uint256 fee, uint256 weightedTotal) {
+        uint32[] memory snpIds = protocol.disclosureSnpIds(requestId);
+        uint32[] storage scarcity = _fieldScarcity[queryId];
+
+        fee = baseFee;
+
+        for (uint256 i = 0; i < snpIds.length; ++i) {
+            uint32 count = protocol.snpCoverageCount(snpIds[i]);
+            uint32 bps = _scarcityBps(count, pool);
+
+            scarcity.push(bps);
+            fee += (perRecordFee * count * bps) / BPS_DENOMINATOR;
+            weightedTotal += uint256(count) * bps;
+        }
+
+        address module = protocol.biomarkerModule();
+        if (module == address(0)) return (fee, weightedTotal);
+
+        uint32[] memory metricIds = protocol.disclosureMetricIds(requestId);
+        for (uint256 i = 0; i < metricIds.length; ++i) {
+            uint32 count = IVeriarfyBiomarkerCoverage(module).metricCoverageCount(metricIds[i]);
+            uint32 bps = _scarcityBps(count, pool);
+
+            scarcity.push(bps);
+            fee += (perRecordFee * count * bps) / BPS_DENOMINATOR;
+            weightedTotal += uint256(count) * bps;
+        }
+    }
+
+    /// @dev `[0, 1, ... n-1]` — varsayilan alan listesi.
+    function _defaultIds(uint32 n) private pure returns (uint32[] memory ids) {
+        ids = new uint32[](n);
+        for (uint32 i = 0; i < n; ++i) ids[i] = i;
+    }
+
+    /// @dev Protokolun varsayilan SNP penceresi — `requestDisclosure` ile AYNI.
+    function _defaultSnpWindow() private view returns (uint32) {
+        uint32 total = protocol.snpCount();
+        uint32 cap = protocol.MAX_DISCLOSURE_WINDOW();
+        return total > cap ? cap : total;
+    }
+
+    /// @dev Modul yoksa metrik penceresi sifirdir.
+    function _defaultMetricWindow() private view returns (uint32) {
+        address module = protocol.biomarkerModule();
+        if (module == address(0)) return 0;
+        return IVeriarfyBiomarkerCoverage(module).disclosureWindowSize();
+    }
+
+    function setPricing(uint256 baseFee_, uint256 perRecordFee_) external onlyOwner {
         baseFee = baseFee_;
-        perParticipantFee = perParticipantFee_;
-        emit PricingUpdated(baseFee_, perParticipantFee_);
+        perRecordFee = perRecordFee_;
+        emit PricingUpdated(baseFee_, perRecordFee_);
+    }
+
+    /**
+     * @notice Kitlik tavanini gunceller.
+     *
+     * @dev Taban BPS_DENOMINATOR'dur (1x): kitligin fiyati DUSURMESI
+     *      anlamsiz olurdu, cunku carpan zaten 1'in altina inmiyor.
+     */
+    function setScarcityCap(uint32 maxScarcityBps_) external onlyOwner {
+        if (maxScarcityBps_ < BPS_DENOMINATOR) revert InvalidScarcityCap(maxScarcityBps_);
+        maxScarcityBps = maxScarcityBps_;
+        emit ScarcityCapUpdated(maxScarcityBps_);
     }
 
     // ---------------------------------------------------------------------------------
@@ -344,30 +706,77 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
      * @param queryType Sorgu hassasiyeti (GWAS | ML | STATISTICS). Gereken
      *        onay orani buna gore belirlenir — rapor §2.6.
      */
+    /**
+     * @notice Sorguyu SECILEN ALANLAR icin acar.
+     *
+     * @dev  NEDEN KAPIDAN GECIYOR
+     *
+     *       Her arastirmaci ayni veriyle calismaz: birine `rs4977574` ve
+     *       VO2 max lazimdir, digerine bambaska bir kume. Secim protokole
+     *       kapi uzerinden iletilir cunku ucret emaneti ve arastirmaci kaydi
+     *       kontrolu burada yapilir.
+     *
+     * @param snpIds    Istenen SNP indeksleri.
+     * @param metricIds Istenen metrik indeksleri; bos birakilabilir.
+     */
+    function openQueryFields(
+        uint8 queryType,
+        uint32[] calldata snpIds,
+        uint32[] calldata metricIds
+    ) external nonReentrant returns (uint256 queryId) {
+        return _openQuery(queryType, snpIds, metricIds, true);
+    }
+
     function openQuery(uint8 queryType) external nonReentrant returns (uint256 queryId) {
+        uint32[] calldata empty;
+        assembly {
+            empty.offset := 0
+            empty.length := 0
+        }
+        return _openQuery(queryType, empty, empty, false);
+    }
+
+    function _openQuery(
+        uint8 queryType,
+        uint32[] calldata snpIds,
+        uint32[] calldata metricIds,
+        bool explicitFields
+    ) private returns (uint256 queryId) {
         if (!researchers.isRegistered(msg.sender)) {
             revert NotRegisteredResearcher(msg.sender);
         }
 
-        (uint256 fee, uint32 participants) = quoteFor(msg.sender);
-        // Kimse izin vermemisse sorgu acilamaz: dagitilacak kimse yokken
-        // ucret tahsil etmek, ucretin tamaminin hazineye gitmesi demek olurdu.
+        uint32 participants = protocol.participantCount();
+        // Havuz bossa sorgu acilamaz: dagitilacak kimse yokken ucret tahsil
+        // etmek, ucretin tamaminin hazineye gitmesi demek olurdu.
         if (participants == 0) revert PoolEmpty();
 
-        // Once transfer, sonra durum: token transferi basarisiz olursa kayit
-        // olusmasin. `SafeERC20` donus degeri olmayan token'lari da dogru
-        // isler (USDT gibi standarda tam uymayan uygulamalar mevcut).
-        token.safeTransferFrom(msg.sender, address(this), fee);
+        // SIRA DEGISTI — once talep, sonra tahsilat.
+        //
+        // Ucret artik ISTENEN ALANLARIN kapsamasindan hesaplaniyor. Alan
+        // secilmeyen yolda alanlari protokol belirler, yani liste ancak
+        // talep acildiktan sonra kesinlesir. Ayni islem icinde oldugumuz
+        // icin bu guvenli: transfer duserse talep de geri alinir.
+        uint256 requestId = explicitFields
+            ? protocol.requestDisclosureFields(msg.sender, queryType, snpIds, metricIds)
+            : protocol.requestDisclosure(msg.sender, queryType);
 
-        // Acilim talebi — esigi protokol, sorgu tipine gore hesaplar.
-        uint256 requestId = protocol.requestDisclosure(msg.sender, queryType);
+        queryId = nextQueryId;
+
+        // Fiyat ve pay agirliklari AYNI gecisten cikar; ayri hesaplansalardi
+        // sessizce ayrisabilirlerdi.
+        (uint256 fee, uint256 weightedTotal) = _snapshotPricing(queryId, requestId, participants);
+
+        // `SafeERC20` donus degeri olmayan token'lari da dogru isler (USDT
+        // gibi standarda tam uymayan uygulamalar mevcut).
+        token.safeTransferFrom(msg.sender, address(this), fee);
 
         // Nadirlik anlik goruntusu (rapor §4.3). Carpanin girdisi HAVUZUN
         // TAMAMIDIR; izin verenlerin sayisi degil — nadirlik, varyantin
         // populasyondaki gercek seyrekligidir.
         (uint32 poolCount, uint32 carriers) = protocol.rarityStats();
 
-        queryId = nextQueryId++;
+        nextQueryId++;
         _queries[queryId] = Query({
             researcher: msg.sender,
             fee: fee,
@@ -380,6 +789,8 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
             disclosureRequestId: requestId,
             settled: false,
             refunded: false,
+            coverageTotal: _coverageTotal(requestId),
+            weightedTotal: weightedTotal,
             snapshotPoolCount: poolCount,
             snapshotCarriers: carriers,
             totalWeightBps: _totalWeightBps(msg.sender, participants, poolCount, carriers)
@@ -472,16 +883,20 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
         if (hasClaimed[queryId][msg.sender]) revert AlreadyClaimed(queryId, msg.sender);
 
         if (!q.settled) revert NotSettled(queryId);
-        if (protocol.participantIndex(msg.sender) == 0) revert NotAParticipant(msg.sender);
-        if (!protocol.hasAccessAt(msg.sender, q.researcher, q.openedAtBlock)) {
-            revert NotInThisQuery(msg.sender, 0, q.snapshotCount);
+        uint256 index = protocol.participantIndex(msg.sender);
+        if (index == 0) revert NotAParticipant(msg.sender);
+
+        // IZIN KAPISI YOK. Sorulan iki sey var: sorgudan ONCE mi katildin, ve
+        // sorgu acildiginda hala havuzda miydin? Ayrinti `claimable` icinde.
+        if (index > q.snapshotCount || !protocol.wasInPoolAt(msg.sender, q.openedAtBlock)) {
+            revert NotInThisQuery(msg.sender, uint32(index), q.snapshotCount);
         }
 
         // Tutar `claimable` ile AYNI ifadeden gelmelidir. Iki yerde ayri ayri
         // yazilsaydi (bir kere burada, bir kere gorunumde) panelde gosterilen
         // ile odenen sessizce ayrisirdi — nitekim nadirlik agirliklari
         // eklenirken tam bu oldu ve test yakaladi.
-        amount = (q.liquidityPot * weightOf(queryId, msg.sender)) / q.totalWeightBps;
+        amount = claimable(queryId, msg.sender);
 
         hasClaimed[queryId][msg.sender] = true;
         q.claimedTotal += amount;
@@ -491,31 +906,159 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
     }
 
     /** @notice Bir adresin belirli bir sorgudan cekebilecegi tutar (0 = uygun degil). */
+    /**
+     * @dev Talepte istenen alanlarin KAPSAMA TOPLAMI — kullanim havuzunun
+     *      paydasi.
+     *
+     *      Genomik ve surekli olcum kanallari AYRI kontratlarda; toplam
+     *      ikisinden derlenir. Maliyet O(istenen alan sayisi) — katilimci
+     *      sayisindan bagimsiz.
+     */
+    function _coverageTotal(uint256 requestId) private view returns (uint256 total) {
+        total = protocol.snpCoverageTotal(protocol.disclosureSnpIds(requestId));
+
+        address module = protocol.biomarkerModule();
+        if (module != address(0)) {
+            uint32[] memory metricIds = protocol.disclosureMetricIds(requestId);
+            if (metricIds.length > 0) {
+                total += IVeriarfyBiomarkerCoverage(module).metricCoverageTotal(metricIds);
+            }
+        }
+    }
+
+    /**
+     * @notice Katilimcinin bu sorguda KAC ALANA veri verdigi.
+     *
+     * @dev Kullanim payinin PAYI. "Ne kadar veriniz kullanildiysa o kadar
+     *      kazanirsiniz" ifadesinin sayisal karsiligi budur.
+     */
+    function coverageWeight(uint256 queryId, address account) public view returns (uint256 matched) {
+        uint256 requestId = _queries[queryId].disclosureRequestId;
+
+        matched = protocol.snpCoverageWeight(account, protocol.disclosureSnpIds(requestId));
+
+        address module = protocol.biomarkerModule();
+        if (module != address(0)) {
+            uint32[] memory metricIds = protocol.disclosureMetricIds(requestId);
+            if (metricIds.length > 0) {
+                matched += IVeriarfyBiomarkerCoverage(module).metricCoverageWeight(
+                    account,
+                    metricIds
+                );
+            }
+        }
+    }
+
+    /**
+     * @notice Katilimcinin bu sorgudaki KITLIKLA AGIRLIKLANDIRILMIS kapsamasi.
+     *
+     * @dev  Kullanim payinin PAYIDIR. `coverageWeight` "kac alan" der; bu
+     *       "hangi alanlar, ne kadar degerli" der.
+     *
+     *       Agirliklar sorgu acilirken donduruldu (`_fieldScarcity`), yani
+     *       erken ceken ile gec ceken AYNI sayiyi gorur. Guncel kitlik
+     *       kullanilsaydi paylarin toplami havuzu asabilirdi.
+     *
+     *       Kapsama, alan basina ayri cagri yerine TEK bir bit maskesiyle
+     *       okunur; talep tavani (32 SNP + 16 metrik) maskeye sigar.
+     */
+    function weightedCoverage(uint256 queryId, address account)
+        public
+        view
+        returns (uint256 weight)
+    {
+        uint256 requestId = _queries[queryId].disclosureRequestId;
+        uint32[] storage scarcity = _fieldScarcity[queryId];
+
+        uint32[] memory snpIds = protocol.disclosureSnpIds(requestId);
+        uint256 mask = protocol.snpCoverageMask(account, snpIds);
+
+        for (uint256 i = 0; i < snpIds.length; ++i) {
+            if (mask & (uint256(1) << i) != 0) weight += scarcity[i];
+        }
+
+        address module = protocol.biomarkerModule();
+        if (module == address(0)) return weight;
+
+        uint32[] memory metricIds = protocol.disclosureMetricIds(requestId);
+        if (metricIds.length == 0) return weight;
+
+        uint256 metricMask = IVeriarfyBiomarkerCoverage(module).metricCoverageMask(
+            account,
+            metricIds
+        );
+
+        // Metrik agirliklari, SNP'lerden SONRA gelir — `_snapshotPricing`
+        // ile ayni sira.
+        uint256 offset = snpIds.length;
+        for (uint256 i = 0; i < metricIds.length; ++i) {
+            if (metricMask & (uint256(1) << i) != 0) weight += scarcity[offset + i];
+        }
+    }
+
+    /**
+     * @notice Havuzun kullanim ve bonus bilesenleri.
+     *
+     * @dev KAPSAMA TOPLAMI SIFIRSA kullanim havuzu dagitilamaz — istenen
+     *      alanlarin hicbirine kimse veri vermemis demektir. O tutar
+     *      kilitlenmez, BONUS havuzuna eklenir; aksi halde para sozlesmede
+     *      olu kalirdi.
+     */
+    function potSplit(uint256 queryId) public view returns (uint256 usagePot, uint256 bonusPot) {
+        Query storage q = _queries[queryId];
+        if (q.weightedTotal == 0) return (0, q.liquidityPot);
+
+        usagePot = (q.liquidityPot * usageShareBps) / BPS_DENOMINATOR;
+        bonusPot = q.liquidityPot - usagePot;
+    }
+
     function claimable(uint256 queryId, address account) public view returns (uint256) {
         Query storage q = _queries[queryId];
         if (q.snapshotCount == 0 || hasClaimed[queryId][account]) return 0;
         // Onay gelmeden pay hesaplanmaz: ucret henuz emanettedir.
         if (!q.settled) return 0;
-        if (protocol.participantIndex(account) == 0) return 0;
-        if (!protocol.hasAccessAt(account, q.researcher, q.openedAtBlock)) return 0;
+        // SORGUDAN SONRA KATILAN O SORGUYA DAHIL DEGILDIR.
+        //
+        // Onceden bu siniri izin kapisi ORTUK olarak sagliyordu: izin ancak
+        // havuza girdikten sonra verilebiliyordu, dolayisiyla `grantedAtBlock
+        // <= openedAtBlock` kontrolu ayni ise yariyordu. Izin kalkinca sinir
+        // aciga cikti ve ACIKCA yazilmasi gerekti — yoksa sonradan katilan da
+        // pay alir, paylarin toplami dondurulmus paydayi asardi.
+        //
+        // Katilimci indeksi 1 TABANLIDIR ve tam bunun icin oyle tasarlandi:
+        // indeksi anlik goruntudeki sayidan kucuk esit olan herkes dahildir.
+        uint256 index = protocol.participantIndex(account);
+        if (index == 0 || index > q.snapshotCount) return 0;
 
-        // Payda sifir olamaz: `snapshotCount > 0` ise en az bir izin veren
-        // vardir ve her agirlik en az `ONE_BPS`'tir.
-        return (q.liquidityPot * weightOf(queryId, account)) / q.totalWeightBps;
+        // Havuzdan cikan, cikistan SONRAKI sorgulardan pay almaz.
+        if (!protocol.wasInPoolAt(account, q.openedAtBlock)) return 0;
+
+        (uint256 usagePot, uint256 bonusPot) = potSplit(queryId);
+
+        // KULLANIM: hangi alanlara veri verdiysen ve o alanlar NE KADAR
+        // NADIRSE o kadar. Payda ile pay ayni agirlik sistemini kullanir,
+        // ve o sistem ucreti belirleyenle AYNIDIR.
+        uint256 usage = q.weightedTotal == 0
+            ? 0
+            : (usagePot * weightedCoverage(queryId, account)) / q.weightedTotal;
+
+        // BONUS: nadirlik ve kurucu katkici carpani — hangi alani verdiginden
+        // bagimsiz. Payda sifir olamaz: `snapshotCount > 0` ise en az bir izin
+        // veren vardir ve her agirlik en az `ONE_BPS`'tir.
+        uint256 bonus = (bonusPot * weightOf(queryId, account)) / q.totalWeightBps;
+
+        return usage + bonus;
     }
 
     /**
      * @notice Bir katilimcinin BELIRLI BIR SORGUDAKI agirligi (baz puan).
      *
-     * @dev  Nadirlik durumu `rareAtGrant` uzerinden okunur, guncel durumdan
-     *       DEGIL. Sebep: paydayi olusturan sayaclar da izin anindaki duruma
-     *       gore tutulur; ikisi ayni kaynaktan beslenmezse paylarin toplami
-     *       havuzu asabilir.
+     * @dev  Nadirlik SORGU ANINA gore okunur, guncel duruma gore DEGIL.
      *
-     *       `hasAccessAt` zaten `grantedAtBlock <= openedAtBlock` sartini
-     *       arar; dolayisiyla burada okunan izin, sorgu acildiginda yururlukte
-     *       olan iznin ta kendisidir. Sonradan yenilenen bir izin eski
-     *       sorgulari etkilemez cunku o sorgularda hakedis zaten dusar.
+     *       Sebep: paydayi olusturan sayaclar sorgu acilirken dondurulur.
+     *       Biri sorgu acildiktan SONRA nadirligini dogrularsa, bireysel
+     *       agirligi buyur ama payda ayni kalir — paylarin toplami havuzu
+     *       ASAR. `rareBefore` ikisini tanim geregi esitler.
      */
     function weightOf(uint256 queryId, address account) public view returns (uint256) {
         Query storage q = _queries[queryId];
@@ -523,7 +1066,7 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
 
         uint256 weight = RarityMath.ONE_BPS;
 
-        if (protocol.rareAtGrant(account, q.researcher)) {
+        if (protocol.rareBefore(account, q.openedAtBlock)) {
             weight = RarityMath.multiplierBps(q.snapshotPoolCount, q.snapshotCarriers);
         }
         if (protocol.isFoundingContributor(account)) {
@@ -535,22 +1078,27 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
     /**
      * @notice Anlik goruntudeki toplam agirlik — payin paydasi.
      *
-     * @dev  Izin verenler DOLASILMAZ. Dort sayac dort ayrik kumeyi verir ve
+     * @dev  Katilimcilar DOLASILMAZ. Dort sayac dort ayrik kumeyi verir ve
      *       toplam bu kumelerin agirliklarinin toplamidir:
      *
-     *         N  = izin veren toplam        (`consentCount`)
-     *         C  = izin veren tasiyici      (`consentRareCount`)
-     *         F  = izin veren Kurucu        (`consentFoundingCount`)
-     *         CF = izin veren tasiyici+Kurucu
+     *         N  = havuzdaki toplam         (`participantCount`)
+     *         C  = nadir tasiyici           (`rareCarrierCount`)
+     *         F  = Kurucu katkici           (min(N, FOUNDING_LIMIT) — sayilmaz)
+     *         CF = nadir + Kurucu           (`rareFoundingCount`)
      *
      *         duz            = N - C - F + CF   agirlik 1,00x
      *         yalniz Kurucu  = F - CF           agirlik 1,50x
      *         yalniz tasiyici= C - CF           agirlik R
      *         ikisi birden   = CF               agirlik R x 1,5
      *
-     *       Kumeler ayrik ve tam oldugu icin toplam, `weightOf`'un tum izin
-     *       verenler uzerindeki toplamina BIREBIR esittir — ayni yardimci
+     *       Kumeler ayrik ve tam oldugu icin toplam, `weightOf`'un tum
+     *       katilimcilar uzerindeki toplamina BIREBIR esittir — ayni yardimci
      *       fonksiyonlar kullanildigi surece yuvarlama farki da olusmaz.
+     *
+     *       KURUCU SAYISI SAYILMAZ, HESAPLANIR: kuruculuk indeks tabanlidir
+     *       (`participantIndex <= FOUNDING_CONTRIBUTOR_LIMIT`), yani kurucu
+     *       sayisi tanim geregi `min(N, limit)`tir. Kesisim (nadir VE kurucu)
+     *       ise hesaplanamaz ve zincirde sayilir.
      */
     function _totalWeightBps(
         address researcher,
@@ -558,9 +1106,12 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
         uint32 poolCount,
         uint32 carriers
     ) private view returns (uint256) {
-        uint256 rare = protocol.consentRareCount(researcher);
-        uint256 founding = protocol.consentFoundingCount(researcher);
-        uint256 both = protocol.consentRareFoundingCount(researcher);
+        researcher; // payda artik arastirmaciya gore degismez
+
+        uint256 rare = protocol.rareCarrierCount();
+        uint256 limit = protocol.FOUNDING_CONTRIBUTOR_LIMIT();
+        uint256 founding = consenting < limit ? consenting : limit;
+        uint256 both = protocol.rareFoundingCount();
 
         uint256 multiplier = RarityMath.multiplierBps(poolCount, carriers);
 
@@ -640,7 +1191,8 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
             uint256 claimedTotal,
             uint256 disclosureRequestId,
             bool settled,
-            bool refunded
+            bool refunded,
+            uint256 coverageTotal
         )
     {
         Query storage q = _queries[queryId];
@@ -654,8 +1206,22 @@ contract VeriarfyPayments is Ownable, ReentrancyGuard {
             q.claimedTotal,
             q.disclosureRequestId,
             q.settled,
-            q.refunded
+            q.refunded,
+            q.coverageTotal
         );
+    }
+
+    /**
+     * @notice Sorgunun KITLIKLA AGIRLIKLANDIRILMIS kapsama toplami.
+     *
+     * @dev `query()` ham kayit sayisini doner (gosterim icin); bu, kullanim
+     *      payinin gercek paydasidir. Ikisi ayri durur cunku "kac kayit
+     *      alindi" ile "o kayitlar ne kadar degerliydi" farkli sorulardir.
+     */
+    function weightedTotal(uint256 queryId) external view returns (uint256) {
+        Query storage q = _queries[queryId];
+        if (q.snapshotCount == 0) revert UnknownQuery(queryId);
+        return q.weightedTotal;
     }
 
     // ---------------------------------------------------------------------------------
