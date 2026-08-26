@@ -4,7 +4,7 @@ import type { Signer } from "ethers";
 import { alignToPanel, DOSAGE_MISSING, type GenotypeCall } from "../lib/panel";
 import { detectFormat, parseConsumerFile } from "../lib/consumerGenotype";
 import { GENOMIC_PANEL } from "../lib/studyPanel";
-import { contributeDosages } from "../lib/protocol";
+import { contributeDosages, submitProvenanceRecord } from "../lib/protocol";
 import { useVcfParser } from "../lib/useVcfParser";
 import type { TraceApi } from "../lib/useTrace";
 import { noteEvidence, txEvidence, valueEvidence } from "../lib/trace";
@@ -162,11 +162,15 @@ export function GenomicStep({
           valueEvidence("kapsanan", result.covered),
           valueEvidence("eksik (3 olarak işaretlendi)", result.missing),
           ...(result.ignored > 0
-            ? [valueEvidence("dosyada olup panelde olmayan", result.ignored)]
+            ? [valueEvidence("dosyada olup panelde olmayan", result.ignored.toLocaleString("tr"))]
             : []),
           noteEvidence(
             "eksik neden 0 değil",
             "0 «homozigot referans» demektir; bilinmeyene 0 yazmak alel frekansını aşağı çeker",
+          ),
+          noteEvidence(
+            "kapsama nasıl belirlendi",
+            "size sorulmadı — dosyanız ayrıştırıldı. Hangi alanlarda gerçek veriniz olduğu ödemeyi belirler: araştırmacı o alanları isterse pay alırsınız",
           ),
         ]);
       } catch (err) {
@@ -187,6 +191,70 @@ export function GenomicStep({
       let batches = 0;
       await contributeDosages(signer, aligned.dosages, {
         batchSize: 10,
+
+        // KANIT, DOZAJLARDAN ÖNCE.
+        //
+        // Kanıt, havuza girecek şifreli metinlerin özetine bağlanır; bu
+        // yüzden şifreleme bittikten sonra ama ilk işlem gitmeden önce
+        // üretilir. Sıra tersine dönseydi sözleşme beyan edilen kapsamayı
+        // kanıtsız yazardı ve ödeme yine uydurulabilir olurdu.
+        onEncrypted: async (handles) => {
+          trace.begin("provenance", "ZK köken kanıtı üretildi ve gönderildi");
+          try {
+            const record = await submitProvenanceRecord(
+              signer,
+              aligned.dosages,
+              handles,
+              {
+                onStage: (stage) => {
+                  const label = {
+                    digest: "şifreli metinlerin özeti alınıyor…",
+                    proving: "tarayıcıda Groth16 kanıtı üretiliyor…",
+                    sending: "kanıt zincire gönderiliyor…",
+                  }[stage];
+                  trace.progress("provenance", label);
+                },
+              },
+            );
+
+            if (!record) {
+              trace.succeed("provenance", "Köken kaydı zaten var — atlandı", [
+                noteEvidence(
+                  "neden atlandı",
+                  "nullifier bir kez harcanır; mevcut kayıt zaten kapsamayı kanıtla yazmış durumda",
+                ),
+              ]);
+              return;
+            }
+
+            trace.succeed(
+              "provenance",
+              `${record.coveredFields} alan KANITLA yazıldı (${Math.round(record.provingMs)} ms)`,
+              [
+                txEvidence("submitRecord", record.outcome.hash),
+                valueEvidence("  blok", record.outcome.blockNumber.toLocaleString("tr"), true),
+                valueEvidence("  gaz", Number(record.outcome.gasUsed).toLocaleString("tr"), true),
+                noteEvidence("  kanıtın bağlandığı özet", record.digest),
+                noteEvidence(
+                  "kanıt ne söylüyor",
+                  "kapsama bitleri TAM OLARAK taahhüde giren dozajlardan türedi — «bende bu alan var» deyip boş göndermek imkânsız",
+                ),
+                noteEvidence(
+                  "kanıt ne söylemiyor",
+                  "verinin gerçek bir ölçümden geldiğini söylemez; onu ancak imzalayan akredite bir kurum söyleyebilir, ZK söyleyemez",
+                ),
+                noteEvidence(
+                  "paneliniz zincire girdi mi",
+                  "hayır — yalnızca taahhüt (Poseidon özeti) yazıldı; dozajlar kanıtın içinde gizli kalır",
+                ),
+              ],
+            );
+          } catch (err) {
+            trace.fail("provenance", err);
+            throw err;
+          }
+        },
+
         onBatch: (outcome, from, to) => {
           batches += 1;
           trace.push(
@@ -224,7 +292,7 @@ export function GenomicStep({
   return (
     <div className="card">
       <div className="card__head">
-        <h3>1 · Genomik veri</h3>
+        <h3>2 · Genomik veri</h3>
         <span className={complete ? "badge badge--ok" : "eyebrow"}>
           {complete ? `TAMAM · ${submitted}/${snpCount}` : `${submitted}/${snpCount} SNP`}
         </span>
@@ -234,6 +302,12 @@ export function GenomicStep({
         VCF, 23andMe ya da AncestryDNA ham veri dosyası. Dosya cihazınızdan
         çıkmaz: ayrıştırma ve şifreleme tarayıcıda yapılır, zincire yalnızca
         şifreli dozajlar gider.
+      </p>
+      <p className="card__body">
+        <strong>Dosyanızın içinde ne olduğunu bilmenize gerek yok.</strong>{" "}
+        Türünü seçmeniz yeter — hangi varyantların bulunduğunu sistem
+        ayrıştırıp çıkarır. Bu, ödemeyi de belirler: bir araştırmacı sizde
+        <em>olan</em> alanları isterse pay alırsınız.
       </p>
 
       <input
@@ -281,6 +355,10 @@ export function GenomicStep({
               {aligned.covered}/{aligned.dosages.length}
               {aligned.missing > 0 && ` · ${aligned.missing} eksik`}
             </span>
+          </div>
+          <div className="kv__row">
+            <span className="eyebrow">ÖDEMEYE ESAS ALAN</span>
+            <span className="mono">{aligned.covered} alan</span>
           </div>
           <div className="kv__row">
             <span className="eyebrow">PANEL SIRASINDA DOZAJLAR</span>
