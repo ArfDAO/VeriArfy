@@ -180,10 +180,7 @@ describe("VeriarfyStaking — guvenilmez dugum riski (rapor §2.7)", () => {
   async function runRealQuery() {
     const { payments } = await deployPayments();
 
-    await protocol
-      .connect(alice)
-      .grantAccess(await researcher.getAddress(), 1 | 2 | 4, 0, 0);
-
+    // Izin adimi KALKTI: havuza yuklemek zaten izindir.
     await stakeAll([nodeA, nodeB]);
     await payments.connect(researcher).openQuery(STATISTICS);
     const queryId = (await payments.nextQueryId()) - 1n;
