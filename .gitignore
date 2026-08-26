@@ -7,7 +7,17 @@ cache/
 types/
 typechain-types/
 fhevmTemp/
-deployments/
+# Dagitim adresleri: KLASOR degil ICERIK yoksayilir.
+#
+# `deployments/` yazilirsa git klasore hic inmez ve icindeki tek bir dosyayi
+# geri almak IMKANSIZ olur (gitignore kurali: dislanmis bir klasorun altindaki
+# dosya yeniden dahil edilemez). `deployments/*` icerigi disler, klasoru degil.
+#
+# `sepolia.json` izlenmeli: icinde yalnizca ZINCIRDE ZATEN ACIK olan adresler
+# var ve `verify-storage-deals` betigi onsuz kosamiyor — CI'da bu is aylarca
+# "ENOENT: deployments/sepolia.json" ile kirmizi kaldi.
+deployments/*
+!packages/contracts/deployments/sepolia.json
 coverage/
 coverage.json
 
@@ -46,5 +56,14 @@ next-env.d.ts
 __pycache__/
 *.pyc
 packages/ml/.venv/
-packages/ml/data/
+# ML verisi: ICERIK yoksayilir, kripto PARAMETRELERI izlenir.
+#
+# Klasorde iki farkli sey var:
+#   - GIZLI/BUYUK: submissions.json (duz metin anket yanitlari), chrMT.vcf.gz
+#   - YAPILANDIRMA: tfhers_params*.json (447 bayt, TFHE-rs parametreleri)
+#
+# Ikincisi kodun bir parcasi; testler onsuz kosamiyor ve CI'da kopru testi
+# "FileNotFoundError: tfhers_params_zama.json" ile kirmizi kaldi.
+packages/ml/data/*
+!packages/ml/data/tfhers_params*.json
 packages/ml/rust_expander/
