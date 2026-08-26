@@ -13,6 +13,6 @@
     }
   },
   "scripts": {
-    "test": "node scripts/stats-selftest.js"
+    "test": "node scripts/stats-selftest.js && node scripts/chi-selftest.mjs"
   }
 }
