@@ -5,6 +5,7 @@ import {FHE, ebool, euint8, euint32, euint64, externalEuint32} from "@fhevm/soli
 import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 
 import {BiomarkerStats} from "./libraries/BiomarkerStats.sol";
+import {CoverageBits} from "./libraries/CoverageBits.sol";
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -72,9 +73,15 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     // ---------------------------------------------------------------------------------
 
     event MetricsConfigured(uint32 metricCount, bytes32 metricsHash, string metricsUri);
-    event BiomarkersContributed(address indexed participant, uint32 fromMetric, uint32 toMetric);
+    /// @dev `covered`: bu partide ILK KEZ kapsanan metrik sayisi.
+    event BiomarkersContributed(
+        address indexed participant,
+        uint32 fromMetric,
+        uint32 toMetric,
+        uint32 covered
+    );
     event BiomarkerPanelCompleted(address indexed participant);
-    event BiomarkerSnapshotTaken(uint256 indexed requestId, uint32 from, uint32 to);
+    event BiomarkerSnapshotTaken(uint256 indexed requestId, uint32 metricCount);
 
     // ---------------------------------------------------------------------------------
     // Sabitler
@@ -213,9 +220,8 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     /// @dev `[talep][metrik][grup]` -> dondurulmus toplamlar.
     mapping(uint256 requestId => mapping(uint32 => BiomarkerStats.Accumulator[2])) private _frozen;
 
-    /// @dev Talebin kapsadigi metrik araligi [from, to).
-    mapping(uint256 requestId => uint32) public snapshotFrom;
-    mapping(uint256 requestId => uint32) public snapshotTo;
+    /// @dev Talepte SECILEN metrikler — aralik degil liste.
+    mapping(uint256 requestId => uint32[]) private _snapshotIds;
 
     /// @dev Metrigin akumulatorleri baslatildi mi?
     mapping(uint32 => bool) private _metricInitialized;
@@ -230,6 +236,21 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
 
     /// @dev Ilk katkidan sonra panel degistirilemez.
     bool public panelFrozen;
+
+    /**
+     * @notice `katilimci => kelime => bitler`. Bit, o metrikte GERCEK olcum demek.
+     *
+     * @dev Genomik taraftaki ile ayni gerekce (bkz. `CoverageBits`): odeme
+     *      KULLANILAN ALANA gore dagitilir, bu yuzden kapsama duz metin
+     *      olmak zorunda.
+     *
+     *      Kullanici beyan etmez: olcum girilmediyse `BIOMARKER_MISSING` (0)
+     *      gonderilir ve maske o degerden turetilir.
+     */
+    mapping(address => mapping(uint256 => uint256)) private _metricCoverage;
+
+    /// @notice `metrik => o olcumu vermis katilimci sayisi` (odemenin paydasi).
+    mapping(uint32 => uint32) public metricCoverageCount;
 
     /**
      * @notice Metrik tanim belgesinin ozeti (`metricsUri` icerigi).
@@ -319,6 +340,38 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         return _metrics[index];
     }
 
+    /// @notice Katilimcinin ISTENEN metriklerden kacinda gercek olcumu var?
+    function metricCoverageWeight(
+        address participant,
+        uint32[] calldata metricIds
+    ) external view returns (uint32) {
+        return CoverageBits.weight(_metricCoverage, participant, metricIds);
+    }
+
+    /// @notice Istenen metriklerin kapsama sayaclari toplami — odemenin PAYDASI.
+    function metricCoverageTotal(uint32[] calldata metricIds) external view returns (uint256) {
+        return CoverageBits.total(metricCoverageCount, metricIds);
+    }
+
+    /**
+     * @notice Istenen metriklerin hangilerinde olcumu oldugu — BIT MASKESI.
+     *
+     * @dev Bit i, `metricIds[i]` alanina karsilik gelir. Genomik taraftaki
+     *      `snpCoverageMask` ile ayni amac: kitliga gore agirliklandirma
+     *      alan basina harici cagri yapmak zorunda kalmasin.
+     */
+    function metricCoverageMask(
+        address participant,
+        uint32[] calldata metricIds
+    ) external view returns (uint256) {
+        return CoverageBits.maskOf(_metricCoverage, participant, metricIds);
+    }
+
+    /// @notice Katilimcinin bu metrikte gercek olcumu var mi?
+    function hasMetricCoverage(address participant, uint32 metric) external view returns (bool) {
+        return CoverageBits.has(_metricCoverage, participant, metric);
+    }
+
     /// @notice Katilimci metrik panelini TAMAMLADI mi?
     function hasBiomarkerPanel(address participant) external view returns (bool) {
         return _metrics.length > 0 && submittedMetrics[participant] == _metrics.length;
@@ -372,6 +425,7 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      */
     function contributeBiomarkers(
         externalEuint32[] calldata encValues,
+        uint256 coverageMask,
         bytes calldata inputProof
     ) external nonReentrant {
         if (!protocol.isEnrolled(msg.sender)) revert NotEnrolled(msg.sender);
@@ -396,9 +450,36 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         }
 
         submittedMetrics[msg.sender] = end;
-        emit BiomarkersContributed(msg.sender, start, end);
+        _recordCoverage(start, end, coverageMask, encValues.length);
 
         if (end == total) emit BiomarkerPanelCompleted(msg.sender);
+    }
+
+    /**
+     * @dev Kapsama yazimi AYRI fonksiyonda — sebep yine derleyici.
+     *
+     *      Govde cagiran fonksiyonun icindeyken solc "Stack too deep" veriyor:
+     *      EVM'in 16 slotluk erisilebilir yigin penceresi doluyor.
+     *
+     *      Ne yaptigi: hangi metrikte GERCEK olcum oldugunu isaretler. Sifreli
+     *      degerden cikarilamaz (sifreli olmasinin anlami budur), istemcinin
+     *      doldurdugu alanlardan turetilir.
+     */
+    function _recordCoverage(
+        uint32 start,
+        uint32 end,
+        uint256 coverageMask,
+        uint256 length
+    ) private {
+        uint32 covered = CoverageBits.record(
+            _metricCoverage,
+            metricCoverageCount,
+            msg.sender,
+            start,
+            coverageMask,
+            length
+        );
+        emit BiomarkersContributed(msg.sender, start, end, covered);
     }
 
     /**
@@ -450,20 +531,29 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *      katilimcilar gelmeye devam eder. Onaylayan dugumlerin gordugu
      *      sayilar, oy verdikleri sayilar olmalidir.
      */
-    function snapshotFor(uint256 requestId, uint32 from, uint32 to) external onlyProtocol {
-        if (to > metricCount()) revert TooManyMetrics(to, metricCount());
-        if (to <= from || to - from > MAX_METRIC_WINDOW) {
-            revert InvalidMetricWindow(to - from, MAX_METRIC_WINDOW);
+    function snapshotFor(
+        uint256 requestId,
+        uint32[] calldata metricIds
+    ) external onlyProtocol {
+        if (metricIds.length == 0 || metricIds.length > MAX_METRIC_WINDOW) {
+            revert InvalidMetricWindow(uint32(metricIds.length), MAX_METRIC_WINDOW);
         }
 
-        snapshotFrom[requestId] = from;
-        snapshotTo[requestId] = to;
+        uint32 total = metricCount();
+        for (uint256 i = 0; i < metricIds.length; ++i) {
+            uint32 metric = metricIds[i];
+            if (metric >= total) revert TooManyMetrics(metric + 1, total);
 
-        for (uint32 metric = from; metric < to; ++metric) {
+            _snapshotIds[requestId].push(metric);
             BiomarkerStats.snapshot(_live, _frozen[requestId], metric);
         }
 
-        emit BiomarkerSnapshotTaken(requestId, from, to);
+        emit BiomarkerSnapshotTaken(requestId, uint32(metricIds.length));
+    }
+
+    /// @notice Talepte secilen metrikler.
+    function snapshotIds(uint256 requestId) external view returns (uint32[] memory) {
+        return _snapshotIds[requestId];
     }
 
     /**
@@ -474,9 +564,9 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *      basina yetki verebilmesi, tum onay mekanizmasini atlatirdi.
      */
     function grantFor(uint256 requestId, address researcher) external onlyProtocol {
-        uint32 to = snapshotTo[requestId];
-        for (uint32 metric = snapshotFrom[requestId]; metric < to; ++metric) {
-            BiomarkerStats.grant(_frozen[requestId], metric, researcher);
+        uint32[] storage ids = _snapshotIds[requestId];
+        for (uint256 i = 0; i < ids.length; ++i) {
+            BiomarkerStats.grant(_frozen[requestId], ids[i], researcher);
         }
     }
 
@@ -509,9 +599,15 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         uint32 metric,
         uint8 group
     ) external view returns (euint64 sum, euint64 sumSq, euint32 count) {
-        uint32 from = snapshotFrom[requestId];
-        uint32 to = snapshotTo[requestId];
-        if (metric < from || metric >= to) revert MetricOutsideWindow(metric, from, to);
+        uint32[] storage ids = _snapshotIds[requestId];
+        bool selected = false;
+        for (uint256 i = 0; i < ids.length; ++i) {
+            if (ids[i] == metric) {
+                selected = true;
+                break;
+            }
+        }
+        if (!selected) revert MetricOutsideWindow(metric, 0, uint32(ids.length));
 
         BiomarkerStats.Accumulator storage acc = _frozen[requestId][metric][group];
         return (acc.sum, acc.sumSq, acc.count);
