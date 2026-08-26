@@ -72,12 +72,52 @@ jobs:
         working-directory: packages/client-fhe-rust
         run: cargo check --release --target wasm32-unknown-unknown
 
+      # ---------------------------------------------------------------------
+      # wasm-pack paketleri — arayuz bunlara BAGIMLI
+      # ---------------------------------------------------------------------
+      #
+      # `cargo check --target wasm32` derlemenin gectigini soyler ama
+      # wasm-pack'in TypeScript bildirimlerini ve JS sarmalayicisini uretip
+      # uretmedigini SOYLEMEZ. Arayuz tam olarak o ciktilari import ediyor:
+      #
+      #   src/lib/vcfWorker.ts → @veriarfy/client-side-rust/pkg/veriarfy_vcf_parser.js
+      #   src/lib/fheWorker.ts → @veriarfy/client-fhe-rust/pkg/veriarfy_client_fhe.js
+      #
+      # `pkg/` gitignore'da (uretilebilir cikti) ve `js` isi Rust arac
+      # zincirine sahip degil. Sonuc: `web:build` CI'da her kosuda TS2307 ile
+      # dusuyordu, yerelde ise `pkg/` diskte durdugu icin sorunsuz geciyordu.
+      # Klasik "bende calisiyor" tuzagi.
+      #
+      # Paketler BURADA uretilir (arac zinciri ve onbellek zaten burada) ve
+      # `js` isine artefakt olarak devredilir.
+      # Resmi kurulum betigi: ucuncu taraf bir action eklemek yerine
+      # rustwasm'in kendi dagitimindan onceden derlenmis ikili indirilir.
+      - name: wasm-pack kur
+        run: curl -sSf https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
+
+      - name: VCF ayristirici — wasm paketi
+        run: npm run wasm:build
+
+      - name: FHE sifreleyici — wasm paketi
+        run: npm run fhe:build
+
+      - name: Paketleri devret
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-pkg
+          path: |
+            packages/client-side-rust/pkg
+            packages/client-fhe-rust/pkg
+          retention-days: 1
+
   # ---------------------------------------------------------------------------
   # Solidity — fhEVM sozlesmeleri
   # ---------------------------------------------------------------------------
   contracts:
     name: Akilli sozlesmeler
     runs-on: ubuntu-latest
+    # Testler GERCEK ZK kaniti uretiyor; devre ciktilari olmadan kosamazlar.
+    needs: zk
     steps:
       - uses: actions/checkout@v4
 
@@ -87,6 +127,26 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      - name: Devre ciktilarini al
+        uses: actions/download-artifact@v4
+        with:
+          name: circuit-build
+          path: packages/circuits/build
+
+      # Depodaki dogrulayicilarin UZERINE yazar. Sart: zkey ile dogrulayici
+      # ayni torenden gelmezse uretilen her kanit reddedilir.
+      - name: Dogrulayici sozlesmelerini al
+        uses: actions/download-artifact@v4
+        with:
+          name: circuit-verifiers
+          path: packages/contracts/contracts/verifiers
+
+      - name: Devre ciktilari yerinde mi
+        run: |
+          test -f packages/circuits/build/data_provenance_final.zkey
+          test -f packages/circuits/build/data_provenance_js/data_provenance.wasm
+          test -f packages/circuits/build/researcher_identity_final.zkey
 
       - name: Derle
         run: npm run contracts:compile
@@ -181,12 +241,65 @@ jobs:
       - name: Kanit uretimi ve reddetme senaryolari
         run: npm run test --workspace packages/circuits
 
+      # ---------------------------------------------------------------------
+      # Devre ciktilari — SOZLESME testleri de bunlara bagimli
+      # ---------------------------------------------------------------------
+      #
+      # `VeriarfyProtocol.test.ts` ve `VeriarfyPayments.test.ts` GERCEK kanit
+      # uretiyor: zincirdeki Groth16 dogrulayicinin gercekten kapi olup
+      # olmadigini baska turlu sinamak mumkun degil. Bunun icin wasm tanigi
+      # ve final zkey gerekiyor, ikisi de `build/` altinda ve gitignore'da.
+      #
+      # `contracts` isi bunlari uretmiyordu, dolayisiyla 8 test "Devre
+      # ciktilari yok" ile duserdi. Burada uretiliyorlar; ikinci kez uretmek
+      # yerine devrediliyor.
+      #
+      # Ara zkey'ler (`*_0000.zkey`, 17 MB) haric: toren ciktisi olan
+      # `_final` yeterli.
+      - name: Devre ciktilarini devret
+        uses: actions/upload-artifact@v4
+        with:
+          name: circuit-build
+          path: |
+            packages/circuits/build
+            !packages/circuits/build/*_0000.zkey
+            !packages/circuits/build/*.sym
+            !packages/circuits/build/*.r1cs
+          retention-days: 1
+
+      # ---------------------------------------------------------------------
+      # DOGRULAYICI SOZLESMELERI de devredilmek ZORUNDA
+      # ---------------------------------------------------------------------
+      #
+      # Toren her kosuda FARKLI bir zkey uretiyor; entropi zamana bagli:
+      #
+      #     zKey.contribute(zkey0, zkeyFinal, "veriarfy-dev", `veriarfy-${Date.now()}`)
+      #
+      # Yani depoya islenmis `verifiers/*.sol`, CI'nin taze urettigi zkey ile
+      # ASLA uyusmaz. Yalnizca zkey devredilirse sozlesme testleri taze kanit
+      # uretip eski dogrulayiciya sorar ve hepsi `InvalidProof()` ile duser —
+      # tam olarak yasanan buydu (17 test).
+      #
+      # `circuits:build` dogrulayicilari zaten yeniden yaziyor; onlari da
+      # devretmek, zkey ile dogrulayicinin AYNI torenden gelmesini garanti
+      # eder. Ayri artefakt cunku ortak ust klasorleri yok.
+      - name: Dogrulayici sozlesmelerini devret
+        uses: actions/upload-artifact@v4
+        with:
+          name: circuit-verifiers
+          path: packages/contracts/contracts/verifiers
+          retention-days: 1
+
   # ---------------------------------------------------------------------------
   # Node ve TypeScript — istatistik motoru ve arayuz
   # ---------------------------------------------------------------------------
   js:
     name: Arayuz ve istatistik
     runs-on: ubuntu-latest
+    # Arayuz, `rust` isinin urettigi wasm paketlerine bagimli. Bu, iki isi
+    # sirali hale getirir; alternatifi Rust arac zincirini burada da kurmak
+    # olurdu ki daha yavas ve iki yerde bakim demek.
+    needs: rust
     steps:
       - uses: actions/checkout@v4
 
@@ -196,6 +309,26 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      # `npm ci` calistiktan SONRA indirilmeli: workspace bagi kurulurken
+      # `pkg/` yoksa sorun degil, ama derlemeden once yerinde olmali.
+      # DIKKAT — hedef klasor `packages`, `.` DEGIL.
+      #
+      # `upload-artifact` birden fazla yol verildiginde arsivin kokunu
+      # yollarin EN YAKIN ORTAK ATASI yapar; burada bu `packages/`. Yani
+      # arsivin icinde `client-side-rust/pkg/...` durur. `.` dizinine
+      # acilirsa dosyalar `./client-side-rust/pkg` altina duser ve derleme
+      # yine bulamaz.
+      - name: wasm paketlerini al
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: packages
+
+      - name: Paketler yerinde mi
+        run: |
+          test -f packages/client-side-rust/pkg/veriarfy_vcf_parser.js
+          test -f packages/client-fhe-rust/pkg/veriarfy_client_fhe.js
 
       - name: Istatistik motoru — oz test
         run: npm run study:test
@@ -261,9 +394,26 @@ jobs:
   # kontrolu, overflow) tarar. FHE'ye ozgu islemler (euint8, FHE.add) kapsam
   # disidir; o katmanin guvenligi Zama'nin kendi denetimine dayanir.
   #
-  # `continue-on-error` bilincli: fhEVM import yollari Slither'in solc
-  # cozumlemesini henuz tam gecmiyor. Bulgular rapor edilir ama yesil/kirmizi
-  # kararini bloke etmez. Bu gevsetme, import sorunu cozulunce kaldirilmalidir.
+  # NEDEN AYRI BIR "KAYNAK HIZALAMA" ADIMI VAR
+  #
+  # Slither aylarca hic calismadi; her kosuda parse asamasinda cokuyordu:
+  #
+  #     InvalidCompilation: Source map for '@fhevm/solidity/config/ZamaConfig.sol'
+  #     falls outside the cached source.
+  #
+  # Sebep fhEVM hardhat eklentisi. Eklenti, derlemeden once @fhevm
+  # kaynaklarini `fhevmTemp/` altina KOPYALAYIP DEGISTIRIYOR: goreli
+  # import'lari paket import'una ceviriyor ve mock KMS adreslerini yaziyor.
+  # solc bu degistirilmis dosyayi derliyor, dolayisiyla kaynak haritasi ona
+  # gore. Slither ise ayni yolu `node_modules` altina cozuyor ve orada 26
+  # bayt daha kisa bir dosya buluyor — ofsetler tasiyor, arac cokuyor.
+  #
+  # Cozum, Slither'a solc'un GERCEKTEN derledigi kaynagi gostermek: eklentinin
+  # urettigi dosyalari `node_modules` uzerine kopyalamak. Bu satirdan sonra
+  # arac 50 sozlesmeyi 102 dedektorle tariyor.
+  #
+  # `continue-on-error` yine de duruyor: bulgu sayisi (~1000, cogu bilgi
+  # duzeyi) triyaj edilmeden yesil/kirmizi karari verdirmemeli.
   slither:
     name: Slither (danisma)
     runs-on: ubuntu-latest
@@ -278,7 +428,24 @@ jobs:
 
       - run: npm ci
 
+      # Derleme BURADA yapilir (action'in kendi derlemesi degil): `fhevmTemp`
+      # ancak derleme sirasinda olusur ve bir sonraki adim ona ihtiyac duyar.
+      - name: Derle
+        run: npm run contracts:compile
+
+      - name: fhEVM kaynaklarini derlenen haliyle hizala
+        working-directory: packages/contracts
+        run: |
+          if [ -d fhevmTemp ]; then
+            cp -R fhevmTemp/. node_modules/
+            echo "fhevmTemp -> node_modules hizalandi"
+          else
+            echo "fhevmTemp yok — eklenti kaynak degistirmemis olabilir"
+          fi
+
       - uses: crytic/slither-action@v0.4.0
         with:
           target: packages/contracts
+          # Zaten derledik; action yeniden derlerse hizalama bozulur.
+          ignore-compile: true
           fail-on: none

@@ -18,6 +18,7 @@ export function Nav() {
       <div className="nav__links">
         <a href="#durum" className="nav__link">Sistem Durumu</a>
         <a href="#katil" className="nav__link">Katıl</a>
+        <a href="#arastirma" className="nav__link">Araştırma</a>
         <a href="#sonuclar" className="nav__link">Sonuçlar</a>
       </div>
     </nav>

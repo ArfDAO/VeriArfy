@@ -3,18 +3,15 @@ import type { BrowserProvider } from "ethers";
 
 import { CONTRACTS, explorerAddress, isProtocolDeployed } from "../config";
 import {
-  QUERY_TYPE,
   claimReward,
   confirmRarity,
-  describeQueryTypes,
   formatToken,
-  grantAccess,
   rarityMultiplierBps,
   readDashboard,
   readPersistence,
   readRarity,
   requestRarityAssessment,
-  revokeAccess,
+  leavePool,
   type DashboardState,
   type PersistenceState,
   type RarityState,
@@ -32,7 +29,26 @@ import { connectWallet, ensureSepolia, hasWallet } from "../lib/wallet";
 
 const short = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)}`;
 
+/** Sorgunun BSKK-44 akisindaki asamasi — katilimciya ne anlama geldigi. */
+const STAGE_LABEL: Record<string, string> = {
+  "onay-bekliyor": "BSKK-44 ONAYI BEKLENIYOR",
+  "itiraz-suresi": "ONAYLANDI · ITIRAZ SURESI",
+  "yurutme-bekliyor": "SURE DOLDU · COZUM BEKLENIYOR",
+  iptal: "ITIRAZ KABUL EDILDI — IPTAL",
+  "paylasim-bekliyor": "PAYLASIM BEKLENIYOR",
+  paylasildi: "PAYLASILDI",
+  iade: "IADE EDILDI",
+};
+
+const STAGE_COLOR: Record<string, string> = {
+  iptal: "#8e2b2b",
+  "itiraz-suresi": "#1f5a44",
+  "yurutme-bekliyor": "#1f5a44",
+};
+
 /** 32 baytlik digest'i okunabilir kisaltmaya cevirir. */
+const ZERO_DIGEST = `0x${"0".repeat(64)}`;
+
 const shortHash = (hex: string) =>
   hex && hex !== `0x${"0".repeat(64)}` ? `${hex.slice(0, 10)}…${hex.slice(-6)}` : "—";
 
@@ -46,11 +62,6 @@ export function PrivacyPanel() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-
-  const [grantTo, setGrantTo] = useState("");
-  const [grantTypes, setGrantTypes] = useState<number>(
-    QUERY_TYPE.GWAS | QUERY_TYPE.ML | QUERY_TYPE.STATISTICS,
-  );
 
   const refresh = useCallback(
     async (p: BrowserProvider, who: string) => {
@@ -252,8 +263,17 @@ export function PrivacyPanel() {
             <div className="card__row">
               <span className="eyebrow">KALICILIK (FILECOIN)</span>
               <span className="mono">
-                {!persistence?.tracked
-                  ? "IPFS pinli — Filecoin anlasmasi yok"
+                {/*
+                 * KAYIT YOKSA "PINLI" DENEMEZ.
+                 *
+                 * Onceki surum, CID hic yokken bile "IPFS pinli" yaziyordu —
+                 * yani dayanagi olmayan bir iddiada bulunuyordu. Kasa bosken
+                 * dogru ifade "kayit yok"tur.
+                 */}
+                {!state || state.vault.cidDigest === ZERO_DIGEST
+                  ? "kayit yok — veri kasasi bos"
+                  : !persistence?.tracked
+                  ? "IPFS'te pinli — Filecoin anlasmasi yok"
                   : `${persistence.replicas} saglayici${
                       persistence.adequate ? "" : " (esik alti)"
                     }${persistence.dueForRenewal ? " · yenileme gerekli" : ""}`}
@@ -371,114 +391,64 @@ export function PrivacyPanel() {
         )}
       </div>
 
-      {/* --- Izinler ----------------------------------------------------- */}
+      {/* --- Havuz uyeligi ----------------------------------------------- */}
       <div className="card">
-        <h3 style={{ marginBottom: 4 }}>Erisim Izinleri</h3>
+        <h3 style={{ marginBottom: 4 }}>Havuzdaki durumunuz</h3>
+
         <p style={{ fontSize: 13, color: "var(--color-smoke)", marginBottom: 16 }}>
-          Veriniz yalnizca izin verdiginiz kurumlarca kullanilir. Izni geri
-          aldiginizda, bundan <strong>sonra</strong> acilacak sorgular sizi kapsamaz;
-          daha once hak ettiginiz paylar durur.
+          Verinizi yuklemek, calismanin havuzuna katilmayi kabul etmektir.
+          Arastirmaci bazinda ayri bir izin YOKTUR — cunku acilim{" "}
+          <strong>grup toplamlarini</strong> cozer ve toplam tektir; "su kuruma
+          evet, buna hayir" demek mimari olarak mumkun degil. Boyle bir secenek
+          sunmak, tutulamayacak bir soz vermek olurdu.
         </p>
 
-        {state?.permissions.length === 0 && (
-          <p style={{ color: "var(--color-smoke)", fontSize: 14, marginBottom: 16 }}>
-            Henuz kimseye izin verilmemis.
-          </p>
-        )}
-
-        {state?.permissions.map((p) => {
-          const live =
-            p.isAllowed &&
-            (p.expirationBlock === 0n || p.expirationBlock > BigInt(p.grantedAtBlock));
-          return (
-            <div
-              key={p.researcher}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: 12,
-                padding: "12px 0",
-                borderTop: "1px solid rgba(0,0,0,0.06)",
-              }}
-            >
-              <div>
-                <div className="mono" style={{ fontSize: 13 }}>{short(p.researcher)}</div>
-                <div style={{ fontSize: 12, color: "var(--color-smoke)" }}>
-                  {describeQueryTypes(p.queryTypes).join(" · ") || "—"}
-                  {p.expirationBlock > 0n && ` · blok ${p.expirationBlock} sonuna kadar`}
-                </div>
-              </div>
-              {live ? (
-                <button
-                  className="pill pill--ghost"
-                  disabled={busy !== null}
-                  onClick={() =>
-                    run("Izin iptali", async () => {
-                      const signer = await provider!.getSigner();
-                      await revokeAccess(signer, p.researcher);
-                    })
-                  }
-                >
-                  {busy === "Izin iptali" ? "…" : "Izni geri al"}
-                </button>
-              ) : (
-                <span className="eyebrow" style={{ color: "var(--color-smoke)" }}>
-                  IPTAL EDILDI
-                </span>
-              )}
-            </div>
-          );
-        })}
-
-        {/* Yeni izin */}
-        <div style={{ borderTop: "1px solid rgba(0,0,0,0.06)", paddingTop: 16, marginTop: 8 }}>
-          <label className="eyebrow" style={{ display: "block", marginBottom: 8 }}>
-            YENI IZIN VER
-          </label>
-          <input
-            className="input"
-            placeholder="Arastirmaci cuzdan adresi (0x…)"
-            value={grantTo}
-            onChange={(e) => setGrantTo(e.target.value.trim())}
-            style={{ width: "100%", marginBottom: 10 }}
-          />
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
-            {Object.entries(QUERY_TYPE).map(([name, bit]) => (
-              <label key={name} style={{ fontSize: 13, display: "flex", gap: 6 }}>
-                <input
-                  type="checkbox"
-                  checked={(grantTypes & bit) !== 0}
-                  onChange={(e) =>
-                    setGrantTypes((prev) => (e.target.checked ? prev | bit : prev & ~bit))
-                  }
-                />
-                {describeQueryTypes(bit)[0]}
-              </label>
-            ))}
-          </div>
-          <button
-            className="pill pill--primary"
-            disabled={busy !== null || !grantTo || grantTypes === 0}
-            onClick={() =>
-              run("Izin verme", async () => {
-                const signer = await provider!.getSigner();
-                await grantAccess(signer, grantTo, grantTypes);
-                setGrantTo("");
-              })
-            }
-          >
-            {busy === "Izin verme" ? "Gonderiliyor…" : "Izin ver"}
-          </button>
+        <div className="card__row">
+          <span className="eyebrow">DURUM</span>
+          <span className="mono">
+            {!state || state.vault.participantIndex === 0
+              ? "havuzda degil"
+              : state.membership.active
+                ? "havuzda"
+                : `cikildi (blok ${state.membership.leftAtBlock})`}
+          </span>
         </div>
+
+        {state?.membership.active && (
+          <>
+            <div className="notice notice--warn">
+              <strong>Cikmak gecmisi silmez.</strong> Toplama karisan geri
+              cikarilamaz — bu bir uygulama eksigi degil, homomorfik toplamanin
+              dogasidir. Cikis BUNDAN SONRASI icindir: yeni acilimlarda pay
+              olusmaz, daha once hak ettikleriniz durur.
+            </div>
+            <button
+              className="pill pill--ghost"
+              style={{ marginTop: 12 }}
+              disabled={busy !== null}
+              onClick={() =>
+                run("Havuzdan cikis", async () => {
+                  const signer = await provider!.getSigner();
+                  await leavePool(signer);
+                })
+              }
+            >
+              {busy === "Havuzdan cikis" ? "…" : "Havuzdan cik"}
+            </button>
+          </>
+        )}
       </div>
 
       {/* --- Sorgular ve kazanc ------------------------------------------ */}
       <div className="card">
         <h3 style={{ marginBottom: 4 }}>Sorgular ve Kazanc</h3>
         <p style={{ fontSize: 13, color: "var(--color-smoke)", marginBottom: 16 }}>
-          Verinizin kullanildigi her sorgudan pay alirsiniz. Odeme, sorgu
-          ucretinin %80'inin izin veren katilimcilara bolunmesiyle hesaplanir.
+          Verinizin kullanildigi her sorgudan pay alirsiniz. Ucretin %80'i
+          katilimcilara ayrilir ve IKIYE bolunur: buyuk kismi{" "}
+          <strong>kullanima gore</strong> (arastirmacinin istedigi alanlarin
+          kacina veri verdiginize), kalani nadirlik ve kurucu katkici
+          bonuslarina gore dagitilir. Ayni veriniz farkli arastirmalarda
+          tekrar tekrar kullanilabilir — her biri ayri odemedir.
         </p>
 
         {state?.queries.length === 0 && (
@@ -507,14 +477,47 @@ export function PrivacyPanel() {
                 {q.snapshotCount} katilimci · blok {q.openedAtBlock} ·{" "}
                 {formatToken(q.fee, decimals, symbol)}
               </div>
+              {q.coverageTotal > 0 && (
+                <div style={{ fontSize: 12, color: "var(--color-smoke)" }}>
+                  {/*
+                   * Kullanim payinin dayanagi ACIKCA gosterilir: "kac alanina
+                   * veri verdin / toplam kac alan istendi". Kullanici payinin
+                   * nereden geldigini gormeden odemeye guvenemez.
+                   */}
+                  bu sorguda kullanilan veriniz:{" "}
+                  <strong>{q.coverageWeight}</strong> alan · havuzun kapsama
+                  toplami {q.coverageTotal}
+                  {q.weightedTotal > 0 && (
+                    <>
+                      <br />
+                      {/*
+                        * KITLIK GORUNUR OLMALI. Odeme, verdiginiz alanlarin
+                        * ne kadar NADIR oldugunu da hesaba katar; bu ekranda
+                        * gorunmezse kullanici acisindan kitlik diye bir sey
+                        * YOKTUR. Oran, kullanim havuzundan alacaginiz payin
+                        * ta kendisidir.
+                        */}
+                      ödeme ağırlığınız: <strong>{q.weightedCoverage}</strong> /{" "}
+                      {q.weightedTotal}
+                      {q.coverageWeight > 0 &&
+                        q.weightedCoverage > q.coverageWeight * 10_000 && (
+                          <> · nadir alan primi uygulandı</>
+                        )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
             {q.refunded ? (
               <span className="eyebrow" style={{ color: "var(--color-smoke)" }}>IADE EDILDI</span>
             ) : !q.settled ? (
-              // Rapor §2.6: ucret, yetkili kurumlarin onayi gelene kadar
-              // emanette bekler. Bu asamada kimse pay cekemez.
-              <span className="eyebrow" style={{ color: "var(--color-smoke)" }}>
-                BSKK-44 ONAYI BEKLENIYOR
+              // Rapor §2.6: ucret, onay ve itiraz sureci bitene kadar
+              // emanette bekler. Ama bu SUREC DORT ASAMALIDIR ve katilimci
+              // acisindan cok farkli seyler ifade ederler: onay bekleyen bir
+              // sorgu hala reddedilebilir, itiraz suresindeki fiilen
+              // kesinlesmistir. Tek etikete sikistirmak bilgi kaybiydi.
+              <span className="eyebrow" style={{ color: STAGE_COLOR[q.stage] }}>
+                {STAGE_LABEL[q.stage]}
               </span>
             ) : q.claimed ? (
               <span className="eyebrow" style={{ color: "var(--color-smoke)" }}>ÇEKILDI</span>

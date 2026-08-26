@@ -7,14 +7,27 @@ include "lib/merkle.circom";
 /*
  * VeriArfy — Sıfır Bilgi Veri Kökeni (ZK-Data Provenance).
  *
- * ## Kanıtlanan iddia
+ * ## Kanıtlanan iddia — İKİ KATMAN
  *
- *   "Yüklediğim panelin düz metni, akredite kurumlar listesinde yer alan bir
- *    kurumun EdDSA imzasını taşıyor; panel biçim kurallarına uyuyor; bu kanıt
- *    benim cüzdanıma ve yüklediğim şifreli bloba bağlı; aynı kayıt ikinci kez
- *    yüklenemez."
+ * Devre `attested` anahtarına göre iki farklı şey kanıtlar. Anahtar AÇIK
+ * sinyaldir, yani sözleşme hangisinin kanıtlandığını görür ve karıştıramaz.
  *
- * Panelin kendisi (dozaj vektörü) hiçbir noktada açığa çıkmaz.
+ *   `attested = 1` — KURUM İMZALI (bugün entegrasyon yok, altyapı hazır)
+ *     "Panelin düz metni, akredite kurumlar listesindeki bir kurumun EdDSA
+ *      imzasını taşıyor; biçim kurallarına uyuyor; kapsama bitleri tam olarak
+ *      bu dozajlardan türedi; kanıt cüzdanıma ve bloba bağlı; aynı kayıt
+ *      ikinci kez yüklenemez."
+ *
+ *   `attested = 0` — KENDİ YÜKLEDİĞİM (bugün kullanılan yol)
+ *     "Bir dozaj vektörüne taahhüt ettim; biçim kurallarına uyuyor; kapsama
+ *      bitleri tam olarak bu dozajlardan türedi; kanıt cüzdanıma ve bloba
+ *      bağlı."
+ *
+ * İkinci katmanda EKSİK OLAN, dozajların gerçek bir ölçümden geldiğidir. Onu
+ * ancak imzalayan bir taraf söyleyebilir; ZK söyleyemez. Kapattığı şey ödeme
+ * saldırısıdır: kapsama artık beyan değil, taahhüdün matematiksel sonucudur.
+ *
+ * Panelin kendisi (dozaj vektörü) hiçbir katmanda açığa çıkmaz.
  *
  * ## Neden RSA değil EdDSA
  *
@@ -47,7 +60,10 @@ include "lib/merkle.circom";
  *
  * ## Açık sinyal sırası (snarkjs)
  *
- *   [root, nullifierHash, commitment, externalNullifier, cidHigh, cidLow, signalHash]
+ *   [root, nullifierHash, commitment, coverage[0..W-1],
+ *    externalNullifier, cidHigh, cidLow, signalHash, attested]
+ *
+ * `W = ceil(PANEL / 240)`. PANEL=1000 için W=5, yani 13 açık sinyal.
  */
 template DataProvenance(PANEL, LEVELS) {
     // ------------------------------------------------------------------
@@ -74,11 +90,22 @@ template DataProvenance(PANEL, LEVELS) {
     assert(PANEL > 0);
     assert(PANEL <= 1875);
 
+    // Kapsama bitleri: alan elemanı başına 240 bit (bkz. `coverage` çıktısı).
+    var COVERAGE_BITS_PER_WORD = 240;
+    var COVERAGE_WORDS = (PANEL + COVERAGE_BITS_PER_WORD - 1) \ COVERAGE_BITS_PER_WORD;
+
     // ------------------------------------------------------------------
     // Gizli girdiler — hiçbiri kanıttan okunamaz
     // ------------------------------------------------------------------
 
-    /// Dozaj vektörü: her eleman 0 (hom. referans), 1 (het.) veya 2 (hom. alt).
+    /// Dozaj vektörü. Her eleman:
+    ///   0 hom. referans · 1 heterozigot · 2 hom. alternatif · 3 EKSİK
+    ///
+    /// 3'ün geçerli olması ŞART: gerçek dosyalarda çağrılamamış genotip
+    /// vardır (test ettiğimiz PGP dosyasında 638.463 satırın 21.987'si).
+    /// Devre yalnızca {0,1,2} kabul ederken köken kanıtı, eksik çağrısı olan
+    /// HER gerçek panelde üretilemiyordu — sessiz değil, tamamen kapalı bir
+    /// yol. Sözleşme tarafı MK-0013'te düzeltilmiş, devre unutulmuştu.
     signal input dosages[PANEL];
 
     /// Kullanıcıya özel rastgelelik. Olmazsa taahhüt kaba kuvvetle aranabilir:
@@ -114,11 +141,48 @@ template DataProvenance(PANEL, LEVELS) {
     /// Yükleyenin cüzdanına bağlar.
     signal input signalHash;
 
+    /**
+     * KATMAN AYRACI — 1 kurum imzalı, 0 kullanıcının kendi yüklediği.
+     *
+     * ## Neden devrede bir anahtar var
+     *
+     * Bugün akredite bir kurum entegrasyonumuz yok; kullanıcı kendi tüketici
+     * dosyasını (23andMe, AncestryDNA) yüklüyor ve o dosyanın kurumsal imzası
+     * YOKTUR, olamaz da. İmzayı zorunlu tutmak B2C yolunu tamamen kapatırdı.
+     *
+     * Bu yüzden imza doğrulaması bir anahtarla açılıp kapanır. Ama anahtar
+     * GİZLİ DEĞİL AÇIK sinyaldir: sözleşme kanıtın hangi katmandan geldiğini
+     * görür ve iki katmanı asla karıştıramaz.
+     *
+     * ## Kapatınca ne KAYBEDİLİR — dürüstçe
+     *
+     * `attested = 0` iken devre "bu dozajlar gerçek bir ölçümden geliyor"
+     * DEMEZ; kimse imzalamadığı için diyemez. Söylediği şudur:
+     *
+     *   - dozajlar biçim kurallarına uyuyor,
+     *   - kapsama bitleri TAM OLARAK bu dozajlardan türedi,
+     *   - taahhüt bu dozajları kilitliyor,
+     *   - kanıt bu cüzdana ve bu bloba bağlı.
+     *
+     * Yani ödeme tarafındaki asıl saldırı — "bende bu alan var" deyip boş
+     * göndermek — kapatılır. Kapatılmayan, uydurma bir dosya yüklemektir; onu
+     * ancak imzalayan bir kurum kapatabilir.
+     */
+    signal input attested;
+
     // ------------------------------------------------------------------
     // Çıktılar — açık sinyal olur
     // ------------------------------------------------------------------
 
-    /// Akredite kurumlar ağacının kökü; sözleşme bunu kendi kaydıyla karşılaştırır.
+    /**
+     * Akredite kurumlar ağacının kökü — YALNIZCA `attested = 1` iken.
+     *
+     * `attested = 0` iken bu çıktı zorla 0'dır (aşağıda `attested * tree.root`).
+     * Sözleşme sıfır olmayan bir kök gördüğünde imzanın da doğrulandığını
+     * bilir: sıfır olmayan kök üretmenin TEK yolu anahtarı açmaktır, o da
+     * EdDSA doğrulamasını zorunlu kılar. İki katman böylece devrede birbirine
+     * kilitlenir; sözleşmenin ayrıca güvenmesi gereken bir şey kalmaz.
+     */
     signal output root;
 
     /// Aynı imzalı kaydın ikinci kez yüklenmesini engeller (Sybil / tekrar).
@@ -126,6 +190,30 @@ template DataProvenance(PANEL, LEVELS) {
 
     /// Panelin taahhüdü; zincirde saklanır, panelin kendisi asla açığa çıkmaz.
     signal output commitment;
+
+    /**
+     * KAPSAMA BİTLERİ — hangi alanda GERÇEK veri var.
+     *
+     * Bit i = 1 ise `dosages[i] != 3`, yani o alanda ölçüm var.
+     *
+     * ## Neden devreden çıkıyor
+     *
+     * Ödeme kullanılan alana göre dağıtılır (bkz. `CoverageBits`). Kapsama
+     * istemciden gelseydi uydurulabilirdi: "bende bu alan var" deyip boş
+     * göndermek, veri vermeden pay almak demekti. İstatistiği bozmaz (şifreli
+     * değer karar verir) ama parayı bozardı.
+     *
+     * Burada türetildiğinde uydurulamaz: dozajlar zaten kurumun İMZALADIĞI
+     * taahhüde giriyor, kapsama da aynı dozajlardan çıkıyor.
+     *
+     * ## Neden 240'lık gruplar
+     *
+     * Bir BN254 alan elemanı ~254 bit taşır. 240 seçildi çünkü sözleşme
+     * tarafındaki `CoverageBits.record` maskeyi `uint256` olarak alıyor ve
+     * her grubu kendi ofsetinden yazıyor — 240 hem alana rahat sığar hem
+     * maskeye sığar, hem de sınıra dayanmaz.
+     */
+    signal output coverage[COVERAGE_WORDS];
 
     // ------------------------------------------------------------------
     // 1) Biçim doğrulaması: her dozaj {0, 1, 2} kümesinde olmalı
@@ -137,11 +225,52 @@ template DataProvenance(PANEL, LEVELS) {
 
     signal firstFactor[PANEL];
     signal secondFactor[PANEL];
+    signal thirdFactor[PANEL];
 
+    /// `dosages[i] == 3` mi? Kapsama bitleri bundan türer.
+    signal isMissing[PANEL];
+
+    // 6'nin alan tersi: d(d-1)(d-2), d=3 için tam olarak 6 verir.
+    // Sabite bölmek çarpma kadar ucuzdur (tersi derleme zamanında hesaplanır).
     for (var i = 0; i < PANEL; i++) {
         firstFactor[i] <== dosages[i] * (dosages[i] - 1);
         secondFactor[i] <== firstFactor[i] * (dosages[i] - 2);
-        secondFactor[i] === 0;
+        thirdFactor[i] <== secondFactor[i] * (dosages[i] - 3);
+        thirdFactor[i] === 0;
+
+        // d ∈ {0,1,2} -> secondFactor = 0;  d = 3 -> secondFactor = 6.
+        isMissing[i] <== secondFactor[i] / 6;
+
+        // Boole kısıtı: yukarıdaki aralık kontrolü zaten garanti eder ama
+        // ucuz ve niyeti kodda görünür kılıyor.
+        isMissing[i] * (isMissing[i] - 1) === 0;
+    }
+
+    // ------------------------------------------------------------------
+    // 1b) Kapsama bitlerini paketle
+    // ------------------------------------------------------------------
+    //
+    // Bit i = "o alanda gerçek veri var". Sözleşme bu kelimeleri doğrudan
+    // `CoverageBits.record`'a verir; her kelime kendi ofsetinden yazılır.
+
+    signal coverageAcc[PANEL + 1];
+    coverageAcc[0] <== 0;
+
+    for (var w = 0; w < COVERAGE_WORDS; w++) {
+        var wStart = w * COVERAGE_BITS_PER_WORD;
+        var wStop = wStart + COVERAGE_BITS_PER_WORD;
+        if (wStop > PANEL) {
+            wStop = PANEL;
+        }
+
+        var bitValue = 1;
+        for (var i = wStart; i < wStop; i++) {
+            // 1 - isMissing = "var".
+            coverageAcc[i + 1] <== coverageAcc[i] + (1 - isMissing[i]) * bitValue;
+            bitValue = bitValue * 2;
+        }
+
+        coverage[w] <== coverageAcc[wStop] - coverageAcc[wStart];
     }
 
     // ------------------------------------------------------------------
@@ -216,8 +345,12 @@ template DataProvenance(PANEL, LEVELS) {
     // aynı paneli farklı salt'la yeniden yükleyip nullifier'ı atlatmayı
     // engeller.
 
+    // Anahtar Boole olmalı: aksi halde `attested = 2` gibi bir değerle hem
+    // imzayı atlatıp hem sıfır olmayan (2 x kök) bir kök üretilebilirdi.
+    attested * (attested - 1) === 0;
+
     component signatureCheck = EdDSAPoseidonVerifier();
-    signatureCheck.enabled <== 1;
+    signatureCheck.enabled <== attested;
     signatureCheck.Ax <== institutionAx;
     signatureCheck.Ay <== institutionAy;
     signatureCheck.S <== S;
@@ -239,7 +372,9 @@ template DataProvenance(PANEL, LEVELS) {
         tree.pathIndices[i] <== pathIndices[i];
         tree.siblings[i] <== siblings[i];
     }
-    root <== tree.root;
+    // KATMAN KİLİDİ. `attested = 0` iken imza doğrulaması kapalı olduğu için
+    // kurum girdileri serbesttir ve ağaç anlamsız bir kök verir — sıfırlanır.
+    root <== attested * tree.root;
 
     // ------------------------------------------------------------------
     // 6) Nullifier — aynı kayıt iki kez yüklenemez
@@ -284,5 +419,5 @@ template DataProvenance(PANEL, LEVELS) {
 //            Köken kanıtı "akredite kurum bu paneli imzaladı" der; çıkarım
 //            o panelin bir alt kümesinde çalışabilir.
 // LEVELS=20: araştırmacı devresiyle aynı ağaç derinliği; ~1 milyon kurum.
-component main {public [externalNullifier, cidHigh, cidLow, signalHash]} =
+component main {public [externalNullifier, cidHigh, cidLow, signalHash, attested]} =
     DataProvenance(1000, 20);

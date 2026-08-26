@@ -99,26 +99,29 @@ async function main() {
     (_: unknown, i: number) => [0, 1, 2, 1, 0, 2][i % 6],
   );
 
-  // Kontratin tanidigi kok ile yerelde kurulan agacin koku ayni olmali;
-  // degilse kanit gecerli olsa bile `UnknownAccreditedRoot` ile reddedilir.
+  // KATMAN SECIMI — bilerek IMZASIZ.
+  //
+  // Bu betik, sitenin gercekten kullandigi yolu olcmelidir. Akredite kurum
+  // entegrasyonumuz yok; kullanici kendi tuketici dosyasini yukluyor ve o
+  // dosyanin kurumsal imzasi YOKTUR. Imzali yolu olcmek, uretimde
+  // calismayan bir seyi dogrulamak olurdu.
+  //
+  // Kok yine de karsilastirilir ama HATA DEGIL BILGIDIR: imzali katman
+  // ileride devreye girdiginde uyusmazlik burada gorulsun.
   const onChainRoot = await protocol.accreditedRoot();
   if (onChainRoot !== institutionRegistry.root) {
-    throw new Error(
-      `akredite kok uyusmuyor:\n  zincir: ${onChainRoot}\n  yerel : ${institutionRegistry.root}`,
+    console.log(
+      `  not: akredite kok farkli (zincir ${onChainRoot}) — imzasiz katmanda kullanilmiyor`,
     );
   }
 
   const salt = provenance.randomSalt();
   const commitment = provenance.panelCommitment(PANEL, salt);
-  const signature = await provenance.signCommitment(institution.privateKey, commitment);
 
   const circuitsDir = join(__dirname, "..", "..", "circuits");
-  const provenanceInput = provenance.buildProvenanceInput({
+  const provenanceInput = provenance.buildSelfProvenanceInput({
     dosages: PANEL,
     salt,
-    institution,
-    signature,
-    registry: institutionRegistry,
     externalNullifier: await protocol.PROVENANCE_SCOPE(),
     cidDigest,
     signerAddress: signer.address,
@@ -138,9 +141,13 @@ async function main() {
     .connect(signer)
     .submitRecord(
       cidDigest,
-      institutionRegistry.root,
+      false, // imzasiz katman: kullanicinin kendi yukledigi veri
+      0n, // devre koku zorla sifirlar; sozlesme de sifir bekler
       provenance.computeProvenanceNullifier(await protocol.PROVENANCE_SCOPE(), commitment),
       commitment,
+      // KAPSAMA — devrenin acik ciktisi. Odeme buna gore dagitilir; istemciden
+      // gelseydi uydurulabilirdi.
+      provenance.coverageWords(PANEL),
       a,
       b,
       c,
@@ -198,7 +205,9 @@ async function main() {
       console.log(`contributeDosages gonderiliyor (SNP ${sent}..${sent + size - 1})...`);
       aggTx = await protocol
         .connect(signer)
-        .contributeDosages(encrypted.handles, encrypted.inputProof);
+        // Kapsama maskesi: bu duman testinde her SNP'ye gercek deger
+        // gonderiliyor, dolayisiyla hepsi kapsandi.
+        .contributeDosages(encrypted.handles, (1n << BigInt(size)) - 1n, encrypted.inputProof);
       const aggReceipt = await aggTx.wait();
       console.log(`  hash : ${aggTx.hash}`);
       console.log(`  gas  : ${aggReceipt?.gasUsed}  (${size} SNP)`);
@@ -290,7 +299,8 @@ async function main() {
         );
         const bioTx = await biomarkers
           .connect(signer)
-          .contributeBiomarkers(encrypted.handles, encrypted.inputProof);
+          // Duman testinde her metrige gecerli deger gonderiliyor.
+          .contributeBiomarkers(encrypted.handles, (1n << BigInt(size)) - 1n, encrypted.inputProof);
         const bioReceipt = await bioTx.wait();
         console.log(`  hash : ${bioTx.hash}`);
         console.log(`  gas  : ${bioReceipt?.gasUsed}  (${size} metrik)`);
@@ -422,19 +432,16 @@ async function main() {
     console.log(`  kayit tx: ${regTx.hash}`);
   }
 
-  // Rapor §3.4: veri ancak kullanicinin ACIKCA izin verdigi kurum tarafindan
-  // kullanilabilir. Bu betikte gonderen hem katilimci hem arastirmaci rolunde
-  // oldugu icin izni kendisi verir.
-  const scopeAll = 1 | 2 | 4; // GWAS | ML | STATISTICS
-  const existing = await protocol.permission(signer.address, signer.address);
-  if (!existing.isAllowed) {
-    const grantTx = await protocol.grantAccess(signer.address, scopeAll, 0, 0);
-    await grantTx.wait();
-    console.log(`Erisim izni verildi: ${grantTx.hash}`);
-  }
-
-  const [fee, participants] = await payments.quoteFor(signer.address);
-  console.log(`Sorgu ucreti: ${fee} (${participants} izin veren katilimci)`);
+  // IZIN ADIMI KALKTI: havuza yuklemek zaten izindir (bkz. `leavePool`).
+  // Arastirmaci bazinda izin, mimarinin tutamayacagi bir sozdu — acilim
+  // TOPLAMI cozer ve toplam tektir.
+  // FIYAT ARTIK KAYIT BASINA (MK-0018): carpan havuz buyuklugu degil,
+  // istenen alanlarda GERCEKTEN verisi olan kisi sayisi. Kayit = kisi x alan.
+  const [fee, records] = await payments.quote();
+  const pool = await protocol.participantCount();
+  console.log(
+    `Sorgu ucreti: ${fee}  (${records} kayit = kisi x alan; havuzda ${pool} katilimci)`,
+  );
 
   // Test token'i ise bakiye basabiliyoruz; gercek USDC ise bakiye onceden olmali.
   if (record.paymentTokenIsTestToken) {
@@ -510,9 +517,12 @@ async function main() {
   // Uretimde `minParticipants` 10'dur ve DUSURULMEMELIDIR: tek katilimciyken
   // havuzu cozmek, dogrudan o kisinin verisini okumak demektir. Burada tek
   // cuzdanla uctan uca akisi dogrulamak icin 1'e cekiliyor.
-  if ((await protocol.minParticipants()) > 1n) {
+  const originalMinParticipants = await protocol.minParticipants();
+  if (originalMinParticipants > 1n) {
     await (await protocol.setMinParticipants(1)).wait();
-    console.log("k-anonimlik esigi 1'e cekildi (YALNIZCA duman testi icin)");
+    console.log(
+      `k-anonimlik esigi ${originalMinParticipants} -> 1 (YALNIZCA duman testi icin, sonda geri alinir)`,
+    );
   }
 
   // Rapor §2.6: sorgu tipi esigi belirler. Genel istatistik -> 4/10.
@@ -592,6 +602,20 @@ async function main() {
   q = await payments.query(queryId);
   console.log(`  ucret ${q.fee} -> katilimcilara ${q.liquidityPot}, hazineye ${q.fee - q.liquidityPot}`);
 
+  // KITLIK AGIRLIGI — odemenin gercek payi.
+  //
+  // `coverageWeight` "kac alana veri verdin" der; agirlikli olan "o alanlar
+  // ne kadar nadirdi" der. Ucreti belirleyen formulle AYNI sayidir.
+  const rawWeight = await payments.coverageWeight(queryId, signer.address);
+  const weighted = await payments.weightedCoverage(queryId, signer.address);
+  const weightedAll = await payments.weightedTotal(queryId);
+  console.log(
+    `  kapsama ${rawWeight} alan · odeme agirligi ${weighted}/${weightedAll}` +
+      (rawWeight > 0n
+        ? `  (alan basi ortalama ${Number(weighted) / Number(rawWeight) / 10_000}x)`
+        : ""),
+  );
+
   // Gonderen ayni zamanda katilimci oldugu icin kendi payini cekebilir.
   const share = await payments.claimable(queryId, signer.address);
   if (share === 0n) {
@@ -620,16 +644,14 @@ async function main() {
   console.log("--- Gizlilik Paneli okumasi ---");
 
   const [pendingTotal, pendingIds] = await payments.pendingRewards(signer.address);
-  const perm = await protocol.permission(signer.address, signer.address);
   const panelFields = {
     cid: await protocol.userCIDs(signer.address),
     taahhut: (await protocol.panelCommitment(signer.address)).toString().slice(0, 14) + "…",
     katilimIndeksi: await protocol.participantIndex(signer.address),
     havuzKatilimci: await protocol.participantCount(),
     kAnonimlik: await protocol.minParticipants(),
-    izinVeren: await protocol.consentCount(signer.address),
-    izinAktif: perm.isAllowed,
-    izinTipleri: perm.queryTypes,
+    havuzdaMi: (await protocol.leftPoolAtBlock(signer.address)) === 0n,
+    cikisBlogu: await protocol.leftPoolAtBlock(signer.address),
     bekleyenOdul: pendingTotal.toString(),
     bekleyenSorgu: pendingIds.length,
     tokenBakiye: (await token.balanceOf(signer.address)).toString(),
@@ -643,8 +665,19 @@ async function main() {
   if (panelFields.cid === ethers.ZeroHash) {
     throw new Error("panel CID okuyamadi");
   }
-  if (!panelFields.izinAktif) {
-    throw new Error("panel izin kaydini okuyamadi");
+  if (!panelFields.havuzdaMi) {
+    throw new Error("katilimci havuzdan cikmis gorunuyor");
+  }
+
+  // K-ANONIMLIK GERI ALINIR — betigin en onemli temizligi.
+  //
+  // Onceden esik 1'de BIRAKILIYORDU. Betik bir kez kosunca dagitim, tek
+  // katilimciyken bile sorgu acilabilen bir durumda kaliyordu; o da havuzu
+  // cozmenin dogrudan o kisinin verisini okumak demek oldugu bir hal.
+  // "Gecici" olan bir seyin gecici kalmasi kendiliginden olmuyor.
+  if (originalMinParticipants > 1n) {
+    await (await protocol.setMinParticipants(originalMinParticipants)).wait();
+    console.log(`\nk-anonimlik esigi GERI ALINDI: ${originalMinParticipants}`);
   }
 
   console.log("\nCanli dogrulama tamam: veri, kanit ve odeme dongusu gercek agda kapandi.");

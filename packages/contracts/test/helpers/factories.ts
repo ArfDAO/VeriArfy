@@ -18,9 +18,28 @@ export async function protocolFactory() {
   const contingency = await Contingency.deploy();
   await contingency.waitForDeployment();
 
+  const Coverage = await ethers.getContractFactory("CoverageBits");
+  const coverage = await Coverage.deploy();
+  await coverage.waitForDeployment();
+
   return ethers.getContractFactory("VeriarfyProtocol", {
-    libraries: { ContingencyStats: await contingency.getAddress() },
+    libraries: {
+      ContingencyStats: await contingency.getAddress(),
+      CoverageBits: await coverage.getAddress(),
+    },
   });
+}
+
+/**
+ * "Hepsi kapsandi" maskesi.
+ *
+ * @remarks Kapsama bitmap'i odemeyi belirler; testlerin cogu kapsama
+ *          davranisini degil istatistigi olcuyor, bu yuzden varsayilan
+ *          "her alanda gercek veri var"dir. Kapsamayi ozellikle sinayan
+ *          testler kendi maskesini verir.
+ */
+export function fullCoverage(count: number): bigint {
+  return (1n << BigInt(count)) - 1n;
 }
 
 /** Biyobelirtec istatistik kutuphanesi baglanmis modul fabrikasi. */
@@ -29,7 +48,14 @@ export async function biomarkersFactory() {
   const stats = await Stats.deploy();
   await stats.waitForDeployment();
 
+  const Coverage = await ethers.getContractFactory("CoverageBits");
+  const coverage = await Coverage.deploy();
+  await coverage.waitForDeployment();
+
   return ethers.getContractFactory("VeriarfyBiomarkers", {
-    libraries: { BiomarkerStats: await stats.getAddress() },
+    libraries: {
+      BiomarkerStats: await stats.getAddress(),
+      CoverageBits: await coverage.getAddress(),
+    },
   });
 }

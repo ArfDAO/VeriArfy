@@ -22,7 +22,19 @@ const config: HardhatUserConfig = {
   solidity: {
     version: "0.8.24",
     settings: {
-      optimizer: { enabled: true, runs: 800 },
+      // `runs` DUSUK BILEREK SECILDI.
+      //
+      // 800'de `VeriarfyProtocol` EIP-170'in 24.576 baytlik sinirina 63 bayt
+      // kala dayandi. Optimizasyon "runs" degeri, derleyiciye kodun kac kez
+      // CALISTIRILACAGINI soyler: yuksek deger calisma gazini ucuzlatir ama
+      // kodu buyutur.
+      //
+      // Bu projede takas nettir: islem maliyetine HOMOMORFIK ISLEMLER hakim
+      // (SNP basina ~673.000 gaz). Cagri dagitimindaki birkac yuz gazlik fark
+      // olculebilir bile degil; kod boyutu ise dagitilabilirligin ta kendisi.
+      //
+      // Olculen: 800 -> 24.513 · 400 -> 24.300 · 200 -> 24.074 · 100 -> 23.587
+      optimizer: { enabled: true, runs: 100 },
       evmVersion: "cancun",
     },
   },

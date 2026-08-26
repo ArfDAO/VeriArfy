@@ -19,18 +19,18 @@ interface IProtocolNodes {
 }
 
 interface IProtocolValue {
-    /// @notice Sistemden bugune kadar gecen toplam ucret — "TotalDataValue".
+    /// @notice Sistemden bugune kadar gecen toplam ucret - "TotalDataValue".
     function cumulativeFees() external view returns (uint256);
 }
 
 /**
  * @title   VeriarfyStaking
- * @notice  Guvenilmez dugum riskine karsi kripto-ekonomik guvenlik — rapor §2.7.
+ * @notice  Guvenilmez dugum riskine karsi kripto-ekonomik guvenlik - rapor 2.7.
  *
  * @dev
  * # Raporun tarifi
  *
- * Rapor §2.7.1 uc katmanli bir model tarif ediyor:
+ * Rapor 2.7.1 uc katmanli bir model tarif ediyor:
  *   1. ekonomik caydiricilik (staking / slashing),
  *   2. cogunluk onayi (2/3+ majority consensus),
  *   3. kriptografik dogrulama (threshold decryption).
@@ -38,18 +38,18 @@ interface IProtocolValue {
  * Ucuncusu zaten var (BSKK-44 + KMS imzalari). Bu sozlesme birinci ve
  * ikinciyi getiriyor.
  *
- * # RAPORDAN ONEMLI BIR SAPMA — durustce
+ * # RAPORDAN ONEMLI BIR SAPMA - durustce
  *
  * Rapor'un tehdit modeli "tembel hesaplama" (lazy computation): FHE
- * hesaplamasini yapan eş-islemcinin isi atlayip rastgele sifreli metin
+ * hesaplamasini yapan es-islemcinin isi atlayip rastgele sifreli metin
  * dondurmesi. Bu tehdit BIZIM sozlesmelerimizde YOKTUR ve bunu iddia etmek
  * yaniltici olurdu:
  *
- *   - Homomorfik hesabi Zama'nin eş-islemci katmani yapar; onun dogrulugu
+ *   - Homomorfik hesabi Zama'nin es-islemci katmani yapar; onun dogrulugu
  *     Zama'nin kendi stake/konsensus katmaninda yasar, bizde degil.
  *   - Bizim zincirdeki her deger ya EVM'in kendi determinist hesabidir
  *     (itiraza konu olamaz) ya da KMS esik imzalariyla gelir ve zincirde
- *     dogrulanir (`IKMSVerifier`) — yani yanlis sonuc zaten kabul edilmez.
+ *     dogrulanir (`IKMSVerifier`) - yani yanlis sonuc zaten kabul edilmez.
  *
  * Dolayisiyla Arbitrum tarzi **etkilesimli** (bisection) sahtekarlik kanitinin
  * burada tartisacagi bir hesap yoktur. Bunu taklit eden bir mekanizma yazmak,
@@ -58,7 +58,7 @@ interface IProtocolValue {
  * Bizim dugumlerimizin elindeki yetki farklidir ve daha tehlikelidir:
  * **cozum yetkisi vermek.** Kotu niyetli bir cogunluk, hak etmeyen bir
  * arastirmaciya havuzu actirabilir. Sozlesmenin kurallari bunu "gecersiz"
- * yapmaz — karar bir POLITIKA yargisidir, bir hesap degil.
+ * yapmaz - karar bir POLITIKA yargisidir, bir hesap degil.
  *
  * Politika yargisinin dogru denetim mekanizmasi da matematiksel kanit degil,
  * **akran denetimi + ekonomik risktir**. Uygulanan budur:
@@ -135,7 +135,7 @@ contract VeriarfyStaking is Ownable, ReentrancyGuard {
     IProtocolValue public payments;
 
     /**
-     * @notice Taban teminat — rapor §2.7.1'de 32 ETH.
+     * @notice Taban teminat - rapor 2.7.1'de 32 ETH.
      *
      * @dev Yapilandirilabilir birakildi: test aglarinda 32 ETH edinmek mumkun
      *      degildir ve sabitlenseydi mekanizma hic denenemezdi. Uretim hedefi
@@ -144,11 +144,11 @@ contract VeriarfyStaking is Ownable, ReentrancyGuard {
     uint256 public baseStake;
 
     /**
-     * @notice Progresif teminat esigi — formuldeki `Threshold`.
+     * @notice Progresif teminat esigi - formuldeki `Threshold`.
      *
      * @dev  RAPORUN IKI VERISI BIRBIRIYLE TUTARSIZ; secim gerekcelendirildi.
      *
-     *       Rapor §2.7.1: `MinStake = BaseStake x log2(TotalDataValue / Threshold)`
+     *       Rapor 2.7.1: `MinStake = BaseStake x log2(TotalDataValue / Threshold)`
      *       ve iki kontrol noktasi veriyor (BaseStake = 32 ETH ile):
      *
      *         TotalDataValue > 1M USD   -> MinStake = 64 ETH  (carpan 2)
@@ -160,7 +160,7 @@ contract VeriarfyStaking is Ownable, ReentrancyGuard {
      *
      *       250.000 secildi: 1M noktasini BIREBIR tutturur, 100M noktasinda
      *       276 ETH verir (rapor 256 diyor). Yani sapma DAHA YUKSEK teminat
-     *       yonundedir — guvenlik acisindan dogru taraf. Tersi secim, raporun
+     *       yonundedir - guvenlik acisindan dogru taraf. Tersi secim, raporun
      *       vaat ettiginden daha ucuz bir koalisyon saldirisi anlamina gelirdi.
      */
     uint256 public valueThreshold;
@@ -172,7 +172,7 @@ contract VeriarfyStaking is Ownable, ReentrancyGuard {
     uint256 public constant VOTING_PERIOD = 3_600;
 
     /**
-     * @notice Itiraz icin yatirilan teminat — asilsiz itirazi pahali kilar.
+     * @notice Itiraz icin yatirilan teminat - asilsiz itirazi pahali kilar.
      * @dev Taban teminatin onda biri. Sifir olsaydi her acilim bedava
      *      geciktirilebilirdi (hizmet engelleme).
      */
@@ -181,7 +181,7 @@ contract VeriarfyStaking is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Itirazin kabulu icin gereken oy orani — rapor §2.7.1 "2/3+".
+     * @notice Itirazin kabulu icin gereken oy orani - rapor 2.7.1 "2/3+".
      * @dev Pay/payda olarak tutulur; ondalik yuvarlama tartismasi olmasin.
      */
     uint256 public constant UPHOLD_NUMERATOR = 2;
@@ -201,7 +201,7 @@ contract VeriarfyStaking is Ownable, ReentrancyGuard {
     mapping(address => uint256) public unbondingAvailableAt;
 
     /**
-     * @notice Kalici men — rapor §2.7.1: "kalici olarak agdan men edilir".
+     * @notice Kalici men - rapor 2.7.1: "kalici olarak agdan men edilir".
      * @dev Geri alinamaz. Teminat yatirmak da yasakli dugumu geri getirmez.
      */
     mapping(address => bool) public isBanned;
@@ -252,7 +252,7 @@ contract VeriarfyStaking is Ownable, ReentrancyGuard {
     }
 
     // ---------------------------------------------------------------------------------
-    // 1) Progresif teminat — rapor §2.7.1
+    // 1) Progresif teminat - rapor 2.7.1
     // ---------------------------------------------------------------------------------
 
     /**
@@ -262,7 +262,7 @@ contract VeriarfyStaking is Ownable, ReentrancyGuard {
      *
      *      Esigin ALTINDA taban teminat uygulanir. Formul oldugu gibi
      *      uygulansaydi `log2(x<1)` negatif olur, sistemin en kirilgan
-     *      oldugu ilk gunlerde teminati SIFIRA indirirdi — raporun amaciyla
+     *      oldugu ilk gunlerde teminati SIFIRA indirirdi - raporun amaciyla
      *      taban tabana zit bir sonuc.
      *
      *      Ayni sekilde oran tam 2'nin altindayken carpan 1'in altina duser;
@@ -274,7 +274,7 @@ contract VeriarfyStaking is Ownable, ReentrancyGuard {
         uint256 totalValue = payments.cumulativeFees();
         if (totalValue <= valueThreshold) return baseStake;
 
-        // `multiplierBps(N, C)` = log2(1 + N/C) — formulde "1 +" yoktur.
+        // `multiplierBps(N, C)` = log2(1 + N/C) - formulde "1 +" yoktur.
         // Orani dogrudan kurup log2'sini almak icin `1 + (x-1)/1` kimligi
         // kullanilir: multiplierBps(x - 1, 1) = log2(x).
         uint256 ratio = totalValue / valueThreshold;
@@ -348,7 +348,7 @@ contract VeriarfyStaking is Ownable, ReentrancyGuard {
     }
 
     // ---------------------------------------------------------------------------------
-    // 3) Itiraz — rapor §2.7.1
+    // 3) Itiraz - rapor 2.7.1
     // ---------------------------------------------------------------------------------
 
     /**
@@ -392,7 +392,7 @@ contract VeriarfyStaking is Ownable, ReentrancyGuard {
         _challengeOfRequest[requestId] = id + 1; // +1: 0 "yok" demek
 
         // Acilim, itiraz cozulene kadar FIILEN verilemez. Protokolde iptal
-        // bayragini simdiden kaldirmiyoruz — itiraz reddedilirse acilim
+        // bayragini simdiden kaldirmiyoruz - itiraz reddedilirse acilim
         // devam etmelidir. Engelleme, `resolveChallenge` gelene kadar
         // `executeDisclosure`'in penceresini asmasiyla degil, asagidaki
         // `isBlocked` kontrolu ile saglanir.
@@ -400,7 +400,7 @@ contract VeriarfyStaking is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Itiraz hakkinda oy verir — rapor §2.7.1 "2/3+ majority consensus".
+     * @notice Itiraz hakkinda oy verir - rapor 2.7.1 "2/3+ majority consensus".
      *
      * @dev Talebi onaylayanlar oy KULLANAMAZ: kendi kararlarini yargilamak
      *      denetimi anlamsiz kilardi. Itiraz eden de oy kullanmaz; itirazi
@@ -430,12 +430,12 @@ contract VeriarfyStaking is Ownable, ReentrancyGuard {
     /**
      * @notice Oylamayi kapatir ve sonucu uygular.
      *
-     * @dev  KABUL ESIGI: kullanilan oylarin 2/3'u (rapor §2.7.1).
+     * @dev  KABUL ESIGI: kullanilan oylarin 2/3'u (rapor 2.7.1).
      *
      *       Payda neden KULLANILAN oy, tum dugumler degil: cekimser bir
      *       cogunluk her itirazi otomatik reddederdi. Denetimin islemesi icin
      *       sessizligin "hayir" sayilmamasi gerekir. Buna karsilik hic oy
-     *       kullanilmamissa itiraz REDDEDILIR — kimsenin desteklemedigi bir
+     *       kullanilmamissa itiraz REDDEDILIR - kimsenin desteklemedigi bir
      *       iddia dugum kesmeye yetmez.
      *
      *       Kabul -> talebi onaylayan HER dugumun teminati kesilir ve dugum
@@ -460,7 +460,7 @@ contract VeriarfyStaking is Ownable, ReentrancyGuard {
         uint256 slashedTotal;
 
         if (upheld) {
-            // Acilim iptal edilir — henuz verilmemis olmasi gerekir. Itiraz
+            // Acilim iptal edilir - henuz verilmemis olmasi gerekir. Itiraz
             // suresi + oylama suresi boyunca `executeDisclosure` engellendigi
             // icin bu garanti altindadir.
             protocol.revokeDisclosure(c.requestId);
@@ -536,7 +536,7 @@ contract VeriarfyStaking is Ownable, ReentrancyGuard {
     // ---------------------------------------------------------------------------------
 
     /**
-     * @dev Teminatin TAMAMI kesilir ve dugum kalici men edilir (rapor §2.7.1:
+     * @dev Teminatin TAMAMI kesilir ve dugum kalici men edilir (rapor 2.7.1:
      *      "aninda yakilir" + "kalici olarak agdan men edilir").
      *
      *      Kesilen tutar YAKILMAZ, hazine havuzunda toplanir. Yakmak yerine

@@ -7,17 +7,17 @@ import {FHE, ebool, euint32, euint64} from "@fhevm/solidity/lib/FHE.sol";
  * @title   BiomarkerStats
  * @notice  Surekli olcumlerin sifreli YETERLI ISTATISTIKLERINI biriktirir.
  *
- * @dev  NEDEN AYRI BIR KUTUPHANE — KOD BOYUTU
+ * @dev  NEDEN AYRI BIR KUTUPHANE - KOD BOYUTU
  *
  *       `VeriarfyProtocol` EIP-170 sinirina (24.576 bayt) dayandi: metrik
  *       kanali eklendiginde derlenmis boyut 27.807 bayta cikti, yani kontrat
- *       DAGITILAMAZ hale geldi. Optimizasyon ayarlari yetmedi — `runs: 1` ile
+ *       DAGITILAMAZ hale geldi. Optimizasyon ayarlari yetmedi - `runs: 1` ile
  *       bile 26.507 bayt, `viaIR` ile 28.483 bayt (daha kotu).
  *
  *       Cozum yapisal olmak zorundaydi: bu kutuphanenin fonksiyonlari
  *       `public`'tir, yani ayri bir adrese dagitilir ve kontrattan
  *       `delegatecall` ile cagrilir. Kod protokolun disinda yasar ama
- *       `address(this)` protokol olarak kalir — fhEVM'in ACL kayitlari
+ *       `address(this)` protokol olarak kalir - fhEVM'in ACL kayitlari
  *       dogru kontrata yazilir. `internal` yapilsaydi kod satir ici gomulur
  *       ve hicbir sey kazanilmazdi.
  *
@@ -38,7 +38,7 @@ library BiomarkerStats {
         euint32 count;
     }
 
-    /// @dev Grup sayisi (kontrol / vaka) — protokoldeki `GROUP_COUNT` ile ayni.
+    /// @dev Grup sayisi (kontrol / vaka) - protokoldeki `GROUP_COUNT` ile ayni.
     uint8 internal constant GROUP_COUNT = 2;
 
     /**
@@ -76,7 +76,7 @@ library BiomarkerStats {
      *
      *       Ayni tek kural EKSIK veriyi de halleder: olculmemis metrik 0
      *       gonderilir ve `minValue >= 1` zorunlu oldugu icin 0 zaten arali
-     *       disidir. Ayri bir "var/yok" bayragi gondermeye gerek kalmaz —
+     *       disidir. Ayri bir "var/yok" bayragi gondermeye gerek kalmaz -
      *       bir sifreli girdi ve bir karsilastirma tasarruf edilir.
      *
      *       ONCE MASKELE, SONRA KARESINI AL: sirasi bedava bir tasarruftur.

@@ -8,15 +8,15 @@ import {IVeriArfyRegistry} from "./interfaces/IVeriArfyRegistry.sol";
 
 /**
  * @title   AnxietyStudy
- * @notice  "Sosyal medya kullanimi ↔ anksiyete / panik" calismasinin FHE hatti.
+ * @notice  "Sosyal medya kullanimi <-> anksiyete / panik" calismasinin FHE hatti.
  *
  * @dev  CALISMA SORUSU
- *       Gunluk sosyal medya kullanimi DUSUK (0–5s) olanlar ile YUKSEK (10+s)
+ *       Gunluk sosyal medya kullanimi DUSUK (0-5s) olanlar ile YUKSEK (10+s)
  *       olanlar arasinda anksiyete ve panik siddeti farkli mi?
  *
  *       NEDEN BU TASARIM
  *       Bir grubun tum istatistigi uc tamsayidan turetilebilir:
- *           n, Σx, Σx²   ->   ortalama = Σx/n,  varyans = (n·Σx² − (Σx)²)/(n·(n−1))
+ *           n, Sumx, Sumx^2   ->   ortalama = Sumx/n,  varyans = (n*Sumx^2 - (Sumx)^2)/(n*(n-1))
  *       Bu yuzden kontrat bireysel puani HIC ACMADAN yalnizca bu uc toplami
  *       homomorfik olarak biriktirir. Bireysel yanit zincire duz olarak hic
  *       yazilmaz, saklanmaz ve hicbir adres icin cozulebilir yapilmaz.
@@ -32,17 +32,17 @@ import {IVeriArfyRegistry} from "./interfaces/IVeriArfyRegistry.sol";
  *       kotu niyetli bir katilimci sisirilmis bir degerle toplamlari bozamaz.
  *
  *       NE ACILIR
- *       Yalnizca grup duzeyindeki 3 × (n, Σx, Σx²) toplamlari herkese acik
+ *       Yalnizca grup duzeyindeki 3 x (n, Sumx, Sumx^2) toplamlari herkese acik
  *       cozulebilir yapilir. Yayimlanan sonuc budur.
  */
 contract AnxietyStudy is ZamaEthereumConfig {
-    /// @notice Kullanim gruplari: 0 = 0–5 saat, 1 = 5–10 saat, 2 = 10+ saat.
+    /// @notice Kullanim gruplari: 0 = 0-5 saat, 1 = 5-10 saat, 2 = 10+ saat.
     uint8 public constant GROUP_COUNT = 3;
 
-    /// @notice Burns Anxiety Inventory: 33 madde × 0–3 = 0–99.
+    /// @notice Burns Anxiety Inventory: 33 madde x 0-3 = 0-99.
     uint32 public constant ANXIETY_MAX = 99;
 
-    /// @notice PDSS yapisinda panik olcegi: 7 madde × 0–4 = 0–28.
+    /// @notice PDSS yapisinda panik olcegi: 7 madde x 0-4 = 0-28.
     uint32 public constant PANIC_MAX = 28;
 
     /// @dev Grup basina sifreli toplamlar.
@@ -92,7 +92,7 @@ contract AnxietyStudy is ZamaEthereumConfig {
     }
 
     /// @dev Toplamlar hem kontrat tarafindan tekrar kullanilabilir hem de
-    ///      herkese acik cozulebilir olmali — yayimlanan sonuc bunlar.
+    ///      herkese acik cozulebilir olmali - yayimlanan sonuc bunlar.
     function _publish(Accumulator storage acc) internal {
         FHE.allowThis(acc.n);
         FHE.allowThis(acc.sum);
@@ -105,8 +105,8 @@ contract AnxietyStudy is ZamaEthereumConfig {
     /**
      * @notice Sifreli anket yanitini gonderir.
      * @param  encGroup    Sifreli kullanim grubu (0,1,2).
-     * @param  encAnxiety  Sifreli Burns anksiyete toplami (0–99).
-     * @param  encPanic    Sifreli panik toplami (0–28).
+     * @param  encAnxiety  Sifreli Burns anksiyete toplami (0-99).
+     * @param  encPanic    Sifreli panik toplami (0-28).
      * @param  inputProof  Uc girdinin ortak relayer ispati.
      *
      * @dev Tum girdiler tek bir sifreli girdi paketinde uretilir
@@ -129,7 +129,7 @@ contract AnxietyStudy is ZamaEthereumConfig {
         anxiety = FHE.min(anxiety, FHE.asEuint32(ANXIETY_MAX));
         panic = FHE.min(panic, FHE.asEuint32(PANIC_MAX));
 
-        // Kareler kontratta hesaplanir — katilimci yanlis kare gonderemez.
+        // Kareler kontratta hesaplanir - katilimci yanlis kare gonderemez.
         euint32 anxietySq = FHE.mul(anxiety, anxiety);
         euint32 panicSq = FHE.mul(panic, panic);
 

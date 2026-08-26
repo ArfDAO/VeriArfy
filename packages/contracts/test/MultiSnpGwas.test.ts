@@ -2,7 +2,7 @@ import { expect } from "chai";
 import { ethers, fhevm } from "hardhat";
 import { FhevmType } from "@fhevm/mock-utils";
 import type { Signer } from "ethers";
-import { protocolFactory } from "./helpers/factories";
+import { fullCoverage, protocolFactory } from "./helpers/factories";
 
 /**
  * Cok SNP'li GWAS — rapor §3.3.
@@ -81,7 +81,9 @@ describe("Cok SNP'li GWAS (rapor §3.3)", () => {
     for (const d of dosages) builder.add8(d);
     const enc = await builder.encrypt();
 
-    await protocol.connect(signer).contributeDosages(enc.handles, enc.inputProof);
+    await protocol
+      .connect(signer)
+      .contributeDosages(enc.handles, fullCoverage(dosages.length), enc.inputProof);
   }
 
   /** Kayit + tum panel tek partide. */
@@ -90,12 +92,23 @@ describe("Cok SNP'li GWAS (rapor §3.3)", () => {
     await contribute(signer, dosages);
   }
 
-  /** Acilim talebini acar, onaylatir ve yurutur. */
+  /**
+   * Acilim talebini acar, onaylatir ve yurutur.
+   *
+   * @remarks Arastirmaci artik ARALIK degil LISTE secer; bu yardimci geriye
+   *          donuk kolaylik icin araligi listeye cevirir.
+   */
   async function disclose(from = 0, window = SNP_COUNT): Promise<bigint> {
+    const snpIds = Array.from({ length: window }, (_, i) => from + i);
+    return discloseFields(snpIds);
+  }
+
+  /** Acilim talebini SECILEN alanlar icin acar. */
+  async function discloseFields(snpIds: number[]): Promise<bigint> {
     const id = await protocol.nextRequestId();
     await protocol
       .connect(owner)
-      .requestDisclosureWindow(await researcher.getAddress(), STATISTICS, from, window);
+      .requestDisclosureFields(await researcher.getAddress(), STATISTICS, snpIds, []);
     // 2 dugum + istatistik esigi (4/10) -> ceil(2 x 0,4) = 1 onay yeter.
     // Ikinci onay `AlreadyFinalized` ile duser; esik saglanana kadar onaylanir.
     await protocol.connect(nodeA).approveDisclosure(id);
@@ -249,7 +262,7 @@ describe("Cok SNP'li GWAS (rapor §3.3)", () => {
     it("bos parti reddedilir", async () => {
       await enroll(participants[0], 0);
       await expect(
-        protocol.connect(participants[0]).contributeDosages([], "0x"),
+        protocol.connect(participants[0]).contributeDosages([], 0, "0x"),
       ).to.be.revertedWithCustomError(protocol, "EmptyBatch");
     });
 
@@ -310,8 +323,8 @@ describe("Cok SNP'li GWAS (rapor §3.3)", () => {
       await joinFull(participants[0], 0, [0, 1, 2, 0, 1, 2]);
 
       const id = await disclose(2, 2); // SNP 2 ve 3
-      const [from, to] = await protocol.disclosureWindow(id);
-      expect([Number(from), Number(to)]).to.deep.equal([2, 4]);
+      const ids = await protocol.disclosureSnpIds(id);
+      expect(ids.map(Number)).to.deep.equal([2, 4 - 1]);
 
       expect(await readTable(id, 2)).to.deep.equal([[0, 0, 1], [0, 0, 0]]);
       expect(await readTable(id, 3)).to.deep.equal([[1, 0, 0], [0, 0, 0]]);
@@ -326,6 +339,21 @@ describe("Cok SNP'li GWAS (rapor §3.3)", () => {
       ).to.be.revertedWithCustomError(protocol, "SnpOutsideWindow");
     });
 
+    it("BITISIK OLMAYAN alanlar secilebilir", async () => {
+      // Gercek arastirma "SNP 0-9" istemez; belirli varyantlari ister.
+      await joinFull(participants[0], 0, [0, 1, 2, 0, 1, 2]);
+
+      const id = await discloseFields([0, 3, 5]);
+      expect((await protocol.disclosureSnpIds(id)).map(Number)).to.deep.equal([0, 3, 5]);
+
+      // Secilenler okunabilir...
+      expect(await readTable(id, 5)).to.deep.equal([[0, 0, 1], [0, 0, 0]]);
+      // ...secilmeyen okunamaz.
+      await expect(
+        protocol.disclosureContingencyAt(id, 4),
+      ).to.be.revertedWithCustomError(protocol, "SnpOutsideWindow");
+    });
+
     it("pencere ust sinirdan buyuk olamaz", async () => {
       await joinFull(participants[0], 0, [0, 0, 0, 0, 0, 0]);
       const max = await protocol.MAX_DISCLOSURE_WINDOW();
@@ -333,8 +361,11 @@ describe("Cok SNP'li GWAS (rapor §3.3)", () => {
       await expect(
         protocol
           .connect(owner)
-          .requestDisclosureWindow(
-            await researcher.getAddress(), STATISTICS, 0, Number(max) + 1,
+          .requestDisclosureFields(
+            await researcher.getAddress(),
+            STATISTICS,
+            Array.from({ length: Number(max) + 1 }, (_, i) => i),
+            [],
           ),
       ).to.be.reverted;
     });

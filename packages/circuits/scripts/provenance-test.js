@@ -23,10 +23,12 @@ import { computeNullifierHash } from "../src/index.js";
 import {
   PANEL_SIZE,
   buildProvenanceInput,
+  buildSelfProvenanceInput,
   cidDigestToFieldPair,
   computeProvenanceNullifier,
   createInstitutionKey,
   createInstitutionRegistry,
+  coverageWords,
   packPanel,
   panelCommitment,
   randomSalt,
@@ -53,7 +55,14 @@ const VKEY = join(BUILD, "data_provenance_verification_key.json");
  * Desen tekrarlanir ama sabit degildir: her uc dozaj degeri de temsil edilir,
  * boylece bicim kontrolu (0/1/2) gercekten sinanir.
  */
-const PANEL = Array.from({ length: PANEL_SIZE }, (_, i) => [0, 1, 2, 1, 0, 2][i % 6]);
+/**
+ * Test paneli — EKSIK deger (3) DAHIL.
+ *
+ * Gercek dosyalarda cagirilamamis genotip vardir (test ettigimiz PGP
+ * dosyasinda 638.463 satirin 21.987'si). Devre yalnizca {0,1,2} kabul
+ * ederken koken kaniti bu dosyalarda hic uretilemiyordu.
+ */
+const PANEL = Array.from({ length: PANEL_SIZE }, (_, i) => [0, 1, 2, 3, 0, 2][i % 6]);
 
 const EXTERNAL_NULLIFIER = 20260814n;
 const CID_DIGEST = "0x6141536c73ac0f16a16230490be5131d044466a72ff6c5b31b2eccdd4ffb9b30";
@@ -129,10 +138,16 @@ async function main() {
   assert.notEqual(result, null, "gecerli tanik kabul edilmeliydi");
   ok(`gecerli kanit uretildi ve dogrulandi (${provingMs.toFixed(0)} ms)`);
 
-  // Acik sinyal sirasi: [root, nullifierHash, commitment, externalNullifier,
-  //                      cidHigh, cidLow, signalHash]
-  const [root, nullifierHash, publicCommitment, extNull, cidHigh, cidLow, signalHash] =
-    result.publicSignals.map(BigInt);
+  // Acik sinyal sirasi:
+  //   [root, nullifierHash, commitment, coverage[0..W-1],
+  //    externalNullifier, cidHigh, cidLow, signalHash, attested]
+  //
+  // Kapsama kelimeleri ARADA durur cunku circom once ciktileri, sonra acik
+  // girdileri yazar. Sabit indeks yazmak kirilgan olurdu — sondan sayilir.
+  const signals = result.publicSignals.map(BigInt);
+  const [root, nullifierHash, publicCommitment] = signals;
+  const [extNull, cidHigh, cidLow, signalHash, attested] = signals.slice(-5);
+  const coverage = signals.slice(3, signals.length - 5);
 
   assert.equal(root, registry.root, "kok akredite agacinkiyle ayni olmali");
   ok("kok, akredite kurumlar agaciyla ayni");
@@ -153,6 +168,30 @@ async function main() {
   assert.equal(extNull, EXTERNAL_NULLIFIER);
   assert.equal(signalHash, BigInt(UPLOADER));
   ok("kanit CID'e ve yukleyen cuzdana bagli");
+
+  assert.equal(attested, 1n, "kurum imzali katmanda attested = 1 olmali");
+  ok("katman ayraci acik sinyalde (attested = 1)");
+
+  // --- KAPSAMA: devrenin turettigi bitler JS hesabiyla ayni mi ------------
+  //
+  // Odeme bu bitlere gore dagitiliyor. Devre ile istemci ayrisirsa, kanit
+  // gecerli gorunur ama yanlis alanlar icin pay olusur.
+  const expectedCoverage = coverageWords(PANEL);
+  assert.deepEqual(
+    coverage.map(String),
+    expectedCoverage.map(String),
+    "kapsama kelimeleri JS hesabiyla ayni olmali",
+  );
+  ok(`kapsama bitleri dogru (${coverage.length} kelime)`);
+
+  // Eksik isaretli alan kapsamaya GIRMEMELI.
+  const missingIndex = PANEL.findIndex((d) => d === 3);
+  if (missingIndex >= 0) {
+    const word = coverage[Math.floor(missingIndex / 240)];
+    const bit = (word >> BigInt(missingIndex % 240)) & 1n;
+    assert.equal(bit, 0n, "eksik alan kapsamada isaretli gorunuyor");
+    ok(`eksik alan (indeks ${missingIndex}) kapsamada YOK`);
+  }
 
   // Panelin kendisi hicbir acik sinyalde gorunmemeli.
   // `packPanel` artik PARCA LISTESI dondurur; hicbir parca sizmamali.
@@ -193,10 +232,14 @@ async function main() {
   });
 
   // --- 4) Saldiri: bicim disi dozaj ----------------------------------------
+  //
+  // DIKKAT: 3 artik GECERLIDIR (EKSIK). Bu test onceden 3 kullaniyordu ve
+  // dogru sebeple degil, taahhut degistigi icin geciyordu. Bicim kontrolunu
+  // gercekten sinamak icin kume disinda bir deger gerekir.
   const malformedPanel = [...PANEL];
-  malformedPanel[0] = 3; // {0,1,2} disinda
+  malformedPanel[0] = 4; // {0,1,2,3} disinda
 
-  await expectRejection("bicim disi dozaj (3) reddedildi", {
+  await expectRejection("bicim disi dozaj (4) reddedildi", {
     ...baseInput,
     dosages: malformedPanel.map(String),
   });
@@ -220,8 +263,12 @@ async function main() {
     signalHash: BigInt("0x000000000000000000000000000000000000dEaD").toString(),
   });
   assert.notEqual(stolen, null, "farkli cuzdanla uretilen kanit kendi icinde gecerli olmali");
+  // Sabit indeks kullanilmaz: sinyal sayisi devre degistikce kayar ve testin
+  // yanlis alani okumasi sessiz bir yalanci gecise yol acar (bir donem
+  // publicSignals[6] okunuyordu; orada signalHash degil kapsama vardi).
+  const stolenSignalHash = BigInt(stolen.publicSignals.at(-2));
   assert.notEqual(
-    BigInt(stolen.publicSignals[6]),
+    stolenSignalHash,
     BigInt(UPLOADER),
     "signalHash acik sinyale yansimali — sozlesme uyusmazligi boyle yakalar",
   );
@@ -270,6 +317,67 @@ async function main() {
     "iki fonksiyon ayni bicimi kullaniyor — ayrim kapsam degeriyle saglanmali",
   );
   ok("alan ayrimi kapsam degeriyle saglaniyor (ayri mapping sarti kayitli)");
+
+  // --- 9) KENDI YUKLEDIGIM katmani (attested = 0) --------------------------
+  //
+  // Bugun kullanilan yol: kullanicinin tuketici dosyasinin kurumsal imzasi
+  // YOKTUR. Devre imzayi anahtarla kapatir; ama kapsama bitleri yine
+  // taahhutten TURETILIR, yani odeme beyana degil matematige dayanir.
+  const selfSalt = randomSalt();
+  const selfCommitment = panelCommitment(PANEL, selfSalt);
+
+  const selfInput = buildSelfProvenanceInput({
+    dosages: PANEL,
+    salt: selfSalt,
+    externalNullifier: EXTERNAL_NULLIFIER,
+    cidDigest: CID_DIGEST,
+    signerAddress: UPLOADER,
+  });
+
+  const selfResult = await prove(selfInput);
+  assert.notEqual(selfResult, null, "imzasiz katman kanit uretebilmeliydi");
+
+  const selfSignals = selfResult.publicSignals.map(BigInt);
+  assert.equal(selfSignals.at(-1), 0n, "attested = 0 olmali");
+  ok("imzasiz katman (attested = 0) kanit uretiyor");
+
+  // KATMAN KILIDI — en onemli kontrol.
+  //
+  // Imzasiz katmanda kok SIFIR olmali. Sifir olmayan bir kok, sozlesmede
+  // "akredite" muamelesi gorur; devre bunu uretebilseydi iki katman
+  // birbirine karisir ve imzasiz veri imzali gibi odenirdi.
+  assert.equal(selfSignals[0], 0n, "imzasiz katmanda kok sifir olmali");
+  ok("imzasiz katmanda kok SIFIR — katmanlar karismiyor");
+
+  // Kapsama yine dogru turetiliyor: bu katmanin asil kazanimi budur.
+  assert.deepEqual(
+    selfSignals.slice(3, selfSignals.length - 5).map(String),
+    expectedCoverage.map(String),
+    "imzasiz katmanda da kapsama taahhutten turetilmeli",
+  );
+  ok("imzasiz katmanda kapsama yine uydurulamaz");
+
+  assert.equal(selfSignals[2], selfCommitment, "taahhut JS hesabiyla ayni olmali");
+  ok("imzasiz katmanda taahhut JS hesabiyla ayni");
+
+  // --- 10) Saldiri: imzasiz taniga anahtari acmaya calisma -----------------
+  //
+  // Sifir, Baby Jubjub uzerinde gecerli bir nokta DEGILDIR; anahtari acan
+  // saldirgan EdDSA kisitinda takilir. Yani bu tanik "yukseltilemez".
+  await expectRejection("imzasiz tanik attested = 1 ile yeniden kullanilamiyor", {
+    ...selfInput,
+    attested: "1",
+  });
+
+  // --- 11) Saldiri: anahtar Boole olmayan bir deger ------------------------
+  //
+  // `attested = 2` olsaydi imza dogrulamasi (enabled != 1) atlanabilir ama
+  // kok 2 x tree.root olarak SIFIR OLMAYAN cikardi — sozlesme onu akredite
+  // sanabilirdi. Boole kisiti tam olarak bunu kapatir.
+  await expectRejection("attested Boole olmayan degeri reddediyor", {
+    ...selfInput,
+    attested: "2",
+  });
 
   // Kanit boyutu: Groth16 sabit boyutludur (3 eğri noktası) ve devre
   // buyudukce degismez — zincir uzerindeki dogrulama maliyetini sabit tutan

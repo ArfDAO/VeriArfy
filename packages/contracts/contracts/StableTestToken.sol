@@ -17,14 +17,14 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
  *
  * Ayrim onemli: bir sahte DOGRULAYICI guvenlik kontrolunu devre disi birakir
  * ve testi anlamsizlastirir. Gercek bir ERC-20 uygulamasi ise hicbir seyi
- * devre disi birakmaz — yalnizca Circle'in bastigi USDC yerine bizim
+ * devre disi birakmaz - yalnizca Circle'in bastigi USDC yerine bizim
  * bastigimiz bir token kullanilir.
  *
  * # Uretimde
  *
  * Kullanilmaz. `VeriarfyPayments` yapicisina gercek USDC adresi verilir
  * (Sepolia: Circle'in test USDC'si; mainnet: USDC). Adres ortam degiskeniyle
- * gecilir — bkz. `scripts/deploy.ts`, `PAYMENT_TOKEN`.
+ * gecilir - bkz. `scripts/deploy.ts`, `PAYMENT_TOKEN`.
  *
  * # Ondalik
  *

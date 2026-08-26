@@ -56,7 +56,7 @@ describe("VeriarfyPayments", () => {
 
   /** USDC ile ayni: 6 ondalik. 10 tUSD taban, katilimci basina 1 tUSD. */
   const BASE_FEE = 10_000_000n;
-  const PER_PARTICIPANT_FEE = 1_000_000n;
+  const PER_RECORD_FEE = 1_000_000n;
   const LIQUIDITY_SHARE_BPS = 8_000; // %80 — rapor §4.2
 
   let circuits: any;
@@ -152,7 +152,7 @@ describe("VeriarfyPayments", () => {
       await registry.getAddress(),
       LIQUIDITY_SHARE_BPS,
       BASE_FEE,
-      PER_PARTICIPANT_FEE,
+      PER_RECORD_FEE,
     );
     await payments.waitForDeployment();
 
@@ -190,11 +190,13 @@ describe("VeriarfyPayments", () => {
    * acikca izin verdigi kurum tarafindan kullanilabilir. Ucret ve pay,
    * izin veren kisi sayisina gore hesaplanir.
    */
-  async function grant(participant: Signer, to?: Signer) {
-    const ALL_TYPES = 1 | 2 | 4; // GWAS | ML | STATISTICS
-    await protocol
-      .connect(participant)
-      .grantAccess(await (to ?? researcher).getAddress(), ALL_TYPES, 0, 0);
+  /**
+   * Eskiden izin verirdi; IZIN KAPISI KALKTI.
+   *
+   * Havuza yuklemek zaten izindir. Cagri yerlerini bozmamak icin duruyor.
+   */
+  async function grant(_participant: Signer, _to?: Signer) {
+    // artik yapacak is yok
   }
 
   /** Rapor §2.6: genel istatistik sorgusu -> 4/10 esik. */
@@ -206,8 +208,12 @@ describe("VeriarfyPayments", () => {
    * Rapor §2.6: sorgu, yetkili kurumlarin onayi olmadan yurutulemez. Ucret
    * onay gelene kadar EMANETTE bekler; `settleQuery` onu serbest birakir.
    */
-  async function openAndSettle(): Promise<bigint> {
-    await payments.connect(researcher).openQuery(STATISTICS);
+  async function openAndSettle(snpIds?: number[], metricIds?: number[]): Promise<bigint> {
+    if (snpIds) {
+      await payments.connect(researcher).openQueryFields(STATISTICS, snpIds, metricIds ?? []);
+    } else {
+      await payments.connect(researcher).openQuery(STATISTICS);
+    }
     const queryId = (await payments.nextQueryId()) - 1n;
 
     const q = await payments.query(queryId);
@@ -228,37 +234,56 @@ describe("VeriarfyPayments", () => {
 
   // -----------------------------------------------------------------------------------
 
-  describe("Fiyatlandirma (pay-per-compute)", () => {
-    it("ucret IZIN VEREN katilimci sayisiyla dogrusal artar", async () => {
-      const researcherAddr = await researcher.getAddress();
+  describe("Fiyatlandirma — kayit sayisi x kitlik", () => {
+    // Bu paketin panelinde TEK SNP var (`aggregateDosage` kisayolu), yani
+    // her katilimci tam olarak bir kayit uretir ve o alan herkeste vardir:
+    // kitlik carpani 1x kalir. Kitligin kendisi asagida ayrica sinaniyor.
 
-      const [emptyFee, emptyCount] = await payments.quoteFor(researcherAddr);
-      expect(emptyCount).to.equal(0);
+    it("ucret SATIN ALINAN KAYIT sayisiyla artar", async () => {
+      const [emptyFee, emptyRecords] = await payments.quote();
+      expect(emptyRecords).to.equal(0);
+      // Kimsede veri yoksa yalnizca taban alinir — satilacak bir sey yok.
       expect(emptyFee).to.equal(BASE_FEE);
 
-      // Havuza girmek TEK BASINA ucreti artirmaz — izin sarttir.
       await joinPool(alice, 1);
-      const [stillEmpty, stillZero] = await payments.quoteFor(researcherAddr);
-      expect(stillZero).to.equal(0);
-      expect(stillEmpty).to.equal(BASE_FEE);
+      const [oneFee, oneRecords] = await payments.quote();
+      expect(oneRecords).to.equal(1);
+      expect(oneFee).to.equal(BASE_FEE + PER_RECORD_FEE);
 
-      await grant(alice);
-      const [oneFee, oneCount] = await payments.quoteFor(researcherAddr);
-      expect(oneCount).to.equal(1);
-      expect(oneFee).to.equal(BASE_FEE + PER_PARTICIPANT_FEE);
-
-      await joinAndGrant(bob, 2);
-      const [twoFee] = await payments.quoteFor(researcherAddr);
-      expect(twoFee).to.equal(BASE_FEE + 2n * PER_PARTICIPANT_FEE);
+      await joinPool(bob, 2);
+      const [twoFee, twoRecords] = await payments.quote();
+      expect(twoRecords).to.equal(2);
+      expect(twoFee).to.equal(BASE_FEE + 2n * PER_RECORD_FEE);
     });
 
-    it("izin baska bir arastirmaciya gecmez", async () => {
+    it("ucret ARASTIRMACIYA GORE DEGISMEZ", async () => {
+      // Herkes ayni havuzu aliyor, herkes ayni oduyor. "Su kuruma evet, buna
+      // hayir" mimari olarak mumkun degil; fiyat da bunu yansitir.
       await joinPool(alice, 1);
-      await grant(alice, researcher);
 
-      // Alice yalnizca `researcher`'a izin verdi; baskasi icin sayac 0.
-      const [, forOutsider] = await payments.quoteFor(await outsider.getAddress());
-      expect(forOutsider).to.equal(0);
+      const [feeA] = await payments.connect(researcher).quote();
+      const [feeB] = await payments.connect(outsider).quote();
+      expect(feeA).to.equal(feeB);
+    });
+
+    it("ISTENMEYEN alan icin odeme yapilmaz", async () => {
+      await joinPool(alice, 1);
+
+      // Bos alan listesi: taban disinda hicbir sey odenmez. Fiyatin havuz
+      // buyuklugune degil ISTENEN SEYE bagli oldugunun kanitidir.
+      const [fee, records] = await payments.quoteForFields([], []);
+      expect(records).to.equal(0);
+      expect(fee).to.equal(BASE_FEE);
+    });
+
+    it("kimsede olmayan alan BEDAVADIR", async () => {
+      await joinPool(alice, 1);
+
+      // 5. alanda kimsenin verisi yok. Ucret alinsaydi tamami hazineye
+      // giderdi — dagitimda kimse pay alamazdi.
+      const [fee, records] = await payments.quoteForFields([5], []);
+      expect(records).to.equal(0);
+      expect(fee).to.equal(BASE_FEE);
     });
 
     it("bos havuzda sorgu acilamaz", async () => {
@@ -282,12 +307,159 @@ describe("VeriarfyPayments", () => {
     });
   });
 
+  // -----------------------------------------------------------------------------------
+  // KITLIK
+  // -----------------------------------------------------------------------------------
+  //
+  // Istenen davranis: az bulunan veri KISI BASINA daha pahali olsun. Seyrek
+  // bir kohortun verisi, herkeste bulunan bir varyantla ayni fiyata
+  // satilmamali.
+  //
+  // Carpan zincirden TURETILIR (havuz / o alani verenler), sahip tarafindan
+  // atanmaz — "hangi veri degerli" karari kimsenin insafina birakilmaz.
+  describe("Kitlik carpani", () => {
+    /** Cok alanli panelde, verilen kapsama maskesiyle havuza girer. */
+    async function joinWithMask(signer: Signer, dosages: number[], mask: bigint) {
+      const addr = await signer.getAddress();
+      const builder = fhevm.createEncryptedInput(await protocol.getAddress(), addr);
+      builder.add8(0);
+      for (const d of dosages) builder.add8(d);
+      const enc = await builder.encrypt();
+
+      await protocol.connect(signer).enroll(enc.handles[0], enc.inputProof);
+      await protocol
+        .connect(signer)
+        .contributeDosages(enc.handles.slice(1), mask, enc.inputProof);
+    }
+
+    beforeEach(async () => {
+      await protocol.connect(owner).configurePanel(2, 0, ethers.ZeroHash, "");
+    });
+
+    it("herkeste olan alan 1x, azinlikta olan alan KISI BASINA daha pahali", async () => {
+      // 0. alan: herkeste var.  1. alan: yalnizca alice'te.
+      await joinWithMask(alice, [1, 1], 0b11n);
+      await joinWithMask(bob, [1, 3], 0b01n);
+      await joinWithMask(carol, [1, 3], 0b01n);
+
+      const [commonFee] = await payments.quoteForFields([0], []);
+      const [rareFee] = await payments.quoteForFields([1], []);
+
+      // Yaygin alan: 3 kayit x 1x.
+      expect(commonFee).to.equal(BASE_FEE + 3n * PER_RECORD_FEE);
+      // Nadir alan: 1 kayit x 3x (havuz 3 / veren 1).
+      expect(rareFee).to.equal(BASE_FEE + 3n * PER_RECORD_FEE);
+
+      // Toplam ayni ama KISI BASINA fiyat uc kat — istenen tam olarak budur:
+      // tek veri sahibi, uc kisilik yaygin bir alan kadar kazanir.
+      const commonPerRecord = (commonFee - BASE_FEE) / 3n;
+      const rarePerRecord = rareFee - BASE_FEE;
+      expect(rarePerRecord).to.equal(3n * commonPerRecord);
+    });
+
+    it("kitlik carpani TAVANI asamaz", async () => {
+      await payments.connect(owner).setScarcityCap(20_000); // 2x
+
+      await joinWithMask(alice, [1, 1], 0b11n);
+      await joinWithMask(bob, [1, 3], 0b01n);
+      await joinWithMask(carol, [1, 3], 0b01n);
+
+      // Ham kitlik 3x olurdu; tavan 2x'te keser.
+      const [rareFee] = await payments.quoteForFields([1], []);
+      expect(rareFee).to.equal(BASE_FEE + 2n * PER_RECORD_FEE);
+    });
+
+    it("tavan 1x yapilinca kitlik tamamen KAPANIR", async () => {
+      await payments.connect(owner).setScarcityCap(10_000);
+
+      await joinWithMask(alice, [1, 1], 0b11n);
+      await joinWithMask(bob, [1, 3], 0b01n);
+
+      const [rareFee] = await payments.quoteForFields([1], []);
+      expect(rareFee).to.equal(BASE_FEE + PER_RECORD_FEE);
+    });
+
+    it("tavan 1x'in ALTINA cekilemez", async () => {
+      // Kitligin fiyati DUSURMESI anlamsiz olurdu; carpan zaten 1'in altina
+      // inmiyor, boyle bir tavan sessizce etkisiz kalirdi.
+      await expect(
+        payments.connect(owner).setScarcityCap(5_000),
+      ).to.be.revertedWithCustomError(payments, "InvalidScarcityCap");
+    });
+
+    // EN ONEMLI TEST.
+    //
+    // Kitlik fiyata girip PAYA girmeseydi mimari kendi icinde celisirdi:
+    // arastirmaci nadir alan icin fazla oder, ama o alanin sahibi yaygin bir
+    // alanin sahibiyle ayni payi alirdi. Fazla para herkese esit dagilir,
+    // nadir veri sahibinin hakki kalabaligin icinde erirdi.
+    it("NADIR veri sahibi, karisik sorguda da primi ALIR", async () => {
+      // 0. alan herkeste; 1. alan yalnizca alice'te.
+      await joinWithMask(alice, [1, 1], 0b11n);
+      await joinWithMask(bob, [1, 3], 0b01n);
+      await joinWithMask(carol, [1, 3], 0b01n);
+
+      // HER IKI alani birden isteyen sorgu. Tek alanlik sorguda ayrim
+      // kendiliginden dogru cikardi; asil sinav karisik olan.
+      const queryId = await openAndSettle([0, 1], []);
+
+      const aliceWeight = await payments.weightedCoverage(queryId, await alice.getAddress());
+      const bobWeight = await payments.weightedCoverage(queryId, await bob.getAddress());
+      const carolWeight = await payments.weightedCoverage(queryId, await carol.getAddress());
+
+      // Yalnizca yaygin alani verenler esit.
+      expect(bobWeight).to.equal(carolWeight);
+
+      // Alice HEM yaygin (1x) HEM nadir (3x) alani verdi -> 4x.
+      expect(aliceWeight).to.equal(4n * bobWeight);
+
+      const aliceShare = await payments.claimable(queryId, await alice.getAddress());
+      const bobShare = await payments.claimable(queryId, await bob.getAddress());
+
+      // Hesap dogru ama para gelmiyorsa anlamsiz olurdu.
+      expect(aliceShare).to.be.greaterThan(bobShare);
+    });
+
+    it("dagitilan toplam, katilimci havuzunu ASMAZ", async () => {
+      // Payda ile pay ayni agirlik sisteminden gelmezse paylarin toplami
+      // havuzu asar ve son ceken bos doner. Kitlik zamanla degistigi icin
+      // bu risk gercek — agirliklar sorgu aninda DONDURULUYOR.
+      await joinWithMask(alice, [1, 1], 0b11n);
+      await joinWithMask(bob, [1, 3], 0b01n);
+      await joinWithMask(carol, [1, 3], 0b01n);
+
+      const queryId = await openAndSettle([0, 1], []);
+
+      const shares = await Promise.all(
+        [alice, bob, carol].map(async (x) =>
+          payments.claimable(queryId, await x.getAddress()),
+        ),
+      );
+
+      const q = await payments.query(queryId);
+      const sum = shares.reduce((a: bigint, b: bigint) => a + b, 0n);
+      expect(sum).to.be.lessThanOrEqual(q.liquidityPot);
+    });
+
+    it("ucret, ISTENEN alanlarin toplamidir", async () => {
+      await joinWithMask(alice, [1, 1], 0b11n);
+      await joinWithMask(bob, [1, 3], 0b01n);
+
+      const [both] = await payments.quoteForFields([0, 1], []);
+      const [first] = await payments.quoteForFields([0], []);
+      const [second] = await payments.quoteForFields([1], []);
+
+      // Taban bir kez alinir; alan ucretleri toplanir.
+      expect(both).to.equal(first + second - BASE_FEE);
+    });
+  });
+
   describe("Gelir paylasimi (RevShare)", () => {
     it("%80 katilimcilara, %20 hazineye ayrilir", async () => {
       await joinAndGrant(alice, 1);
       await joinAndGrant(bob, 2);
 
-      const [fee] = await payments.quoteFor(await researcher.getAddress());
+      const [fee] = await payments.quote();
       await openAndSettle();
 
       const q = await payments.query(0);
@@ -340,8 +512,9 @@ describe("VeriarfyPayments", () => {
       await joinAndGrant(alice, 1);
       await openAndSettle(); // anlik goruntu: 1 katilimci
 
-      // Carol sorgudan sonra katilip izin veriyor — verisi hesaplamaya girmedi.
-      await joinAndGrant(carol, 2);
+      // Carol sorgudan SONRA katiliyor — verisi o hesaplamaya girmedi.
+      // Sinir artik acikca yazili: `participantIndex > snapshotCount`.
+      await joinPool(carol, 2);
 
       await expect(payments.connect(carol).claim(0)).to.be.revertedWithCustomError(
         payments,
@@ -367,7 +540,7 @@ describe("VeriarfyPayments", () => {
       await joinAndGrant(bob, 2);
       await joinAndGrant(carol, 0);
 
-      const [fee] = await payments.quoteFor(await researcher.getAddress());
+      const [fee] = await payments.quote();
       await openAndSettle();
 
       for (const who of [alice, bob, carol]) {
@@ -390,43 +563,34 @@ describe("VeriarfyPayments", () => {
     });
   });
 
-  describe("Gizlilik Paneli — izin ve iptal (rapor §3.4)", () => {
-    it("veri yuklemeden izin verilemez", async () => {
-      await expect(grant(alice)).to.be.revertedWithCustomError(protocol, "NotAParticipant");
+  describe("Gizlilik Paneli — havuzdan cikis", () => {
+    /*
+     * IZIN KAPISI KALKTI.
+     *
+     * Onceden arastirmaci bazinda izin vardi; mimari o sozu tutamiyordu
+     * (bkz. `VeriarfyProtocol.leavePool`). Yukleme zaten izindir; geriye
+     * "havuzdan cikma" hakki kaldi ve testler onu sinar.
+     */
+
+    it("havuza girmeden cikilamaz", async () => {
+      await expect(
+        protocol.connect(alice).leavePool(),
+      ).to.be.revertedWithCustomError(protocol, "NotAParticipant");
     });
 
-    it("izin kaydi panelin gosterecegi alanlari tasir", async () => {
+    it("iki kez cikilamaz", async () => {
       await joinPool(alice, 1);
-      const expiry = (await ethers.provider.getBlockNumber()) + 1000;
-
-      await protocol.connect(alice).grantAccess(await researcher.getAddress(), 1 | 4, expiry, 25);
-
-      const p = await protocol.permission(
-        await alice.getAddress(),
-        await researcher.getAddress(),
-      );
-      expect(p.isAllowed).to.equal(true);
-      expect(p.queryTypes).to.equal(5); // GWAS | STATISTICS
-      expect(p.expirationBlock).to.equal(expiry);
-      expect(p.maxQueries).to.equal(25);
-      expect(p.revokedAtBlock).to.equal(ethers.MaxUint256);
+      await protocol.connect(alice).leavePool();
+      await expect(
+        protocol.connect(alice).leavePool(),
+      ).to.be.revertedWithCustomError(protocol, "AlreadyLeft");
     });
 
-    it("ayni arastirmaciya iki kez izin verilemez", async () => {
-      await joinAndGrant(alice, 1);
-      await expect(grant(alice)).to.be.revertedWithCustomError(protocol, "AlreadyGranted");
-    });
+    it("CIKISTAN SONRA acilan sorgudan pay ALINMAZ", async () => {
+      await joinPool(alice, 1);
+      await joinPool(bob, 2);
 
-    it("IPTAL sonrasi acilan sorgudan pay ALINMAZ", async () => {
-      await joinAndGrant(alice, 1);
-      await joinAndGrant(bob, 2);
-
-      // Alice izni geri aliyor — bundan SONRAKI sorgular onu kapsamaz.
-      await protocol.connect(alice).revokeAccess(await researcher.getAddress());
-
-      const [, count] = await payments.quoteFor(await researcher.getAddress());
-      expect(count).to.equal(1); // yalnizca bob
-
+      await protocol.connect(alice).leavePool();
       await openAndSettle();
 
       expect(await payments.claimable(0, await alice.getAddress())).to.equal(0);
@@ -437,37 +601,34 @@ describe("VeriarfyPayments", () => {
       expect(await payments.claimable(0, await bob.getAddress())).to.be.greaterThan(0);
     });
 
-    it("IPTALDEN ONCE acilan sorgudan hak edilen pay KORUNUR", async () => {
-      await joinAndGrant(alice, 1);
+    it("CIKISTAN ONCE acilan sorgudan hak edilen pay KORUNUR", async () => {
+      await joinPool(alice, 1);
       await openAndSettle(); // sorgu 0 — alice dahil
 
-      // Sorgu acildiktan sonra iptal: hakedis sorgunun ACILDIGI bloga bakar.
-      await protocol.connect(alice).revokeAccess(await researcher.getAddress());
+      // Cikis, hakedis sorgunun ACILDIGI bloga baktigi icin gecmisi silmez.
+      // Cikmak cezalandirma degildir.
+      await protocol.connect(alice).leavePool();
 
       expect(await payments.claimable(0, await alice.getAddress())).to.be.greaterThan(0);
       await payments.connect(alice).claim(0);
     });
 
-    it("verilmemis izin iptal edilemez", async () => {
+    it("cikis blogu zincirde okunabilir", async () => {
       await joinPool(alice, 1);
-      await expect(
-        protocol.connect(alice).revokeAccess(await researcher.getAddress()),
-      ).to.be.revertedWithCustomError(protocol, "NoActiveGrant");
+      expect(await protocol.leftPoolAtBlock(await alice.getAddress())).to.equal(0);
+
+      await protocol.connect(alice).leavePool();
+      expect(await protocol.leftPoolAtBlock(await alice.getAddress())).to.be.greaterThan(0);
     });
 
-    it("gecmis blokla suresi dolan izin verilemez", async () => {
+    it("UCRET havuzun tamamina gore hesaplanir", async () => {
+      // Izin sayaci kalkti: arastirmaci toplamin tamamini aliyor, dolayisiyla
+      // tamami kadar oder. Once az odeyip cok aliyordu.
       await joinPool(alice, 1);
-      const past = await ethers.provider.getBlockNumber();
-      await expect(
-        protocol.connect(alice).grantAccess(await researcher.getAddress(), 1, past, 0),
-      ).to.be.revertedWithCustomError(protocol, "ExpirationInPast");
-    });
+      await joinPool(bob, 2);
 
-    it("bos sorgu tipi reddedilir", async () => {
-      await joinPool(alice, 1);
-      await expect(
-        protocol.connect(alice).grantAccess(await researcher.getAddress(), 0, 0, 0),
-      ).to.be.revertedWithCustomError(protocol, "EmptyQueryTypes");
+      const [, count] = await payments.quote();
+      expect(count).to.equal(2);
     });
 
     it("bekleyen odul ozeti tek cagrida gelir", async () => {
@@ -483,6 +644,152 @@ describe("VeriarfyPayments", () => {
       const [afterTotal, afterIds] = await payments.pendingRewards(await alice.getAddress());
       expect(afterIds.length).to.equal(1);
       expect(afterTotal).to.equal(total / 2n);
+    });
+  });
+
+  // ===================================================================================
+  // KULLANIMA GORE ODEME — para yolunun korumalari
+  // ===================================================================================
+  //
+  // Bu blogun tamami TEK bir soruya hizmet eder: havuzdan cikan para,
+  // havuza girenden fazla olabilir mi? Formul degistiginde ilk kirilacak
+  // yer burasidir.
+
+  describe("Kullanima gore odeme", () => {
+    /** Uc katilimci havuza girer, izin verir; sorgu acilip bolusturulur. */
+    async function threeParticipants(): Promise<bigint> {
+      await joinAndGrant(alice, 2);
+      await joinAndGrant(bob, 1);
+      await joinAndGrant(carol, 0);
+      return openAndSettle();
+    }
+
+    const cohort = () => [alice, bob, carol];
+
+    it("havuz KULLANIM ve BONUS olarak ikiye ayrilir", async () => {
+      const queryId = await threeParticipants();
+      const q = await payments.query(queryId);
+      const [usagePot, bonusPot] = await payments.potSplit(queryId);
+
+      expect(usagePot + bonusPot).to.equal(q.liquidityPot);
+
+      // Varsayilan %70 kullanim.
+      expect(usagePot).to.equal((q.liquidityPot * 7000n) / 10000n);
+    });
+
+    it("PAYLARIN TOPLAMI havuzu ASMAZ", async () => {
+      // Para yolunun tek gercek guvencesi. Bolme kusurati disinda hicbir
+      // sey havuzdan disari cikmamali.
+      const queryId = await threeParticipants();
+      const q = await payments.query(queryId);
+
+      let sum = 0n;
+      for (const s of cohort()) {
+        sum += await payments.claimable(queryId, await s.getAddress());
+      }
+
+      expect(sum).to.be.lessThanOrEqual(q.liquidityPot);
+      // Iki havuz, iki bolme: kisi basina en fazla 2 birim kusurat.
+      expect(q.liquidityPot - sum).to.be.lessThan(BigInt(cohort().length) * 2n + 1n);
+    });
+
+    it("kapsama agirligi, katilimcinin verdigi ALAN SAYISIDIR", async () => {
+      const queryId = await threeParticipants();
+
+      for (const s of cohort()) {
+        const w = await payments.coverageWeight(queryId, await s.getAddress());
+        expect(w).to.be.greaterThan(0n);
+      }
+    });
+
+    it("kapsama toplami sifirsa havuzun TAMAMI bonusa gider", async () => {
+      // Istenen alanlarin hicbirine kimse veri vermemisse kullanim havuzu
+      // dagitilamaz. Kilitlenmemeli — bonusa eklenmeli, aksi halde para
+      // sozlesmede olu kalirdi.
+      //
+      // Bu senaryo kapsama sayaci 0 olan bir alan gerektirir; mevcut
+      // kurulumda herkes tek alani kapsiyor, bu yuzden dogrudan
+      // `potSplit`'in mantigi sinaniyor.
+      const queryId = await threeParticipants();
+      const q = await payments.query(queryId);
+      const [usagePot, bonusPot] = await payments.potSplit(queryId);
+
+      // Kapsama var -> ikiye ayrilmis olmali.
+      expect(q.coverageTotal).to.be.greaterThan(0n);
+      expect(usagePot).to.be.greaterThan(0n);
+      expect(usagePot + bonusPot).to.equal(q.liquidityPot);
+    });
+
+    it("ODENEN ile CEKILEN birbirini tutar", async () => {
+      // `claim` ile `claimable` AYNI ifadeden gelmeli. Daha once tam burada
+      // ayrismislardi ve test yakalamisti.
+      const queryId = await threeParticipants();
+
+      for (const s of cohort()) {
+        const who = await s.getAddress();
+        const expected = await payments.claimable(queryId, who);
+        const before = await token.balanceOf(who);
+
+        await payments.connect(s).claim(queryId);
+
+        expect(await token.balanceOf(who)).to.equal(before + expected);
+      }
+    });
+
+    it("iki kez cekilemez", async () => {
+      const queryId = await threeParticipants();
+      await payments.connect(alice).claim(queryId);
+
+      await expect(
+        payments.connect(alice).claim(queryId),
+      ).to.be.revertedWithCustomError(payments, "AlreadyClaimed");
+    });
+
+    it("CEKILEN TOPLAM havuzu asmaz", async () => {
+      const queryId = await threeParticipants();
+
+      for (const s of cohort()) {
+        const amount = await payments.claimable(queryId, await s.getAddress());
+        if (amount > 0n) await payments.connect(s).claim(queryId);
+      }
+
+      const q = await payments.query(queryId);
+      expect(q.claimedTotal).to.be.lessThanOrEqual(q.liquidityPot);
+    });
+
+    it("kullanim payi SIFIRA cekilebilir (eski davranis)", async () => {
+      await payments.connect(owner).setUsageShare(0);
+
+      const queryId = await threeParticipants();
+      const q = await payments.query(queryId);
+      const [usagePot, bonusPot] = await payments.potSplit(queryId);
+
+      expect(usagePot).to.equal(0n);
+      expect(bonusPot).to.equal(q.liquidityPot);
+    });
+
+    it("kullanim payi TAMAMA cekilebilir", async () => {
+      await payments.connect(owner).setUsageShare(10_000);
+
+      const queryId = await threeParticipants();
+      const q = await payments.query(queryId);
+      const [usagePot, bonusPot] = await payments.potSplit(queryId);
+
+      expect(usagePot).to.equal(q.liquidityPot);
+      expect(bonusPot).to.equal(0n);
+
+      // Toplam yine havuzu asmamali.
+      let sum = 0n;
+      for (const s of cohort()) {
+        sum += await payments.claimable(queryId, await s.getAddress());
+      }
+      expect(sum).to.be.lessThanOrEqual(q.liquidityPot);
+    });
+
+    it("gecersiz oran reddedilir", async () => {
+      await expect(
+        payments.connect(owner).setUsageShare(10_001),
+      ).to.be.revertedWithCustomError(payments, "InvalidShare");
     });
   });
 
@@ -521,7 +828,7 @@ describe("VeriarfyPayments", () => {
 
     it("onay gelince ucret dagitima acilir", async () => {
       await joinAndGrant(alice, 1);
-      const [fee] = await payments.quoteFor(await researcher.getAddress());
+      const [fee] = await payments.quote();
       await openAndSettle();
 
       const q = await payments.query(0);
@@ -552,7 +859,7 @@ describe("VeriarfyPayments", () => {
     it("bekleme sonrasi onay gelmediyse ucret IADE edilir", async () => {
       await joinAndGrant(alice, 1);
       const before = await token.balanceOf(await researcher.getAddress());
-      const [fee] = await payments.quoteFor(await researcher.getAddress());
+      const [fee] = await payments.quote();
 
       await payments.connect(researcher).openQuery(STATISTICS);
       expect(await token.balanceOf(await researcher.getAddress())).to.equal(before - fee);

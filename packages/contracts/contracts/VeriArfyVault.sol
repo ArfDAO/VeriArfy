@@ -17,7 +17,7 @@ import {IVeriArfyRegistry} from "./interfaces/IVeriArfyRegistry.sol";
  *         ve icin bir metadata (veri turu + off-chain ciphertext blob'un hash'i)
  *         yazilir. Duz deger asla zincire ulasmaz.
  *      3. Sahip, sifreli kaydin cozulme (decrypt) yetkisini baska kayitli
- *         arastirmacilara verebilir — veri paylasilir ama gizli kalir.
+ *         arastirmacilara verebilir - veri paylasilir ama gizli kalir.
  *      4. Kohort istatistigi tamamen sifreli alanda homomorfik olarak birikir:
  *         toplam ve sayac hicbir zaman acilmadan guncellenir.
  *
@@ -52,7 +52,7 @@ contract VeriArfyVault is ZamaEthereumConfig {
 
     /// @notice Her veri turu icin homomorfik kohort birikimi (sifreli toplam).
     mapping(DatasetKind kind => euint32 encryptedSum) private _cohortSum;
-    /// @notice Her veri turune katki veren kayit sayisi (duz — birey aciga cikmaz).
+    /// @notice Her veri turune katki veren kayit sayisi (duz - birey aciga cikmaz).
     mapping(DatasetKind kind => uint32 count) public cohortCount;
 
     event RecordSubmitted(

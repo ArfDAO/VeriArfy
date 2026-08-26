@@ -3,14 +3,14 @@ pragma solidity ^0.8.24;
 
 /**
  * @title  RarityMath
- * @notice Rapor §4.3'teki Nadirlik Carpani: `R = log2(1 + N_total / N_variant)`.
+ * @notice Rapor 4.3'teki Nadirlik Carpani: `R = log2(1 + N_total / N_variant)`.
  *
  * @dev  NEDEN AYRI KUTUPHANE
  *
  *       Formul logaritma icerir; Solidity'de `log2` yoktur ve kesirli kismi
  *       olmadan formul anlamsizlasir (tam sayi `log2` 2000 ile 4095 arasindaki
  *       her havuza ayni carpani verirdi). Bu yuzden sabit noktali bir uygulama
- *       gerekiyor — ve bagimsiz test edilebilmesi icin odeme mantigindan
+ *       gerekiyor - ve bagimsiz test edilebilmesi icin odeme mantigindan
  *       ayrildi.
  *
  *       OLCEK
@@ -31,7 +31,7 @@ library RarityMath {
     uint256 internal constant FOUNDING_BPS = 15_000;
 
     /**
-     * @notice Kurucu Katkici bonusunu uygular (rapor §4.3: kalici +%50).
+     * @notice Kurucu Katkici bonusunu uygular (rapor 4.3: kalici +%50).
      *
      * @dev  Hem BIREYSEL agirlikta hem TOPLAM agirlikta ayni fonksiyon
      *       kullanilmalidir. Tek satirlik bir tam sayi bolmesi gibi gorunse de,
@@ -44,12 +44,12 @@ library RarityMath {
     }
 
     /**
-     * @notice `R = log2(1 + poolCount / carriers)` — baz puan cinsinden.
+     * @notice `R = log2(1 + poolCount / carriers)` - baz puan cinsinden.
      *
      * @dev Tasiyici yoksa carpan tanimsizdir (sifira bolme); 0 doner ve
      *      cagiran taraf o terimi zaten toplama katmaz.
      *
-     *      Tasiyici sayisi havuzun tamamina esitse `R = log2(2) = 1,00x` olur —
+     *      Tasiyici sayisi havuzun tamamina esitse `R = log2(2) = 1,00x` olur -
      *      yani "herkes tasiyor" durumunda nadirlik primi yoktur. Formulun
      *      kendisi bu tabana oturur.
      */
@@ -71,7 +71,7 @@ library RarityMath {
      *       2. Kesirli kisim: kalan [1,2) araligindaki deger tekrar tekrar
      *          KARESI alinir. Kare 2'yi asarsa o basamagin biti 1'dir ve deger
      *          ikiye bolunur. Bu, log2'nin ikili aciliminin basamak basamak
-     *          okunmasidir — `log2(y^2) = 2*log2(y)` ozdesligi.
+     *          okunmasidir - `log2(y^2) = 2*log2(y)` ozdesligi.
      *
      *       Girdi >= 2^64 (yani deger >= 1) olmalidir; nadirlik formulunde
      *       `1 + N/C` her zaman > 1'dir.

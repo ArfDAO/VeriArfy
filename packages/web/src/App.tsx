@@ -7,6 +7,7 @@ import { PrivacyPanel } from "./components/PrivacyPanel";
 import { SectionHead, FeatureRow, Footer, StatRow } from "./components/Marketing";
 import { Contribute } from "./components/Contribute";
 import { SystemStatus } from "./components/SystemStatus";
+import { ResearchConsole } from "./components/ResearchConsole";
 import { submitSurvey, getResults, getStats, type AnalysisResults } from "./lib/api";
 
 export default function App() {
@@ -82,6 +83,16 @@ export default function App() {
           />
           <Contribute />
         </div>
+      </div>
+
+      {/* Arastirma konsolu — sifreli verinin kullanildigi yer */}
+      <div className="section" style={{ marginTop: 64 }} id="arastirma">
+        <SectionHead
+          eyebrow="ARAŞTIRMA"
+          title="Şifreli veriyi kullanmak"
+          sub="Ücret ödenir, yetkili düğümler M-of-N onaylar, itiraz süresi dolar, çözüm yetkisi araştırmacıya geçer. Çözülen şey grup toplamlarıdır — hiçbir bireyin verisi düz metne dönmez."
+        />
+        <ResearchConsole />
       </div>
 
       {/* Survey Section */}

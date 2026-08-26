@@ -153,6 +153,11 @@ export function BiomarkerStep({
             "eksik ölçüm ne oluyor",
             "0 aralık dışı olduğu için o metriğin n sayımına hiç girmiyor — ortalamayı bozmuyor",
           ),
+          valueEvidence("ödemeye esas alan", filled, true),
+          noteEvidence(
+            "kapsama nasıl belirlendi",
+            "doldurduğunuz alanlardan türetildi; boş bıraktığınız metrik ödemeye de girmez",
+          ),
         ],
       );
       onDone();
@@ -167,7 +172,7 @@ export function BiomarkerStep({
   return (
     <div className="card">
       <div className="card__head">
-        <h3>2 · Biyobelirteç ve telemetri</h3>
+        <h3>3 · Biyobelirteç ve telemetri</h3>
         <span className={complete ? "badge badge--ok" : "eyebrow"}>
           {complete ? `TAMAM · ${submitted}/${metricCount}` : `${submitted}/${metricCount} METRİK`}
         </span>
@@ -177,6 +182,13 @@ export function BiomarkerStep({
         Ölçek, birim ve geçerli aralık sözleşmeden okundu — eleme zincirde
         yapılıyor. Ölçmediğiniz metriği boş bırakın: o metriğin sayımına hiç
         girmez, ortalamayı aşağı çekmez.
+      </p>
+      <p className="card__body">
+        Değeri <strong>kendi biriminde</strong> yazın (örneğin VO2 max için{" "}
+        <span className="mono">52,3</span>). Sağdaki sayı, ölçekle çarpılıp
+        sıfır noktası eklendikten sonra <strong>zincire giden tamsayıdır</strong> —
+        şifrelenen budur. Sözleşme yalnızca tamsayıyla çalışır çünkü homomorfik
+        aritmetikte ondalık yoktur.
       </p>
 
       {!rows && !error && <p className="card__body">Metrik paneli okunuyor…</p>}
@@ -219,7 +231,7 @@ export function BiomarkerStep({
                     }
                   >
                     {state === "gecerli"
-                      ? `→ ${encoded?.[i].value.toLocaleString("tr")}`
+                      ? `zincire → ${encoded?.[i].value.toLocaleString("tr")}`
                       : state === "aralikDisi"
                         ? "aralık dışı → elenir"
                         : "eksik"}

@@ -2,6 +2,8 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { expect } from "chai";
+// @ts-expect-error — JS paketi, tip bildirimi yok.
+import { chiSquareTest } from "@veriarfy/study";
 import { ethers, fhevm } from "hardhat";
 import { FhevmType } from "@fhevm/mock-utils";
 import type { Signer } from "ethers";
@@ -163,27 +165,15 @@ describe("GWAS ki-kare", () => {
    *
    * Zincirde hesaplanMAZ: formul bolme icerir ve sifreli bolme TFHE'de
    * pratik degildir. Cozulen sey bireyin verisi degil grup toplamlaridir.
+   *
+   * ORTAK MOTOR: hesap `packages/study` icindedir; arayuzun arastirma
+   * konsolu da AYNI fonksiyonu cagirir. Testin kendi kopyasi olsaydi, iki
+   * uygulama sessizce ayrisir ve ekranda gorunen p-degeri testin dogruladigi
+   * deger olmazdi.
    */
-  function chiSquare(table: number[][]): { chi2: number; df: number } {
-    const rows = table.length;
-    const cols = table[0].length;
-
-    const rowSums = table.map((r) => r.reduce((a, b) => a + b, 0));
-    const colSums = Array.from({ length: cols }, (_, c) =>
-      table.reduce((a, r) => a + r[c], 0),
-    );
-    const total = rowSums.reduce((a, b) => a + b, 0);
-
-    let chi2 = 0;
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const expected = (rowSums[r] * colSums[c]) / total;
-        if (expected === 0) continue;
-        chi2 += (table[r][c] - expected) ** 2 / expected;
-      }
-    }
-
-    return { chi2, df: (rows - 1) * (cols - 1) };
+  function chiSquare(table: number[][]): { chi2: number; df: number; p: number } {
+    const result = chiSquareTest(table);
+    return { chi2: result.chi2, df: result.df, p: result.p };
   }
 
   // -----------------------------------------------------------------------------------

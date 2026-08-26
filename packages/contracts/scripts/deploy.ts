@@ -87,8 +87,19 @@ async function main() {
   const contingencyAddress = await contingency.getAddress();
   console.log(`ContingencyStats (kutuphane): ${contingencyAddress}`);
 
+  // Kapsama bitmap'i — kimin hangi alanda GERCEK verisi var. Odeme buna gore
+  // dagitilir; her iki kanal da ayni kutuphaneyi paylasir.
+  const Coverage = await ethers.getContractFactory("CoverageBits");
+  const coverage = await Coverage.deploy();
+  await coverage.waitForDeployment();
+  const coverageAddress = await coverage.getAddress();
+  console.log(`CoverageBits (kutuphane): ${coverageAddress}`);
+
   const Protocol = await ethers.getContractFactory("VeriarfyProtocol", {
-    libraries: { ContingencyStats: contingencyAddress },
+    libraries: {
+      ContingencyStats: contingencyAddress,
+      CoverageBits: coverageAddress,
+    },
   });
   const protocol = await Protocol.deploy(
     deployer.address,
@@ -121,8 +132,18 @@ async function main() {
   }
 
   // Fiyatlandirma: 6 ondalikli token varsayilir (USDC ile ayni).
-  const baseFee = BigInt(process.env.QUERY_BASE_FEE ?? 10_000_000); // 10 USDC
-  const perParticipantFee = BigInt(process.env.QUERY_PER_PARTICIPANT_FEE ?? 1_000_000); // 1 USDC
+  //
+  // GELISTIRME RAKAMLARI — kasitli olarak dusuk.
+  //
+  // Ucret artik KAYIT basina aliniyor (kayit = bir kisi x bir alan) ve panel
+  // 10 SNP + 6 metrik. Eski "kisi basi 1 USDC" ile 10 katilimcilik bir havuz
+  // 160 kayit eder, yani sorgu basina 160 USDC — test agindaki her denemeyi
+  // pahalilastirirdi.
+  //
+  // Yapinin kendisi degismedi, yalnizca birim fiyat kucultuldu. Uretimde
+  // `QUERY_BASE_FEE` / `QUERY_PER_RECORD_FEE` ile ayarlanir.
+  const baseFee = BigInt(process.env.QUERY_BASE_FEE ?? 1_000_000); // 1 USDC
+  const perRecordFee = BigInt(process.env.QUERY_PER_RECORD_FEE ?? 50_000); // 0,05 USDC
   const liquidityShareBps = Number(process.env.LIQUIDITY_SHARE_BPS ?? 8_000); // %80
 
   const Payments = await ethers.getContractFactory("VeriarfyPayments");
@@ -133,13 +154,13 @@ async function main() {
     registryAddress,
     liquidityShareBps,
     baseFee,
-    perParticipantFee,
+    perRecordFee,
   );
   await payments.waitForDeployment();
   const paymentsAddress = await payments.getAddress();
   console.log(
     `VeriarfyPayments: ${paymentsAddress} ` +
-      `(katilimci payi %${liquidityShareBps / 100}, taban ${baseFee}, kisi basi ${perParticipantFee})`,
+      `(katilimci payi %${liquidityShareBps / 100}, taban ${baseFee}, kayit basi ${perRecordFee})`,
   );
 
   // --- Calisma tanimlari ---------------------------------------------------
@@ -199,7 +220,10 @@ async function main() {
   console.log(`BiomarkerStats (kutuphane): ${biomarkerLibAddress}`);
 
   const Biomarkers = await ethers.getContractFactory("VeriarfyBiomarkers", {
-    libraries: { BiomarkerStats: biomarkerLibAddress },
+    libraries: {
+      BiomarkerStats: biomarkerLibAddress,
+      CoverageBits: coverageAddress,
+    },
   });
   const biomarkers = await Biomarkers.deploy(protocolAddress);
   await biomarkers.waitForDeployment();

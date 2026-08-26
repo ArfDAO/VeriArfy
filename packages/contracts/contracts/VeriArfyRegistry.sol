@@ -16,7 +16,7 @@ import {IGroth16Verifier} from "./interfaces/IGroth16Verifier.sol";
  *      gecmisini saklar. Boylece kok guncellenirken eski kanitlar bir sure gecerli kalir.
  */
 contract VeriArfyRegistry {
-    /// @notice Merkle agac derinligi — devredeki `ResearcherIdentity(20)` ile ayni olmali.
+    /// @notice Merkle agac derinligi - devredeki `ResearcherIdentity(20)` ile ayni olmali.
     uint256 public constant TREE_DEPTH = 20;
 
     /// @notice Kayit kapsami. Devreye `externalNullifier` olarak girer.
@@ -39,7 +39,7 @@ contract VeriArfyRegistry {
     /// @notice Eski koklerin kabul edildigi sure.
     uint256 public constant ROOT_VALIDITY = 1 hours;
 
-    /// @notice Harcanmis nullifier'lar — ayni kimlik iki kez kayit olamaz.
+    /// @notice Harcanmis nullifier'lar - ayni kimlik iki kez kayit olamaz.
     mapping(uint256 nullifierHash => bool spent) public nullifierSpent;
 
     /// @notice Kayitli cuzdanlar.
