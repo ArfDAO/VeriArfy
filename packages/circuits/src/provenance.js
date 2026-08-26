@@ -71,7 +71,44 @@ import { IdentityTree, SNARK_FIELD, TREE_DEPTH, randomFieldElement } from "./ind
 export const PANEL_SIZE = 1000;
 
 /** Gecerli dozaj degerleri: 0 hom-referans, 1 heterozigot, 2 hom-alternatif. */
-const VALID_DOSAGES = new Set([0, 1, 2]);
+/**
+ * Gecerli dozajlar — 3 DAHIL.
+ *
+ * 3 = EKSIK. Gercek dosyalarda cagirilamamis genotip vardir; devre yalnizca
+ * {0,1,2} kabul ederken koken kaniti eksik cagrisi olan HER panelde
+ * uretilemiyordu. Sozlesme tarafi MK-0013'te duzeltilmis, devre ve bu dosya
+ * unutulmustu.
+ */
+const VALID_DOSAGES = new Set([0, 1, 2, 3]);
+
+/** Eksik veri isareti — sozlesmedeki `DOSAGE_MISSING` ile AYNI. */
+export const DOSAGE_MISSING = 3;
+
+/** Kapsama bitlerinin alan elemani basina sayisi — devredeki degerle AYNI. */
+export const COVERAGE_BITS_PER_WORD = 240;
+
+/**
+ * Kapsama kelimeleri: bit i = "o alanda gercek veri var".
+ *
+ * @remarks Devre bunu KENDI turetir ve acik cikti olarak verir; bu fonksiyon
+ *          ayni hesabi istemcide yapar ki kanit uretmeden once beklenen
+ *          degerler bilinsin ve uyusmazlik erken yakalansin.
+ */
+export function coverageWords(dosages) {
+  const words = [];
+  for (let start = 0; start < dosages.length; start += COVERAGE_BITS_PER_WORD) {
+    const stop = Math.min(start + COVERAGE_BITS_PER_WORD, dosages.length);
+
+    let word = 0n;
+    let bitValue = 1n;
+    for (let index = start; index < stop; index++) {
+      if (dosages[index] !== DOSAGE_MISSING) word += bitValue;
+      bitValue *= 2n;
+    }
+    words.push(word);
+  }
+  return words;
+}
 
 /** circomlibjs asenkron kurulur; tek sefer kurup paylasiyoruz. */
 let eddsaPromise = null;
@@ -157,7 +194,9 @@ export function packPanel(dosages) {
     for (let index = start; index < stop; index++) {
       const dosage = dosages[index];
       if (!VALID_DOSAGES.has(dosage)) {
-        throw new Error(`gecersiz dozaj (indeks ${index}): ${dosage} — yalnizca 0, 1, 2`);
+        throw new Error(
+          `gecersiz dozaj (indeks ${index}): ${dosage} — yalnizca 0, 1, 2, 3 (3 = EKSIK)`,
+        );
       }
       packed += BigInt(dosage) * placeValue;
       placeValue *= 4n;
@@ -299,6 +338,56 @@ export function buildProvenanceInput({
     cidHigh: high.toString(),
     cidLow: low.toString(),
     signalHash: BigInt(signerAddress).toString(),
+    attested: "1",
+  };
+}
+
+/**
+ * KENDI YUKLEDIGIM katmani icin tanik girdisi (`attested = 0`).
+ *
+ * # Neden kurum alanlari yine de dolduruluyor
+ *
+ * Devre sabit sayida sinyal bekler; `attested = 0` iken imza dogrulamasi
+ * KAPALIDIR ama sinyaller yine de bir deger almak zorundadir — circom'da
+ * "bos birak" diye bir sey yoktur, eksik girdi tanik uretimini dusurur.
+ *
+ * Sifir verilmesinin sebebi: sifir, egri uzerinde gecerli bir nokta DEGILDIR.
+ * Yani bu tanik hicbir kosulda `attested = 1` ile yeniden kullanilamaz —
+ * anahtari acmaya calisan biri imza kisitinda takilir. Rastgele degerlerle
+ * doldurmak da calisirdi, ama sifir niyeti kodda gorunur kilar.
+ *
+ * # Bu katmanin SOYLEMEDIGI
+ *
+ * "Bu dozajlar gercek bir olcumden geliyor" DEMEZ. Soyledigi, kapsama
+ * bitlerinin taahhutle tutarli oldugudur — yani odeme, beyana degil
+ * matematige dayanir. Ayrinti: docs/mimari/0017-kanitli-kapsama.md
+ */
+export function buildSelfProvenanceInput({
+  dosages,
+  salt,
+  externalNullifier,
+  cidDigest,
+  signerAddress,
+  depth = TREE_DEPTH,
+}) {
+  const { high, low } = cidDigestToFieldPair(cidDigest);
+  const zeros = Array.from({ length: depth }, () => "0");
+
+  return {
+    dosages: dosages.map(String),
+    salt: BigInt(salt).toString(),
+    institutionAx: "0",
+    institutionAy: "0",
+    S: "0",
+    R8x: "0",
+    R8y: "0",
+    pathIndices: zeros,
+    siblings: zeros,
+    externalNullifier: BigInt(externalNullifier).toString(),
+    cidHigh: high.toString(),
+    cidLow: low.toString(),
+    signalHash: BigInt(signerAddress).toString(),
+    attested: "0",
   };
 }
 
