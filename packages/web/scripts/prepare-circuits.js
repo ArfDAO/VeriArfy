@@ -15,6 +15,10 @@ const OUT = join(__dirname, "..", "public", "circuits");
 const FILES = [
   [join(BUILD, "researcher_identity_js", "researcher_identity.wasm"), "researcher_identity.wasm"],
   [join(BUILD, "researcher_identity_final.zkey"), "researcher_identity_final.zkey"],
+  // Veri kokeni — katki akisinda kullanilir. Kapsama bitleri bu devrenin
+  // ACIK CIKTISIDIR, dolayisiyla odemenin dayanagi da buradan gelir.
+  [join(BUILD, "data_provenance_js", "data_provenance.wasm"), "data_provenance.wasm"],
+  [join(BUILD, "data_provenance_final.zkey"), "data_provenance_final.zkey"],
 ];
 
 const missing = FILES.filter(([src]) => !existsSync(src));
