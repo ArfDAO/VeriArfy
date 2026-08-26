@@ -13,6 +13,7 @@ import {
 import {ZamaConfig, ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 
 import {ContingencyStats} from "./libraries/ContingencyStats.sol";
+import {CoverageBits} from "./libraries/CoverageBits.sol";
 
 import {IVeriarfyBiomarkers} from "./interfaces/IVeriarfyBiomarkers.sol";
 
@@ -70,6 +71,24 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     error NotAuthorized(address node);
     error ZeroAddress();
     error EmptyCid();
+
+    /**
+     * @notice Imzasiz katman sifir olmayan bir akredite kok ile geldi.
+     *
+     * @dev Devre `attested = 0` iken koku zorla sifirlar. Sifir olmayan bir
+     *      kok gormek, cagrinin devrenin urettigi sinyallerle uyusmadigi
+     *      anlamina gelir — kanit dogrulamasi zaten dusurur ama hata mesaji
+     *      "kanit gecersiz" yerine sebebi soylesin diye once burada yakalanir.
+     */
+    error UnattestedRootNotZero();
+
+    /**
+     * @notice Beyan edilen kapsama, ZK kanitinin kapsamadigi bir alan iceriyor.
+     *
+     * @dev Kaydi olan katilimcinin maskesi kanitin ALT KUMESI olmak
+     *      zorundadir. Ayrinti: `CoverageBits.withinProven`.
+     */
+    error CoverageNotProven();
     error AlreadyAggregated(address participant);
     error InvalidThreshold(uint256 threshold, uint256 nodeCount);
     error UnknownRequest(uint256 requestId);
@@ -83,10 +102,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     error AccreditedRootExpired(uint256 root);
     error ValueOutOfField();
     error NotAParticipant(address account);
-    error AlreadyGranted(address participant, address researcher);
-    error NoActiveGrant(address participant, address researcher);
-    error EmptyQueryTypes();
-    error ExpirationInPast(uint256 expirationBlock);
+    error AlreadyLeft(address participant);
     error NotQueryGateway(address caller);
     error UnknownQueryType(uint8 queryType);
     error NoAuthorizedNodes();
@@ -118,15 +134,21 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     // Olaylar
     // ---------------------------------------------------------------------------------
 
-    event RecordSubmitted(address indexed participant, bytes32 indexed cidDigest, bool replaced);
-    event AccreditedRootUpdated(uint256 indexed newRoot, uint256 previousRoot);
-    event AccessGranted(
+    /**
+     * @param attested Kayit KURUM IMZALI mi (true) yoksa kullanicinin kendi
+     *                 yukledigi mi (false). Ayrinti: `recordAttested`.
+     */
+    event RecordSubmitted(
         address indexed participant,
-        address indexed researcher,
-        uint8 queryTypes,
-        uint256 expirationBlock
+        bytes32 indexed cidDigest,
+        bool replaced,
+        bool attested
     );
-    event AccessRevoked(address indexed participant, address indexed researcher, uint256 atBlock);
+    /// @dev Koken kaniti ile DOGRULANMIS kapsama; uydurulamaz.
+    event CoverageProven(address indexed participant, uint32 covered);
+    event AccreditedRootUpdated(uint256 indexed newRoot, uint256 previousRoot);
+    /// @dev Katilimci havuzdan cikti — bundan sonraki acilimlarda pay olusmaz.
+    event LeftPool(address indexed participant, uint256 atBlock);
     event QueryGatewayUpdated(address indexed gateway);
     event DosageAggregated(address indexed participant, uint32 participantCount);
     event NodeAuthorized(address indexed node);
@@ -148,7 +170,15 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     event HeirNodeRevoked(address indexed node);
     event Heartbeat(address indexed node, uint256 atBlock);
     event Enrolled(address indexed participant);
-    event DosagesContributed(address indexed participant, uint32 fromSnp, uint32 toSnp);
+    /// @dev `covered`: bu partide ILK KEZ kapsanan alan sayisi. Ayri bir
+    ///      sayac yerine olayda tasinir — toplam, olaylardan turetilebilir ve
+    ///      zincirde bir depolama yuvasi daha tutmaya degmez.
+    event DosagesContributed(
+        address indexed participant,
+        uint32 fromSnp,
+        uint32 toSnp,
+        uint32 covered
+    );
     event PanelConfigured(
         uint32 snpCount,
         uint32 rareSnpIndex,
@@ -195,6 +225,23 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      */
     uint256 public constant PROVENANCE_SCOPE = 2;
 
+    /**
+     * @notice Kapsama bitlerinin alan elemani basina sayisi.
+     *
+     * @dev Devredeki `COVERAGE_BITS_PER_WORD` ile AYNI olmak zorunda. 240
+     *      secildi: bir BN254 alan elemanina (~254 bit) rahat sigar ve
+     *      `uint256` maskeye de sigar, sinira dayanmaz.
+     */
+    uint256 public constant COVERAGE_BITS_PER_WORD = 240;
+
+    /**
+     * @notice Kanittaki kapsama kelimesi sayisi — devrenin PANEL'ine baglidir.
+     *
+     * @dev PANEL=1000 icin ceil(1000/240) = 5. Devre yeniden derlenirse bu
+     *      deger ve dogrulayicinin sinyal sayisi BIRLIKTE degismelidir.
+     */
+    uint256 public constant COVERAGE_WORDS = 5;
+
     /// @dev BN254 skaler alan mertebesi; disaridan gelen alan elemanlari icin sinir.
     uint256 internal constant SNARK_FIELD =
         21888242871839275222246405745257275088548364400416034343698204186575808495617;
@@ -226,6 +273,27 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *      imzali panele karsilik geldigi sonradan kanitlanabilir.
      */
     mapping(address => uint256) public panelCommitment;
+
+    /**
+     * @notice Katilimci -> kaydi KURUM IMZALI mi.
+     *
+     * @dev  IKI KATMAN — neden var
+     *
+     *       Bugun akredite kurum entegrasyonumuz yok; kullanici kendi tuketici
+     *       dosyasini (23andMe, AncestryDNA) yukluyor ve o dosyanin kurumsal
+     *       imzasi YOKTUR, olamaz da. Imzayi zorunlu tutmak B2C yolunu
+     *       tamamen kapatirdi.
+     *
+     *       Bu yuzden iki katman var ve AYIRT EDILEBILIR olmalari sart:
+     *
+     *         true  — akredite kurum paneli imzaladi (devre imzayi dogruladi)
+     *         false — kullanici kendi yukledi; kapsama yine kanitli, KOKEN degil
+     *
+     *       Ikisi de bugun ayni odeme agirligini alir; ayrim SAKLANIR ki
+     *       kurumsal entegrasyon geldiginde agirlik farki gecmise donuk
+     *       uygulanabilsin. Ayrimi sonradan turetmek imkansiz olurdu.
+     */
+    mapping(address => bool) public recordAttested;
 
     /// @notice Kayit yapmis katilimci sayisi (indeks buyuklugu).
     uint32 public recordCount;
@@ -260,45 +328,20 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     // Gizlilik Paneli — kurum bazli erisim izinleri (rapor §3.4)
     // ---------------------------------------------------------------------------------
 
-    /**
-     * @notice Katilimcinin bir arastirmaciya verdigi izin.
-     *
-     * @dev Alanlar rapor §3.4'teki `Permission` yapisini birebir karsilar.
-     *      Zaman ekseni BLOK NUMARASIDIR; rapor da `expirationBlock` diyor.
-     *
-     *      `revokedAtBlock` neden var: iznin ne zaman kalktigi bilinmezse,
-     *      izin verildigi donemde acilmis bir sorgudan hak edilen pay da
-     *      iptalle birlikte kaybolurdu. Iki sinir birlikte "hangi bloklarda
-     *      gecerliydi" araligini verir.
-     */
-    struct Permission {
-        bool isAllowed;
-        /// @dev Izin verilen sorgu tipleri (bit maskesi). Bkz. `QUERY_TYPE_*`.
-        uint8 queryTypes;
-        uint256 grantedAtBlock;
-        /// @dev Iptal blogu; izin surerken `type(uint256).max`.
-        uint256 revokedAtBlock;
-        /// @dev Otomatik sona erme; 0 = suresiz.
-        uint256 expirationBlock;
-        /// @dev Bilgi amacli ust sinir; 0 = sinirsiz.
-        uint256 maxQueries;
-    }
-
     uint8 public constant QUERY_TYPE_GWAS = 1;
     uint8 public constant QUERY_TYPE_ML = 2;
     uint8 public constant QUERY_TYPE_STATISTICS = 4;
 
-    mapping(address participant => mapping(address researcher => Permission)) private _permissions;
-
     /**
-     * @notice Bir arastirmaciya SU AN izin veren katilimci sayisi.
+     * @notice Havuzdan CIKAN katilimcinin cikis blogu; 0 ise hala icerdedir.
      *
-     * @dev Sorgu ucreti ve dagitim havuzu bu sayidan hesaplanir: arastirmaci
-     *      yalnizca kendisine izin vermis kisilerin verisi kadar oder ve
-     *      yalnizca o kisiler pay alir. Sayaci tutmak, sorgu aninda katilimci
-     *      listesini dolasmayi gereksiz kilar (O(1)).
+     * @dev  NEDEN BLOK, NEDEN BAYRAK DEGIL
+     *
+     *       Cikmadan ONCE acilan sorgulardan hak edilen paylar korunmalidir.
+     *       Yalnizca "cikti mi" sorulsaydi, cikan kisi gecmis hakedisini de
+     *       kaybederdi — cikmak cezalandirma olmamali.
      */
-    mapping(address researcher => uint32) public consentCount;
+    mapping(address => uint256) public leftPoolAtBlock;
 
     /**
      * @notice Gecerli dozaj ust siniri.
@@ -462,6 +505,27 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     mapping(uint32 => bool) private _snpInitialized;
 
     // ---------------------------------------------------------------------------------
+    // Kapsama — kimin hangi alanda GERCEK verisi var (acik, sifresiz)
+    // ---------------------------------------------------------------------------------
+
+    /**
+     * @notice `katilimci => kelime => bitler`. Bit, o SNP'de gercek veri demek.
+     *
+     * @dev Ayrinti ve guven siniri `CoverageBits` icinde. Ozet: odeme
+     *      KULLANILAN ALANA gore dagitilir, bu yuzden kapsama duz metin
+     *      olmak zorunda. Sizan sey degerin kendisi degil VARLIGIDIR.
+     *
+     *      Kullanici bunu BEYAN ETMEZ; istemcideki ayristirici cikarir.
+     *      Siradan biri dosyasinin icinde hangi varyantlarin oldugunu bilmez,
+     *      dosyanin TURUNU bilir.
+     */
+    mapping(address => mapping(uint256 => uint256)) private _snpCoverage;
+
+    /// @notice `SNP => o alana gercek veri vermis katilimci sayisi` (odemenin paydasi).
+    mapping(uint32 => uint32) public snpCoverageCount;
+
+
+    // ---------------------------------------------------------------------------------
     // Surekli biyobelirtec kanali (veri kategorisi 2) — AYRI MODUL
     // ---------------------------------------------------------------------------------
 
@@ -548,29 +612,21 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     uint32 public rareCarrierCount;
 
     /**
-     * @notice Izin ANINDA katilimcinin nadirlik durumu.
+     * @notice Nadir VE kurucu olan katilimci sayisi.
      *
-     * @dev  NEDEN DONDURULUYOR
+     * @dev  BONUS PAYDASININ TEK SAYILMASI GEREKEN BILESENI
      *
-     *       Odeme sozlesmesi payi O(1) hesaplayabilmek icin arastirmaci basina
-     *       "kac tasiyici izin verdi" sayaclarini tutar. Katilimcinin durumu
-     *       izin verdikten SONRA degisirse, bu sayaclar ile bireysel agirlik
-     *       birbirini tutmaz ve havuz asilir. Durumu izin aninda dondurmak
-     *       ikisini tanim geregi esitler.
+     *       Payda dort sinifa ayrilir: duz, yalnizca kurucu, yalnizca nadir,
+     *       ikisi birden. Ucu hesaplanabilir:
      *
-     *       Sonradan tasiyici oldugu dogrulanan bir katilimci, izni yenileyerek
-     *       (iptal + yeniden izin) yeni agirligiyla sayilir.
+     *         toplam  = participantCount
+     *         kurucu  = min(participantCount, FOUNDING_CONTRIBUTOR_LIMIT)
+     *         nadir   = rareCarrierCount
+     *
+     *       Kesisim hesaplanamaz — sayilmasi gerekir. `confirmRarity` icinde
+     *       artar, cunku nadirlik ancak orada kesinlesir.
      */
-    mapping(address participant => mapping(address researcher => bool)) public rareAtGrant;
-
-    /// @notice Bu arastirmaciya izin veren nadir tasiyici sayisi.
-    mapping(address researcher => uint32) public consentRareCount;
-
-    /// @notice Bu arastirmaciya izin veren Kurucu Katkici sayisi.
-    mapping(address researcher => uint32) public consentFoundingCount;
-
-    /// @notice Hem nadir tasiyici hem Kurucu Katkici olan izin verenler.
-    mapping(address researcher => uint32) public consentRareFoundingCount;
+    uint32 public rareFoundingCount;
 
     // ---------------------------------------------------------------------------------
     // BSKK-44 — yetkili dugumler ve esikli erisim
@@ -790,13 +846,20 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
          * dondurulur.
          */
         mapping(uint32 => euint32[3][2]) contingencySnapshot;
-        /// @dev Goruntunun kapsadigi SNP araligi [snpFrom, snpTo).
-        uint32 snpFrom;
-        uint32 snpTo;
-        /// @dev Goruntunun kapsadigi metrik araligi [metricFrom, metricTo).
-        ///      Toplamlarin kendisi `biomarkerModule` icinde dondurulur.
-        uint32 metricFrom;
-        uint32 metricTo;
+        /**
+         * @dev Goruntunun kapsadigi SNP'ler — ARALIK DEGIL, LISTE.
+         *
+         * Gercek arastirma "SNP 0-9" istemez; "rs4977574, rs429358, rs4680"
+         * ister. Bitisik pencere, arastirmaciyi ilgilenmedigi varyantlari da
+         * acmaya zorluyordu — hem gereksiz maliyet hem gereksiz aciklik.
+         *
+         * `uint32` dizisi slot basina 8 eleman paketler; 32 SNP yalnizca 4
+         * depolama yuvasi tutar.
+         */
+        uint32[] snpIds;
+        /// @dev Goruntunun kapsadigi metrikler — liste. Toplamlarin kendisi
+        ///      `biomarkerModule` icinde dondurulur.
+        uint32[] metricIds;
         address[] approvers;
     }
 
@@ -878,6 +941,39 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     // ---------------------------------------------------------------------------------
 
     /**
+     * @dev Kanitlanmis kapsama bitlerini yazar.
+     *
+     *      AYRI FONKSIYON — sebep derleyici: govde `submitRecord` icindeyken
+     *      solc "Stack too deep" veriyor; Groth16 bilesenleri yigini zaten
+     *      dolduruyor.
+     *
+     *      Kanit gecerliyse bu bitler TAAHHUDE giren dozajlardan turetilmistir;
+     *      uydurulamaz. Bu, imzasiz katmanda da gecerlidir — degisen tek sey
+     *      dozajlarin kaynagina kimin kefil oldugudur, bitlerin dogrulugu
+     *      degil. Her kelime kendi ofsetinden yazilir.
+     */
+    function _recordProvenCoverage(uint256[COVERAGE_WORDS] calldata coverage) private {
+        uint32 covered;
+
+        for (uint256 w = 0; w < COVERAGE_WORDS; ++w) {
+            uint32 from = uint32(w * COVERAGE_BITS_PER_WORD);
+            if (from >= snpCount) break;
+
+            uint256 remaining = snpCount - from;
+            covered += CoverageBits.record(
+                _snpCoverage,
+                snpCoverageCount,
+                msg.sender,
+                from,
+                coverage[w],
+                remaining < COVERAGE_BITS_PER_WORD ? remaining : COVERAGE_BITS_PER_WORD
+            );
+        }
+
+        emit CoverageProven(msg.sender, covered);
+    }
+
+    /**
      * @notice Akredite kurumlar agacinin kokunu gunceller.
      *
      * @dev Yeni bir kurum akredite edildiginde zincir disinda hesaplanan kok
@@ -912,13 +1008,25 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      * @dev  NEDEN KANIT SART
      *       Sifreli bir verinin icerigi okunamaz. Kanit olmadan, kotu niyetli
      *       bir kullanici rastgele baytlar yukleyip gelir havuzundan pay
-     *       alabilirdi (rapor §1.5, "cop veri" krizi). Kanit su dortunu ayni
-     *       anda baglar:
+     *       alabilirdi (rapor §1.5, "cop veri" krizi).
      *
+     *       IKI KATMAN — `attested`
+     *
+     *       true  (KURUM IMZALI) — kanit su dortunu ayni anda baglar:
      *         1. Panelin duz metni akredite bir kurumun EdDSA imzasini tasir,
-     *         2. Panel bicim kurallarina uyar (her dozaj 0 | 1 | 2),
+     *         2. Panel bicim kurallarina uyar (dozaj 0 | 1 | 2 | 3),
      *         3. Kanit `msg.sender`'a baglidir — baskasinin kaniti calinamaz,
      *         4. Kanit TAM OLARAK bu `cidDigest`e baglidir.
+     *
+     *       false (KENDI YUKLEDIGI) — 1. madde DUSER, digerleri kalir. Bugun
+     *       kullanilan yol budur: tuketici dosyalarinin (23andMe, AncestryDNA)
+     *       kurumsal imzasi yoktur, olamaz da; imzayi zorunlu tutmak B2C
+     *       yolunu tamamen kapatirdi.
+     *
+     *       Bu katmanin KAPATTIGI sey odeme saldirisidir: kapsama bitleri
+     *       taahhutten TURETILIR, yani "bende bu alan var" deyip bos gondermek
+     *       imkansizdir. KAPATMADIGI sey uydurma bir dosya yuklemektir; onu
+     *       ancak imzalayan bir kurum kapatabilir ve ZK kapatamaz.
      *
      *       KAPSAM SINIRI — dikkat
      *       Kanit "panelin duz metni imzalidir" der; "bu CID'deki sifreli metin
@@ -928,16 +1036,29 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      *       dogrular. Ayrinti: docs/mimari/0003-veri-kokeni-eddsa.md
      *
      * @param cidDigest    CIDv1 multihash digest'i (sha2-256, 32 bayt).
+     * @param attested     Kurum imzali katman mi (yukariya bakin).
      * @param root         Kanitin uretildigi akredite kurumlar koku.
+     *                     `attested = false` iken SIFIR olmak zorundadir.
      * @param nullifierHash Poseidon(PROVENANCE_SCOPE, commitment).
      * @param commitment   Poseidon(paketlenmis panel, salt).
+     * @param coverage     KAPSAMA KELIMELERI — devrenin ACIK CIKTISI.
+     *
+     *        Bit i = "o alanda gercek veri var" (dozaj != 3). Odeme buna gore
+     *        dagitilir. Istemciden gelseydi uydurulabilirdi: "bende bu alan
+     *        var" deyip bos gondermek, veri vermeden pay almak demekti.
+     *        Burada kanitin PARCASI oldugu icin uydurulamaz — dozajlar zaten
+     *        kurumun imzaladigi taahhude giriyor, kapsama ayni dozajlardan
+     *        turetiliyor.
+     *
      * @param pA/pB/pC     Groth16 kanit bilesenleri.
      */
     function submitRecord(
         bytes32 cidDigest,
+        bool attested,
         uint256 root,
         uint256 nullifierHash,
         uint256 commitment,
+        uint256[COVERAGE_WORDS] calldata coverage,
         uint256[2] calldata pA,
         uint256[2][2] calldata pB,
         uint256[2] calldata pC
@@ -947,7 +1068,18 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
             revert ProvenanceNullifierSpent(nullifierHash);
         }
 
-        _validateAccreditedRoot(root);
+        // KATMAN AYRIMI.
+        //
+        // Devre koku `attested` ile carpar: imzasiz katmanda kok ZORLA sifirdir
+        // ve sifir olmayan kok uretmenin tek yolu anahtari acmaktir, o da EdDSA
+        // dogrulamasini zorunlu kilar. Yani "kok akredite listede" kontrolu,
+        // imzanin da dogrulandiginin kaniti olur; sozlesmenin ayrica guvenmesi
+        // gereken bir sey kalmaz.
+        if (attested) {
+            _validateAccreditedRoot(root);
+        } else if (root != 0) {
+            revert UnattestedRootNotZero();
+        }
 
         // CID BAGLAMA — kritik satir.
         //
@@ -960,14 +1092,23 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         uint256 cidHigh = uint256(cidDigest) >> 128;
         uint256 cidLow = uint256(cidDigest) & type(uint128).max;
 
-        uint256[7] memory publicSignals = [
+        // SINYAL SIRASI DEVREDEKIYLE BIREBIR: circom once CIKTILARI, sonra
+        // acik GIRDILERI yazar. Kapsama kelimeleri bu yuzden ARADA durur.
+        // Sira kayarsa hata olusmaz — kanit sessizce reddedilir.
+        uint256[13] memory publicSignals = [
             root,
             nullifierHash,
             commitment,
+            coverage[0],
+            coverage[1],
+            coverage[2],
+            coverage[3],
+            coverage[4],
             PROVENANCE_SCOPE,
             cidHigh,
             cidLow,
-            uint256(uint160(msg.sender))
+            uint256(uint160(msg.sender)),
+            attested ? 1 : 0
         ];
 
         if (!provenanceVerifier.verifyProof(pA, pB, pC, publicSignals)) {
@@ -983,8 +1124,12 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
 
         userCIDs[msg.sender] = cidDigest;
         panelCommitment[msg.sender] = commitment;
+        recordAttested[msg.sender] = attested;
 
-        emit RecordSubmitted(msg.sender, cidDigest, replaced);
+        emit RecordSubmitted(msg.sender, cidDigest, replaced, attested);
+
+        // KAPSAMA — artik KANITLI. Ayrinti `_recordProvenCoverage` icinde.
+        _recordProvenCoverage(coverage);
     }
 
     // ---------------------------------------------------------------------------------
@@ -1019,7 +1164,9 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
 
         externalEuint8[] memory single = new externalEuint8[](1);
         single[0] = encDosage;
-        _contribute(single, inputProof);
+        // Tek SNP'lik kisayolda kapsama her zaman 1'dir: gonderilen tek deger
+        // zaten o varyantin verisidir.
+        _contribute(single, 1, inputProof);
     }
 
     /**
@@ -1055,13 +1202,14 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
      */
     function contributeDosages(
         externalEuint8[] calldata encDosages,
+        uint256 coverageMask,
         bytes calldata inputProof
     ) external nonReentrant {
         externalEuint8[] memory copied = new externalEuint8[](encDosages.length);
         for (uint256 i = 0; i < encDosages.length; ++i) {
             copied[i] = encDosages[i];
         }
-        _contribute(copied, inputProof);
+        _contribute(copied, coverageMask, inputProof);
     }
 
     function _enroll(externalEuint8 encGroup, bytes calldata inputProof) private {
@@ -1091,7 +1239,11 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         emit Enrolled(msg.sender);
     }
 
-    function _contribute(externalEuint8[] memory encDosages, bytes calldata inputProof) private {
+    function _contribute(
+        externalEuint8[] memory encDosages,
+        uint256 coverageMask,
+        bytes calldata inputProof
+    ) private {
         if (!isEnrolled[msg.sender]) revert NotEnrolled(msg.sender);
         if (encDosages.length == 0) revert EmptyBatch();
 
@@ -1143,7 +1295,43 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         }
 
         submittedSnps[msg.sender] = end;
-        emit DosagesContributed(msg.sender, start, end);
+
+        // KAPSAMA — hangi alanlarda gercek veri var.
+        //
+        // IKI YOL VAR ve hangisinin gecerli oldugu KAYDIN VARLIGINA baglidir.
+        //
+        //   Kaydi olan (ZK) : kapsama `submitRecord` ile KANITTAN yazilmistir.
+        //                     Buradaki maske yeni alan EKLEYEMEZ, yalnizca
+        //                     kanitin alt kumesi olabilir. Ekleyebilseydi
+        //                     kanit yolu bos yere kurulmus olurdu: saldirgan
+        //                     dar bir kanit gonderip sonra maskeyle
+        //                     genisletirdi.
+        //
+        //   Kaydi olmayan   : maske dogrudan yazilir (eski davranis). Bu yol
+        //                     testler ve kanit devresi olmayan veri turleri
+        //                     icin duruyor; arayuz her zaman kanit gonderir.
+        uint32 covered;
+
+        if (panelCommitment[msg.sender] != 0) {
+            if (
+                !CoverageBits.withinProven(
+                    _snpCoverage, msg.sender, start, coverageMask, encDosages.length
+                )
+            ) {
+                revert CoverageNotProven();
+            }
+        } else {
+            covered = CoverageBits.record(
+                _snpCoverage,
+                snpCoverageCount,
+                msg.sender,
+                start,
+                coverageMask,
+                encDosages.length
+            );
+        }
+
+        emit DosagesContributed(msg.sender, start, end, covered);
 
         // Katilimci ancak paneli TAMAMLAYINCA sayilir.
         //
@@ -1194,6 +1382,42 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         emit PanelConfigured(snpCount_, rareSnpIndex_, panelHash_, panelUri_);
     }
 
+    /**
+     * @notice Katilimcinin ISTENEN SNP'lerden kacinda gercek verisi var?
+     *
+     * @dev Odeme payinin PAYI. Odeme sozlesmesi bunu okur.
+     */
+    function snpCoverageWeight(
+        address participant,
+        uint32[] calldata snpIds
+    ) external view returns (uint32) {
+        return CoverageBits.weight(_snpCoverage, participant, snpIds);
+    }
+
+    /// @notice Istenen SNP'lerin kapsama sayaclarinin toplami — odemenin PAYDASI.
+    function snpCoverageTotal(uint32[] calldata snpIds) external view returns (uint256) {
+        return CoverageBits.total(snpCoverageCount, snpIds);
+    }
+
+    /**
+     * @notice Istenen SNP'lerin hangilerinde verisi oldugu — BIT MASKESI.
+     *
+     * @dev Bit i, `snpIds[i]` alanina karsilik gelir. Odeme sozlesmesi
+     *      kitliga gore agirliklandirma yaparken alan basina ayri bir cagri
+     *      yapmak zorunda kalmasin diye vardir.
+     */
+    function snpCoverageMask(
+        address participant,
+        uint32[] calldata snpIds
+    ) external view returns (uint256) {
+        return CoverageBits.maskOf(_snpCoverage, participant, snpIds);
+    }
+
+    /// @notice Katilimcinin bu SNP'de gercek verisi var mi?
+    function hasSnpCoverage(address participant, uint32 snp) external view returns (bool) {
+        return CoverageBits.has(_snpCoverage, participant, snp);
+    }
+
     /// @notice Katilimci paneli TAMAMLADI mi?
     function hasAggregated(address participant) public view returns (bool) {
         return submittedSnps[participant] == snpCount && isEnrolled[participant];
@@ -1238,135 +1462,82 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     }
 
     // ---------------------------------------------------------------------------------
-    // 3) Gizlilik Paneli — izin ver / geri al
+    // 3) Gizlilik Paneli — havuzdan cikis
     // ---------------------------------------------------------------------------------
 
     /**
-     * @notice Bir arastirmaciya verinizi kullanma izni verir.
+     * @notice HAVUZDAN CIK — bundan sonraki calismalarda verim kullanilmasin.
      *
-     * @dev  Izin ancak veri havuza girdikten SONRA verilebilir; aksi halde
-     *       `consentCount` gercekte var olmayan bir veriyi sayar ve
-     *       arastirmaci bos veri icin oder.
+     * @dev  NEDEN "IZIN VER" DEGIL DE "CIK"
      *
-     * @param researcher      Izin verilen adres.
-     * @param queryTypes      Bit maskesi: GWAS | ML | STATISTICS.
-     * @param expirationBlock Otomatik sona erme blogu; 0 = suresiz.
-     * @param maxQueries      Bilgi amacli ust sinir; 0 = sinirsiz.
+     *       Onceki surumde arastirmaci BAZINDA izin vardi. Mimari o sozu
+     *       TUTAMIYORDU ve sozlesmenin kendisi bunu zorunlu kiliyordu:
+     *       `grantAccess` havuza girmis olmayi sart kosuyordu, yani sira
+     *       MECBUREN "once yukle, sonra izin ver"di. Sonucu:
+     *
+     *         - bugun yukleyen, YARIN kaydolan arastirmaciya izin veremez;
+     *           var olmayan bir adrese izin verilemez ama verisi zaten
+     *           toplamin icindedir,
+     *         - izin geri alinsa bile karisan geri cikarilamaz,
+     *         - "su kuruma evet, buna hayir" imkansizdir cunku toplam TEKTIR.
+     *
+     *       Uc durumda da sonuc ayni: veri kullaniliyor, karsiligi odenmiyor.
+     *       Olmayan bir kontrolu var gibi gostermek, bu panelin tum amacina
+     *       aykiriydi.
+     *
+     *       YUKLEME ZATEN IZNIN KENDISIDIR: katilimci calismanin panelini,
+     *       kurallarini ve k-anonimlik esigini gorup girer; panel ozeti
+     *       zincirde sabittir ve degistirilemez.
+     *
+     *       DURUST SINIR — CIKMAK GECMISI SILMEZ. Toplama karisan geri
+     *       cikarilamaz; bu bir uygulama eksigi degil, homomorfik toplamanin
+     *       dogasidir. Cikis BUNDAN SONRASI icindir ve panel bunu boyle yazar.
      */
-    function grantAccess(
-        address researcher,
-        uint8 queryTypes,
-        uint256 expirationBlock,
-        uint256 maxQueries
-    ) external nonReentrant {
-        if (researcher == address(0)) revert ZeroAddress();
+    function leavePool() external nonReentrant {
         if (participantIndex[msg.sender] == 0) revert NotAParticipant(msg.sender);
-        if (queryTypes == 0) revert EmptyQueryTypes();
-        if (expirationBlock != 0 && expirationBlock <= block.number) {
-            revert ExpirationInPast(expirationBlock);
-        }
+        if (leftPoolAtBlock[msg.sender] != 0) revert AlreadyLeft(msg.sender);
 
-        Permission storage grant = _permissions[msg.sender][researcher];
-        if (_isLive(grant)) revert AlreadyGranted(msg.sender, researcher);
-
-        _permissions[msg.sender][researcher] = Permission({
-            isAllowed: true,
-            queryTypes: queryTypes,
-            grantedAtBlock: block.number,
-            revokedAtBlock: type(uint256).max,
-            expirationBlock: expirationBlock,
-            maxQueries: maxQueries
-        });
-
-        // Nadirlik/kuruculuk durumu izin aninda DONDURULUR; gerekcesi
-        // `rareAtGrant` aciklamasinda. Sayaclar ile bireysel agirlik ayni
-        // kaynaktan beslenir, boylece dagitim havuzu asla asilamaz.
-        bool rare = isRareCarrier[msg.sender];
-        bool founding = isFoundingContributor(msg.sender);
-        rareAtGrant[msg.sender][researcher] = rare;
-
-        consentCount[researcher] += 1;
-        if (rare) consentRareCount[researcher] += 1;
-        if (founding) consentFoundingCount[researcher] += 1;
-        if (rare && founding) consentRareFoundingCount[researcher] += 1;
-
-        emit AccessGranted(msg.sender, researcher, queryTypes, expirationBlock);
+        leftPoolAtBlock[msg.sender] = block.number;
+        emit LeftPool(msg.sender, block.number);
     }
 
     /**
-     * @notice Verilen izni geri alir (rapor §3.4.1 "Revoke").
+     * @notice Katilimci, verilen blokta havuzda MIYDI?
      *
-     * @dev  KAPSAM — dogru anlasilmasi onemli:
-     *       Iptal, iptalden SONRA acilacak sorgular icin gecerlidir. Iptalden
-     *       once acilmis bir sorgudan hak edilen pay durur; hakedis o sorgunun
-     *       acildigi blokta iznin gecerli olmasina baglidir.
-     *
-     *       Zaten hesaplanmis toplamdan verinin geri cikarilmasi mumkun
-     *       DEGILDIR: havuz homomorfik bir toplamdir ve bir terimi cikarmak
-     *       icin o terimin sifreli halinin ayrica saklanmasi gerekirdi.
-     *       Rapor §3.4.1 "hesaplamaya dahil etmeye calisirsa revert eder"
-     *       diyor; burada saglanan sey bunun gelecege donuk karsiligidir.
+     * @dev Odeme bunu sorar. "Su an havuzda mi" sorusu YANLIS olurdu: cikan
+     *      kisi, cikmadan once acilan sorgulardan hak ettigi payi da
+     *      kaybederdi. Cikmak cezalandirma degildir.
      */
-    function revokeAccess(address researcher) external nonReentrant {
-        Permission storage grant = _permissions[msg.sender][researcher];
-        if (!_isLive(grant)) revert NoActiveGrant(msg.sender, researcher);
-
-        grant.isAllowed = false;
-        grant.revokedAtBlock = block.number;
-
-        // Sayaclardan dusulen degerler, IZIN ANINDA dondurulan duruma gore
-        // secilir — guncel duruma gore dusulseydi, arada nadirligi dogrulanan
-        // bir katilimci sayaci eksiye dusurebilirdi.
-        bool rare = rareAtGrant[msg.sender][researcher];
-        bool founding = isFoundingContributor(msg.sender);
-
-        consentCount[researcher] -= 1;
-        if (rare) consentRareCount[researcher] -= 1;
-        if (founding) consentFoundingCount[researcher] -= 1;
-        if (rare && founding) consentRareFoundingCount[researcher] -= 1;
-
-        emit AccessRevoked(msg.sender, researcher, block.number);
-    }
-
-    /** @dev Izin su anda yururlukte mi (iptal edilmemis ve suresi gecmemis). */
-    function _isLive(Permission storage grant) private view returns (bool) {
-        if (!grant.isAllowed) return false;
-        if (grant.expirationBlock != 0 && block.number >= grant.expirationBlock) {
-            return false;
-        }
-        return true;
-    }
-
-    /**
-     * @notice Izin BELIRLI BIR BLOKTA gecerli miydi?
-     *
-     * @dev Odeme sozlesmesi hakedisi bununla belirler. "Su an gecerli mi"
-     *      sorusu yanlis olurdu: sorgu acildiktan sonra izni iptal eden bir
-     *      katilimci, o sorgudan hak ettigi payi kaybederdi.
-     */
-    function hasAccessAt(
-        address participant,
-        address researcher,
-        uint256 blockNumber
-    ) external view returns (bool) {
-        Permission storage grant = _permissions[participant][researcher];
-
-        if (grant.grantedAtBlock == 0) return false;
-        if (blockNumber < grant.grantedAtBlock) return false;
-        if (blockNumber >= grant.revokedAtBlock) return false;
-        if (grant.expirationBlock != 0 && blockNumber >= grant.expirationBlock) {
-            return false;
-        }
-        return true;
-    }
-
-    /// @notice Izin kaydini oldugu gibi dondurur (panel bunu gosterir).
-    function permission(address participant, address researcher)
+    function wasInPoolAt(address participant, uint256 blockNumber)
         external
         view
-        returns (Permission memory)
+        returns (bool)
     {
-        return _permissions[participant][researcher];
+        if (participantIndex[participant] == 0) return false;
+        uint256 left = leftPoolAtBlock[participant];
+        return left == 0 || blockNumber < left;
+    }
+
+    /**
+     * @notice Katilimcinin nadirligi, verilen bloktan ONCE dogrulanmis miydi?
+     *
+     * @dev  NEDEN DONDURULMASI SART
+     *
+     *       Odeme sozlesmesi bonus paydasini sorgu ACILIRKEN, o andaki
+     *       sayaclardan O(1) hesaplar. Bireysel agirlik sonradan degisirse
+     *       (biri sorgu acildiktan sonra nadirligini dogrularsa) paylarin
+     *       toplami paydayi ASAR ve havuzdan fazla para cikar.
+     *
+     *       Blok karsilastirmasi ikisini tanim geregi esitler: sorgu anindan
+     *       SONRA dogrulanan nadirlik o sorguda sayilmaz, sonrakilerde sayilir.
+     */
+    function rareBefore(address participant, uint256 blockNumber)
+        external
+        view
+        returns (bool)
+    {
+        uint256 confirmed = rarityConfirmedAtBlock[participant];
+        return isRareCarrier[participant] && confirmed != 0 && confirmed <= blockNumber;
     }
 
     /**
@@ -1468,6 +1639,10 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         if (rare) {
             isRareCarrier[participant] = true;
             rareCarrierCount += 1;
+
+            // Kesisim SAYILMAK zorunda: "nadir VE kurucu" kac kisi oldugu
+            // diger sayaclardan turetilemez. Bonus paydasinin bileseni.
+            if (isFoundingContributor(participant)) rareFoundingCount += 1;
         }
 
         emit RarityConfirmed(participant, rare, rareCarrierCount);
@@ -1576,69 +1751,53 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         address researcher,
         uint8 queryType
     ) external nonReentrant returns (uint256 requestId) {
-        // Varsayilan pencere: panelin basindan, tavana kadar. Tek SNP'lik
-        // calismalarda eski davranisla birebir ayni.
-        uint32 window = snpCount > MAX_DISCLOSURE_WINDOW ? MAX_DISCLOSURE_WINDOW : snpCount;
+        // Varsayilan: panelin basindan tavana kadar TUM alanlar. Alan
+        // secmeyen cagiranlar (ornegin duman testleri) icin kisayol.
+        return _requestDisclosure(
+            researcher,
+            queryType,
+            _defaultIds(snpCount > MAX_DISCLOSURE_WINDOW ? MAX_DISCLOSURE_WINDOW : snpCount),
+            _defaultIds(_defaultMetricWindow())
+        );
+    }
 
-        // Metrik paneli varsa varsayilan olarak o da tavana kadar acilir;
-        // yoksa (modul yok) aralik bostur ve modul hic cagrilmaz.
-        uint32 metricWindow = _defaultMetricWindow();
-
-        return _requestDisclosure(researcher, queryType, 0, window, 0, metricWindow);
+    /// @dev `[0, 1, ... n-1]` — varsayilan alan listesi.
+    function _defaultIds(uint32 n) private pure returns (uint32[] memory ids) {
+        ids = new uint32[](n);
+        for (uint32 i = 0; i < n; ++i) ids[i] = i;
     }
 
     /**
-     * @notice Acilim talebini belirli bir METRIK araligi icin acar.
+     * @notice Acilim talebini SECILEN ALANLAR icin acar.
      *
-     * @dev SNP penceresiyle ayni gerekce: arastirmaci genelde birkac metrikle
-     *      ilgilenir ve ne kadar az acilirsa gizlilik o kadar korunur.
+     * @dev  NEDEN ARALIK DEGIL LISTE
+     *
+     *       Her arastirmaci ayni veriyle calismaz: birine `rs4977574` ve
+     *       VO2 max lazimdir, digerine bambaska bir kume. Bitisik pencere
+     *       arastirmaciyi ilgilenmedigi alanlari da acmaya zorluyordu — hem
+     *       gereksiz maliyet hem GEREKSIZ ACIKLIK.
+     *
+     *       Odeme de buna baglanir (bkz. `CoverageBits`): secilen alanlara
+     *       GERCEKTEN veri vermis olanlar, verdikleri alan sayisi kadar pay
+     *       alir.
+     *
+     * @param snpIds    Istenen SNP indeksleri; en fazla `MAX_DISCLOSURE_WINDOW`.
+     * @param metricIds Istenen metrik indeksleri; bos birakilabilir.
      */
-    function requestDisclosureMetrics(
+    function requestDisclosureFields(
         address researcher,
         uint8 queryType,
-        uint32 snpFrom,
-        uint32 snpWindow,
-        uint32 metricFrom,
-        uint32 metricWindow
+        uint32[] calldata snpIds,
+        uint32[] calldata metricIds
     ) external nonReentrant returns (uint256 requestId) {
-        return
-            _requestDisclosure(
-                researcher,
-                queryType,
-                snpFrom,
-                snpWindow,
-                metricFrom,
-                metricWindow
-            );
-    }
-
-    /**
-     * @notice Acilim talebini BELIRLI bir SNP araligi icin acar.
-     *
-     * @dev Cok varyantli panellerde arastirmaci genelde birkac SNP ile
-     *      ilgilenir; tum paneli cozdurmek hem gereksiz hem de gizlilik
-     *      acisindan savurgandir (ne kadar az acilirsa o kadar iyi).
-     *
-     * @param snpFrom   Aralik basi (dahil).
-     * @param snpWindow Aralik uzunlugu; en fazla `MAX_DISCLOSURE_WINDOW`.
-     */
-    function requestDisclosureWindow(
-        address researcher,
-        uint8 queryType,
-        uint32 snpFrom,
-        uint32 snpWindow
-    ) external nonReentrant returns (uint256 requestId) {
-        uint32 metricWindow = _defaultMetricWindow();
-        return _requestDisclosure(researcher, queryType, snpFrom, snpWindow, 0, metricWindow);
+        return _requestDisclosure(researcher, queryType, snpIds, metricIds);
     }
 
     function _requestDisclosure(
         address researcher,
         uint8 queryType,
-        uint32 snpFrom,
-        uint32 snpWindow,
-        uint32 metricFrom,
-        uint32 metricWindow
+        uint32[] memory snpIds,
+        uint32[] memory metricIds
     ) private returns (uint256 requestId) {
         if (msg.sender != queryGateway) revert NotQueryGateway(msg.sender);
         if (researcher == address(0)) revert ZeroAddress();
@@ -1673,36 +1832,33 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         // Yalnizca ISTENEN ARALIK kopyalanir. Tum panel kopyalansaydi 1000
         // SNP'de 6000 handle yazimi olurdu: gaz acisindan imkansiz ve
         // gereksiz, cunku arastirmaci belirli varyantlarla ilgilenir.
-        uint32 windowEnd = snpFrom + snpWindow;
-        if (windowEnd > snpCount) revert TooManySnps(windowEnd, snpCount);
-        if (snpWindow == 0 || snpWindow > MAX_DISCLOSURE_WINDOW) {
-            revert InvalidSnpWindow(snpWindow, MAX_DISCLOSURE_WINDOW);
+        if (snpIds.length == 0 || snpIds.length > MAX_DISCLOSURE_WINDOW) {
+            revert InvalidSnpWindow(uint32(snpIds.length), MAX_DISCLOSURE_WINDOW);
         }
 
-        request.snpFrom = snpFrom;
-        request.snpTo = windowEnd;
+        for (uint256 i = 0; i < snpIds.length; ++i) {
+            uint32 snp = snpIds[i];
+            if (snp >= snpCount) revert TooManySnps(snp + 1, snpCount);
 
-        for (uint32 snp = snpFrom; snp < windowEnd; ++snp) {
+            request.snpIds.push(snp);
             ContingencyStats.snapshot(_contingency, request.contingencySnapshot, snp);
         }
 
         // Biyobelirtec toplamlari da ayni anda dondurulur.
         //
-        // `metricWindow == 0` gecerlidir ve "bu talep metrik istemiyor"
-        // demektir — yalnizca genomik calismalarda (metrik paneli yok) ve
-        // arastirmacinin sadece GWAS istedigi durumlarda olur. SNP penceresi
-        // icin ayni sey gecerli DEGILDIR: orada 0 pencere anlamsizdir cunku
-        // her calismanin en az bir SNP'si vardir.
-        uint32 metricEnd = metricFrom + metricWindow;
-        if (metricWindow > 0 && biomarkerModule == address(0)) {
-            revert InvalidMetricWindow(metricWindow, 0);
-        }
-
-        request.metricFrom = metricFrom;
-        request.metricTo = metricEnd;
-
-        if (metricEnd > metricFrom) {
-            IVeriarfyBiomarkers(biomarkerModule).snapshotFor(requestId, metricFrom, metricEnd);
+        // Bos metrik listesi GECERLIDIR ve "bu talep metrik istemiyor"
+        // demektir — yalnizca genomik calismalarda ve arastirmacinin sadece
+        // GWAS istedigi durumlarda olur. SNP listesi icin ayni sey gecerli
+        // DEGILDIR: orada bos liste anlamsizdir cunku her calismanin en az
+        // bir SNP'si vardir.
+        if (metricIds.length > 0) {
+            if (biomarkerModule == address(0)) {
+                revert InvalidMetricWindow(uint32(metricIds.length), 0);
+            }
+            for (uint256 i = 0; i < metricIds.length; ++i) {
+                request.metricIds.push(metricIds[i]);
+            }
+            IVeriarfyBiomarkers(biomarkerModule).snapshotFor(requestId, metricIds);
         }
 
         emit DisclosureRequested(requestId, researcher, participantCount);
@@ -2018,12 +2174,17 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         FHE.allow(request.snapshot, request.requester);
 
         // Ki-kare icin her SNP'nin 6 hucresi cozulebilmeli; tek tek izin verilir.
-        for (uint32 snp = request.snpFrom; snp < request.snpTo; ++snp) {
-            ContingencyStats.grant(request.contingencySnapshot, snp, request.requester);
+        uint256 snpLength = request.snpIds.length;
+        for (uint256 i = 0; i < snpLength; ++i) {
+            ContingencyStats.grant(
+                request.contingencySnapshot,
+                request.snpIds[i],
+                request.requester
+            );
         }
 
         // Welch t-testi icin metrik basina 6 sayi cozulebilmeli.
-        if (request.metricTo > request.metricFrom) {
+        if (request.metricIds.length > 0) {
             IVeriarfyBiomarkers(biomarkerModule).grantFor(requestId, request.requester);
         }
 
@@ -2097,40 +2258,45 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     function disclosureContingency(
         uint256 requestId
     ) external view returns (euint32[3][2] memory) {
-        // Geriye donuk kisayol: penceredeki ILK SNP. Tek SNP'lik calismalarda
+        // Geriye donuk kisayol: SECILEN ILK SNP. Tek SNP'lik calismalarda
         // eskisiyle ayni davranir.
-        return disclosureContingencyAt(requestId, _requests[requestId].snpFrom);
+        return disclosureContingencyAt(requestId, _requests[requestId].snpIds[0]);
     }
 
-    /// @notice Talep penceresindeki BELIRLI bir SNP'nin sifreli tablosu.
+    /**
+     * @notice Talepte SECILEN bir SNP'nin sifreli tablosu.
+     *
+     * @dev Uyelik listede aranir. Liste en fazla `MAX_DISCLOSURE_WINDOW`
+     *      uzunlugunda ve bu bir `view` — dolayisiyla dogrusal arama bedava.
+     *      Ayri bir uyelik haritasi tutmak, her talepte fazladan depolama
+     *      yazimi demek olurdu.
+     */
     function disclosureContingencyAt(
         uint256 requestId,
         uint32 snp
     ) public view returns (euint32[3][2] memory) {
         DisclosureRequest storage request = _requests[requestId];
         if (request.requester == address(0)) revert UnknownRequest(requestId);
-        if (snp < request.snpFrom || snp >= request.snpTo) {
-            revert SnpOutsideWindow(snp, request.snpFrom, request.snpTo);
+
+        uint256 length = request.snpIds.length;
+        for (uint256 i = 0; i < length; ++i) {
+            if (request.snpIds[i] == snp) return request.contingencySnapshot[snp];
         }
-        return request.contingencySnapshot[snp];
+        revert SnpOutsideWindow(snp, 0, uint32(length));
     }
 
-    /// @notice Talebin kapsadigi SNP araligi [from, to).
-    function disclosureWindow(
-        uint256 requestId
-    ) external view returns (uint32 from, uint32 to) {
+    /// @notice Talepte secilen SNP'ler.
+    function disclosureSnpIds(uint256 requestId) external view returns (uint32[] memory) {
         DisclosureRequest storage request = _requests[requestId];
         if (request.requester == address(0)) revert UnknownRequest(requestId);
-        return (request.snpFrom, request.snpTo);
+        return request.snpIds;
     }
 
-    /// @notice Talebin kapsadigi metrik araligi [from, to).
-    function disclosureMetricWindow(
-        uint256 requestId
-    ) external view returns (uint32 from, uint32 to) {
+    /// @notice Talepte secilen metrikler.
+    function disclosureMetricIds(uint256 requestId) external view returns (uint32[] memory) {
         DisclosureRequest storage request = _requests[requestId];
         if (request.requester == address(0)) revert UnknownRequest(requestId);
-        return (request.metricFrom, request.metricTo);
+        return request.metricIds;
     }
 
     /**
