@@ -72,6 +72,7 @@ describe("Web ABI senkronizasyonu", () => {
   const MAPPING: Record<string, string> = {
     PROTOCOL_ABI: "VeriarfyProtocol",
     BIOMARKERS_ABI: "VeriarfyBiomarkers",
+    STAKING_ABI: "VeriarfyStaking",
     PAYMENTS_ABI: "VeriarfyPayments",
     REGISTRY_ABI: "VeriArfyRegistry",
     STUDY_ABI: "AnxietyStudy",
