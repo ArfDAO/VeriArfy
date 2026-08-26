@@ -110,7 +110,7 @@ describe("Biyobelirtec kanali (veri kategorisi 2)", () => {
       .add8(0)
       .encrypt();
     await protocol.connect(signer).enroll(enc.handles[0], enc.inputProof);
-    await protocol.connect(signer).contributeDosages([enc.handles[1]], enc.inputProof);
+    await protocol.connect(signer).contributeDosages([enc.handles[1]], 1, enc.inputProof);
   }
 
   /**
@@ -124,7 +124,11 @@ describe("Biyobelirtec kanali (veri kategorisi 2)", () => {
     for (const v of values) builder.add32(v);
     const enc = await builder.encrypt();
 
-    await biomarkers.connect(signer).contributeBiomarkers(enc.handles, enc.inputProof);
+    // Kapsama maskesi olcumlerden TURETILIR: 0 (BIOMARKER_MISSING) girilen
+    // metrik "olculmedi" demektir ve o alanin kapsamasina girmez.
+    const mask = values.reduce((m, v, i) => (v === 0 ? m : m | (1n << BigInt(i))), 0n);
+
+    await biomarkers.connect(signer).contributeBiomarkers(enc.handles, mask, enc.inputProof);
   }
 
   async function join(signer: Signer, group: number, values: number[]) {
@@ -395,7 +399,7 @@ describe("Biyobelirtec kanali (veri kategorisi 2)", () => {
       ).to.be.revertedWithCustomError(biomarkers, "NotProtocol");
 
       await expect(
-        biomarkers.connect(owner).snapshotFor(0, 0, 1),
+        biomarkers.connect(owner).snapshotFor(0, [0]),
       ).to.be.revertedWithCustomError(biomarkers, "NotProtocol");
     });
 
