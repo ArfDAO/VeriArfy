@@ -1,5 +1,5 @@
 import { ethers, fhevm } from "hardhat";
-import { protocolFactory } from "./helpers/factories";
+import { fullCoverage, protocolFactory } from "./helpers/factories";
 
 /**
  * Cok SNP'li GWAS'in gercek siniri: HCU — rapor §3.3.
@@ -61,7 +61,7 @@ describe("Cok SNP'li GWAS — parti tavani (HCU)", () => {
       try {
         const tx = await protocol
           .connect(participant)
-          .contributeDosages(enc.handles, enc.inputProof);
+          .contributeDosages(enc.handles, fullCoverage(batch), enc.inputProof);
         const receipt = await tx.wait();
         return Number(receipt!.gasUsed);
       } catch (err: any) {
