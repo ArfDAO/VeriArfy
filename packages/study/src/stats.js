@@ -208,3 +208,163 @@ export function formatP(p) {
   if (p < 0.0001) return "< 0.0001";
   return p.toFixed(4);
 }
+
+/* ------------------------------------------------------------------ *
+ * Ki-kare — kategorik veri (veri kategorisi 1: genomik dozaj)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Duzenlenmis eksik gama fonksiyonu P(a, x) — seri acilimi.
+ *
+ * @remarks Ki-kare p-degeri icin gerekli. Beta fonksiyonu (t-testi) burada
+ *          ise yaramaz: farkli dagilim, farkli ozel fonksiyon.
+ */
+function gammaSeries(a, x) {
+  const ITMAX = 300;
+  const EPS = 3e-16;
+
+  if (x <= 0) return 0;
+
+  let ap = a;
+  let sum = 1 / a;
+  let del = sum;
+  for (let n = 0; n < ITMAX; n++) {
+    ap += 1;
+    del *= x / ap;
+    sum += del;
+    if (Math.abs(del) < Math.abs(sum) * EPS) break;
+  }
+  return sum * Math.exp(-x + a * Math.log(x) - gammaln(a));
+}
+
+/** Duzenlenmis eksik gama fonksiyonu Q(a, x) — surekli kesir (Lentz). */
+function gammaContinuedFraction(a, x) {
+  const ITMAX = 300;
+  const EPS = 3e-16;
+  const FPMIN = 1e-300;
+
+  let b = x + 1 - a;
+  let c = 1 / FPMIN;
+  let d = 1 / b;
+  let h = d;
+
+  for (let i = 1; i <= ITMAX; i++) {
+    const an = -i * (i - a);
+    b += 2;
+    d = an * d + b;
+    if (Math.abs(d) < FPMIN) d = FPMIN;
+    c = b + an / c;
+    if (Math.abs(c) < FPMIN) c = FPMIN;
+    d = 1 / d;
+    const del = d * c;
+    h *= del;
+    if (Math.abs(del - 1) < EPS) break;
+  }
+  return Math.exp(-x + a * Math.log(x) - gammaln(a)) * h;
+}
+
+/**
+ * Ki-kare dagiliminin ust kuyruk olasiligi: P(X > chi2), df serbestlik dereceli.
+ *
+ * @remarks Iki yontem BILINCLI olarak ayrilmistir: seri acilimi kucuk `x`'te,
+ *          surekli kesir buyuk `x`'te yakinsar. Tek yontem kullanmak
+ *          uclarda sessizce yanlis p-degeri uretirdi.
+ */
+export function chiSquareP(chi2, df) {
+  if (!Number.isFinite(chi2) || !Number.isFinite(df) || df <= 0) return NaN;
+  if (chi2 <= 0) return 1;
+
+  const a = df / 2;
+  const x = chi2 / 2;
+
+  return x < a + 1 ? 1 - gammaSeries(a, x) : gammaContinuedFraction(a, x);
+}
+
+/**
+ * Kontenjans tablosundan ki-kare bagimsizlik testi.
+ *
+ * @param {number[][]} table `[grup][seviye]` sayimlari (bizde 2x3).
+ *
+ * @remarks Bos satir/sutunlar DUSURULUR ve serbestlik derecesi buna gore
+ *          hesaplanir. Dusurulmezse beklenen deger sifir olur, bolme patlar
+ *          ve `Infinity` bir ki-kare degeri gibi gorunerek "cok anlamli"
+ *          sonuc uretirdi.
+ *
+ *          `minExpected` uyarisi: ki-kare yaklasimi beklenen hucre sayisi
+ *          5'in altina duserse guvenilmez. Sayi gizlenmez, gosterilir.
+ */
+export function chiSquareTest(table) {
+  const rowSums = table.map((row) => row.reduce((a, b) => a + b, 0));
+  const colCount = table[0]?.length ?? 0;
+  const colSums = Array.from({ length: colCount }, (_, c) =>
+    table.reduce((sum, row) => sum + row[c], 0),
+  );
+  const total = rowSums.reduce((a, b) => a + b, 0);
+
+  const usedRows = rowSums.filter((s) => s > 0).length;
+  const usedCols = colSums.filter((s) => s > 0).length;
+  const df = (usedRows - 1) * (usedCols - 1);
+
+  if (total === 0 || df <= 0) {
+    return { chi2: NaN, df: 0, p: NaN, total, minExpected: NaN, reliable: false };
+  }
+
+  let chi2 = 0;
+  let minExpected = Infinity;
+
+  for (let r = 0; r < table.length; r++) {
+    for (let c = 0; c < colCount; c++) {
+      const expected = (rowSums[r] * colSums[c]) / total;
+      if (expected === 0) continue; // bos satir/sutun — df'ten zaten dusuldu
+      minExpected = Math.min(minExpected, expected);
+      const diff = table[r][c] - expected;
+      chi2 += (diff * diff) / expected;
+    }
+  }
+
+  return {
+    chi2,
+    df,
+    p: chiSquareP(chi2, df),
+    total,
+    minExpected,
+    reliable: minExpected >= 5,
+  };
+}
+
+/**
+ * Coklu test duzeltmesi — Benjamini-Hochberg (FDR).
+ *
+ * @remarks NEDEN GEREKLI: 1000 SNP tararsan, %5 esikte 50 tanesi TESADUFEN
+ *          "anlamli" cikar. GWAS'ta duzeltilmemis p-degeri yayimlanmaz.
+ *
+ *          Bonferroni (p x m) yerine BH secildi: Bonferroni cok muhafazakar,
+ *          binlerce testte gercek sinyali de eler. BH yanlis kesif ORANINI
+ *          kontrol eder ve GWAS/omics'te standarttir.
+ *
+ * @param {number[]} pValues
+ * @returns {number[]} Girdiyle AYNI SIRADA duzeltilmis p-degerleri.
+ */
+export function benjaminiHochberg(pValues) {
+  const m = pValues.length;
+  if (m === 0) return [];
+
+  const order = pValues
+    .map((p, i) => ({ p, i }))
+    .filter((x) => Number.isFinite(x.p))
+    .sort((a, b) => a.p - b.p);
+
+  const adjusted = new Array(m).fill(NaN);
+  let previous = 1;
+
+  // Buyukten kucuge yuru ve monoton azalmayi zorla: BH duzeltmesi sirali
+  // olmak zorundadir, aksi halde kucuk bir p buyuk bir p'den daha yuksek
+  // duzeltilmis deger alabilir.
+  for (let k = order.length - 1; k >= 0; k--) {
+    const value = Math.min(previous, (order[k].p * order.length) / (k + 1));
+    adjusted[order[k].i] = value;
+    previous = value;
+  }
+
+  return adjusted;
+}
