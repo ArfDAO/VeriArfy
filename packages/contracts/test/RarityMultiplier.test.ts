@@ -178,10 +178,14 @@ describe("Nadirlik Carpani (rapor §4.3)", () => {
     return handle;
   }
 
-  async function grant(participant: Signer) {
-    await protocol
-      .connect(participant)
-      .grantAccess(await researcher.getAddress(), ALL_TYPES, 0, 0);
+  /**
+   * Eskiden izin verirdi; IZIN KAPISI KALKTI.
+   *
+   * Havuza yuklemek zaten izindir (bkz. `VeriarfyProtocol.leavePool`).
+   * Cagri yerlerini bozmamak icin duruyor.
+   */
+  async function grant(_participant: Signer) {
+    // artik yapacak is yok
   }
 
   async function openAndSettle(): Promise<bigint> {
@@ -389,8 +393,41 @@ describe("Nadirlik Carpani (rapor §4.3)", () => {
       // 3 kisilik havuzda 1 tasiyici: R = log2(1 + 3/1) = 2,00x tam.
       const [, , multiplier] = await payments.queryWeights(queryId);
       expect(multiplier).to.equal(20_000n);
-      // Herkes Kurucu oldugu icin +%50 bonusu sadelesir; oran saf R'dir.
-      expect(aliceShare).to.equal(bobShare * 2n);
+
+      // ODEME IKI HAVUZDAN OLUSUR (bkz. `usageShareBps`):
+      //
+      //   kullanim havuzu -> kac alana veri verdin        (herkes ayni: 1)
+      //   bonus havuzu    -> nadirlik x kurucu carpani    (Alice 2x)
+      //
+      // Bu yuzden Alice'in payi bob'un TAM IKI KATI DEGILDIR; yalnizca bonus
+      // bileseni ikiye katlanir. Herkes ayni alanlari kapsadigi icin kullanim
+      // bileseni esittir.
+      const [usagePot, bonusPot] = await payments.potSplit(queryId);
+      const usageEach = usagePot / 3n; // uc kisi, hepsi ayni alani kapsiyor
+      expect(aliceShare - usageEach).to.be.greaterThan(0n);
+
+      // Bonus bileseni tam iki kat.
+      expect(aliceShare - usageEach).to.equal((bobShare - usageEach) * 2n);
+
+      // Bonus havuzu bos degil — aksi halde nadirlik hic yansimazdi.
+      expect(bonusPot).to.be.greaterThan(0n);
+    });
+
+    it("KULLANIM havuzu, veri verilen alan sayisiyla orantilidir", async () => {
+      // Bu testin tek isi yeni davranisi sabitlemek: odeme, kullanilan alan
+      // sayisina baglidir. Alice iki alani da kapsiyor, Bob yalnizca birini.
+      await joinPool(alice, 2);
+      await joinPool(bob, 1);
+      for (const s of [alice, bob]) await assessRarity(s);
+      for (const s of [alice, bob]) await grant(s);
+
+      const queryId = await openAndSettle();
+      const a = await payments.coverageWeight(queryId, await alice.getAddress());
+      const b = await payments.coverageWeight(queryId, await bob.getAddress());
+
+      // Tek SNP'lik panelde ikisi de bir alan kapsiyor.
+      expect(a).to.equal(b);
+      expect(a).to.be.greaterThan(0n);
     });
 
     it("paylarin toplami havuzu ASMAZ", async () => {
@@ -409,8 +446,9 @@ describe("Nadirlik Carpani (rapor §4.3)", () => {
       }
 
       expect(sum).to.be.lessThanOrEqual(q.liquidityPot);
-      // Artik yalnizca tam sayi bolmesi kusuratidir: kisi basina 1 birimden az.
-      expect(q.liquidityPot - sum).to.be.lessThan(3n);
+      // IKI havuz, iki bolme: kusurat kisi basina en fazla 2 birim (her
+      // havuzdan 1). Ust sinir buna gore.
+      expect(q.liquidityPot - sum).to.be.lessThan(6n);
     });
 
     it("agirliklarin toplami paydayla BIREBIR tutar", async () => {
@@ -464,44 +502,78 @@ describe("Nadirlik Carpani (rapor §4.3)", () => {
       expect(a).to.equal(q.liquidityPot / 2n);
     });
 
-    it("izinden SONRA dogrulanan nadirlik eski izne yansimaz", async () => {
-      // Payda izin anindaki duruma gore tutulur. Sonradan degisen bir durum
-      // paydaya yansimadigi icin bireysel agirliga da yansimamalidir —
-      // aksi halde paylarin toplami havuzu asardi.
+    it("SORGUDAN SONRA dogrulanan nadirlik O SORGUYU etkilemez", async () => {
+      // TEHLIKE: payda sorgu ACILIRKEN dondurulur. Biri sonradan nadirligini
+      // dogrularsa bireysel agirligi buyur ama payda ayni kalir — paylarin
+      // toplami havuzu ASAR. `rareBefore` ikisini tanim geregi esitler.
       await joinPool(alice, 2);
       await joinPool(bob, 1);
-      await grant(alice); // once izin
-      await grant(bob);
-      await assessRarity(alice); // sonra dogrulama
-      await assessRarity(bob);
 
+      // Sorgu, nadirlik dogrulanMADAN acilir.
       const queryId = await openAndSettle();
       const a = await payments.claimable(queryId, await alice.getAddress());
       const b = await payments.claimable(queryId, await bob.getAddress());
       expect(a).to.equal(b);
 
-      // Izni yenilerse yeni agirligiyla sayilir.
-      await protocol.connect(alice).revokeAccess(await researcher.getAddress());
-      await grant(alice);
+      // Simdi dogrulaniyor — ESKI sorgu degismemeli.
+      await assessRarity(alice);
+      await assessRarity(bob);
+      expect(await payments.claimable(queryId, await alice.getAddress())).to.equal(a);
+
+      // Ve havuz asilmamali.
+      const q = await payments.query(queryId);
+      let sum = 0n;
+      for (const s of [alice, bob]) {
+        sum += await payments.claimable(queryId, await s.getAddress());
+      }
+      expect(sum).to.be.lessThanOrEqual(q.liquidityPot);
+
+      // SONRAKI sorguda yeni agirligiyla sayilir.
       const next = await openAndSettle();
       expect(
         await payments.claimable(next, await alice.getAddress()),
       ).to.be.greaterThan(await payments.claimable(next, await bob.getAddress()));
     });
 
-    it("iptal, nadirlik sayaclarini da dogru dusurur", async () => {
+    it("GLOBAL nadirlik sayaclari dogru artar", async () => {
+      // Izin sayaclari kalkti; payda artik havuzun tamamindan hesaplaniyor.
       await joinPool(alice, 2);
       await assessRarity(alice);
-      await grant(alice);
 
-      const researcherAddr = await researcher.getAddress();
-      expect(await protocol.consentRareCount(researcherAddr)).to.equal(1);
-      expect(await protocol.consentRareFoundingCount(researcherAddr)).to.equal(1);
+      expect(await protocol.rareCarrierCount()).to.equal(1);
+      // Alice hem nadir hem kurucu.
+      expect(await protocol.rareFoundingCount()).to.equal(1);
+    });
 
-      await protocol.connect(alice).revokeAccess(researcherAddr);
-      expect(await protocol.consentRareCount(researcherAddr)).to.equal(0);
-      expect(await protocol.consentFoundingCount(researcherAddr)).to.equal(0);
-      expect(await protocol.consentRareFoundingCount(researcherAddr)).to.equal(0);
+    it("HAVUZDAN CIKAN, cikistan SONRAKI sorgudan pay almaz", async () => {
+      await joinPool(alice, 2);
+      await joinPool(bob, 1);
+      await assessRarity(alice);
+      await assessRarity(bob);
+
+      // Cikmadan once acilan sorgudan hakedis KORUNUR.
+      const before = await openAndSettle();
+      const earned = await payments.claimable(before, await alice.getAddress());
+      expect(earned).to.be.greaterThan(0n);
+
+      await protocol.connect(alice).leavePool();
+
+      // Cikmadan onceki sorgu etkilenmez.
+      expect(await payments.claimable(before, await alice.getAddress())).to.equal(earned);
+
+      // Sonraki sorguda pay olusmaz.
+      const after = await openAndSettle();
+      expect(await payments.claimable(after, await alice.getAddress())).to.equal(0n);
+      expect(await payments.claimable(after, await bob.getAddress())).to.be.greaterThan(0n);
+    });
+
+    it("iki kez cikilamaz", async () => {
+      await joinPool(alice, 2);
+      await protocol.connect(alice).leavePool();
+
+      await expect(
+        protocol.connect(alice).leavePool(),
+      ).to.be.revertedWithCustomError(protocol, "AlreadyLeft");
     });
   });
 
