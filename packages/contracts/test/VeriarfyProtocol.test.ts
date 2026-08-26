@@ -106,10 +106,17 @@ describe("VeriarfyProtocol", () => {
   async function buildProof(
     signer: Signer,
     cidDigest: string,
-    options: { institution?: any; signWith?: any; panel?: number[] } = {},
+    options: {
+      institution?: any;
+      signWith?: any;
+      panel?: number[];
+      /** false ise KENDI YUKLEDIGI katmani: imza yok, kok sifir. */
+      attested?: boolean;
+    } = {},
   ) {
     const institution = options.institution ?? hospital;
     const panel = options.panel ?? PANEL;
+    const attested = options.attested ?? true;
 
     const salt = provenance.randomSalt();
     const commitment = provenance.panelCommitment(panel, salt);
@@ -118,26 +125,39 @@ describe("VeriarfyProtocol", () => {
     const signer_ = options.signWith ?? institution;
     const signature = await provenance.signCommitment(signer_.privateKey, commitment);
 
-    const input = provenance.buildProvenanceInput({
-      dosages: panel,
-      salt,
-      institution,
-      signature,
-      registry,
-      // Sozlesmedeki PROVENANCE_SCOPE ile ayni olmali; farkliysa kanit
-      // dogrulanmaz (alan ayrimi).
-      externalNullifier: 2n,
-      cidDigest,
-      signerAddress: await signer.getAddress(),
-    });
+    // Sozlesmedeki PROVENANCE_SCOPE ile ayni olmali; farkliysa kanit
+    // dogrulanmaz (alan ayrimi).
+    const input = attested
+      ? provenance.buildProvenanceInput({
+          dosages: panel,
+          salt,
+          institution,
+          signature,
+          registry,
+          externalNullifier: 2n,
+          cidDigest,
+          signerAddress: await signer.getAddress(),
+        })
+      : provenance.buildSelfProvenanceInput({
+          dosages: panel,
+          salt,
+          externalNullifier: 2n,
+          cidDigest,
+          signerAddress: await signer.getAddress(),
+        });
 
     const { proof } = await snarkjs.groth16.fullProve(input, PROVENANCE_WASM, PROVENANCE_ZKEY);
     const { a, b, c } = (await import("@veriarfy/circuits")).toSolidityCalldata(proof);
 
     return {
+      attested,
       commitment,
       nullifierHash: provenance.computeProvenanceNullifier(2n, commitment),
-      root: registry.root,
+      // Imzasiz katmanda devre koku ZORLA sifirlar; sozlesme de sifir bekler.
+      root: attested ? registry.root : 0n,
+      // KAPSAMA — devrenin acik ciktisi. Kanit gecerliyse bu bitler kurumun
+      // imzaladigi dozajlardan turetilmistir; uydurulamaz.
+      coverage: provenance.coverageWords(panel),
       a,
       b,
       c,
@@ -149,7 +169,16 @@ describe("VeriarfyProtocol", () => {
     const p = await buildProof(signer, cidDigest, options);
     return protocol
       .connect(signer)
-      .submitRecord(cidDigest, p.root, p.nullifierHash, p.commitment, p.a, p.b, p.c);
+      .submitRecord(cidDigest, p.attested, p.root, p.nullifierHash, p.commitment, p.coverage, p.a, p.b, p.c);
+  }
+
+  /** Katilimciyi sifreli grup etiketiyle kaydeder. */
+  async function enrollIn(signer: Signer, group: number) {
+    const enc = await fhevm
+      .createEncryptedInput(protocolAddr, await signer.getAddress())
+      .add8(group)
+      .encrypt();
+    return protocol.connect(signer).enroll(enc.handles[0], enc.inputProof);
   }
 
   /** Bir katilimci adina sifreli dozaj gonderir. */
@@ -192,13 +221,141 @@ describe("VeriarfyProtocol", () => {
   // IPFS indeksi
   // -----------------------------------------------------------------------------------
 
+  // -----------------------------------------------------------------------------------
+  // IKI KATMAN
+  // -----------------------------------------------------------------------------------
+  //
+  // Bugun akredite kurum entegrasyonu yok; kullanici kendi tuketici dosyasini
+  // yukluyor ve o dosyanin kurumsal imzasi YOKTUR. Devre imzayi bir anahtarla
+  // kapatiyor. Buradaki sorular:
+  //
+  //   - Imzasiz katman gercekten calisiyor mu?
+  //   - Iki katman AYIRT EDILEBILIR mi (odeme agirligi ileride ayrilacak)?
+  //   - Imzasiz katman kendini imzali gibi gosterebilir mi?   (gosterememeli)
+  //   - Kapsama imzasiz katmanda da kanitli mi?               (olmali)
+  describe("Katmanlar — kurum imzali / kendi yukledigi", () => {
+    const digest = ethers.keccak256(ethers.toUtf8Bytes("kendi-yukledigim-blob"));
+
+    it("imzasiz katman kayit yapabiliyor ve katman saklaniyor", async () => {
+      await expect(submit(alice, digest, { attested: false }))
+        .to.emit(protocol, "RecordSubmitted")
+        .withArgs(await alice.getAddress(), digest, false, false);
+
+      expect(await protocol.recordAttested(await alice.getAddress())).to.equal(false);
+      expect(await protocol.userCIDs(await alice.getAddress())).to.equal(digest);
+    });
+
+    it("kurum imzali katman ayirt edilebiliyor", async () => {
+      await submit(bob, digest);
+      expect(await protocol.recordAttested(await bob.getAddress())).to.equal(true);
+    });
+
+    it("imzasiz katmanda da kapsama KANITLI yazilir", async () => {
+      await submit(alice, digest, { attested: false });
+
+      // Kapsama, imza olmadan da taahhutten turetilir — odemenin dayandigi
+      // asil ozellik budur.
+      //
+      // Yalnizca CALISMANIN boyutu kadar bit yazilir (devrenin PANEL'i 1000
+      // olsa da); bu yuzden dongu `snpCount` ile sinirlidir.
+      const width = Number(await protocol.snpCount());
+      for (let i = 0; i < width; i++) {
+        expect(await protocol.hasSnpCoverage(await alice.getAddress(), i)).to.equal(
+          PANEL[i] !== 3,
+        );
+      }
+    });
+
+    it("imzasiz kanit kendini KURUM IMZALI gosteremiyor", async () => {
+      const p = await buildProof(alice, digest, { attested: false });
+
+      // Ayni kaniti `attested = true` ile gondermek: sozlesme artik akredite
+      // kok bekler, devre ise sifir uretmistir. Uydurma bir kok vermek de
+      // kanit dogrulamasini dusurur.
+      await expect(
+        protocol
+          .connect(alice)
+          .submitRecord(digest, true, registry.root, p.nullifierHash, p.commitment,
+            p.coverage, p.a, p.b, p.c),
+      ).to.be.revertedWithCustomError(protocol, "InvalidProvenanceProof");
+    });
+
+    // ODEMENIN ASIL KILIDI.
+    //
+    // Kanit yolu, kapsamayi uydurulamaz kilar. Ama maske yolu acik kalsaydi
+    // saldirgan once DAR bir kanit gonderip sonra maskeyle genisletirdi ve
+    // kanit yolu bos yere kurulmus olurdu.
+    it("kaydi olan katilimci maskeyle YENI alan ekleyemiyor", async () => {
+      await protocol.connect(owner).configurePanel(2, 0, ethers.ZeroHash, "");
+
+      // Kanit: yalnizca 0. alanda veri var (1. alan EKSIK).
+      const narrow = [...PANEL];
+      narrow[0] = 1;
+      narrow[1] = 3;
+      await submit(alice, digest, { attested: false, panel: narrow });
+
+      expect(await protocol.hasSnpCoverage(await alice.getAddress(), 0)).to.equal(true);
+      expect(await protocol.hasSnpCoverage(await alice.getAddress(), 1)).to.equal(false);
+
+      await enrollIn(alice, 0);
+
+      // Maske ikisini de iddia ediyor — kanit etmiyor.
+      const enc = await fhevm
+        .createEncryptedInput(protocolAddr, await alice.getAddress())
+        .add8(1)
+        .add8(1)
+        .encrypt();
+
+      await expect(
+        protocol.connect(alice).contributeDosages([enc.handles[0], enc.handles[1]], 0b11n, enc.inputProof),
+      ).to.be.revertedWithCustomError(protocol, "CoverageNotProven");
+    });
+
+    it("kanitin ALT KUMESI olan maske kabul ediliyor", async () => {
+      await protocol.connect(owner).configurePanel(2, 0, ethers.ZeroHash, "");
+
+      const narrow = [...PANEL];
+      narrow[0] = 1;
+      narrow[1] = 3;
+      await submit(alice, digest, { attested: false, panel: narrow });
+      await enrollIn(alice, 0);
+
+      const enc = await fhevm
+        .createEncryptedInput(protocolAddr, await alice.getAddress())
+        .add8(1)
+        .add8(3)
+        .encrypt();
+
+      await expect(
+        protocol.connect(alice).contributeDosages([enc.handles[0], enc.handles[1]], 0b01n, enc.inputProof),
+      ).to.not.be.reverted;
+
+      // Sayac kanit yolundan gelir; maske yolu ikinci kez SAYMAZ.
+      expect(await protocol.snpCoverageCount(0)).to.equal(1);
+      expect(await protocol.snpCoverageCount(1)).to.equal(0);
+    });
+
+    it("imzasiz katman sifir olmayan kok ile gelemiyor", async () => {
+      const p = await buildProof(alice, digest, { attested: false });
+
+      await expect(
+        protocol
+          .connect(alice)
+          .submitRecord(digest, false, registry.root, p.nullifierHash, p.commitment,
+            p.coverage, p.a, p.b, p.c),
+      ).to.be.revertedWithCustomError(protocol, "UnattestedRootNotZero");
+    });
+  });
+
+  // -----------------------------------------------------------------------------------
+
   describe("IPFS kayit indeksi", () => {
     const digest = ethers.keccak256(ethers.toUtf8Bytes("sifreli-panel-blobu"));
 
     it("gecerli koken kanitiyla CID kaydedilir ve sayac artar", async () => {
       await expect(submit(alice, digest))
         .to.emit(protocol, "RecordSubmitted")
-        .withArgs(await alice.getAddress(), digest, false);
+        .withArgs(await alice.getAddress(), digest, false, true);
 
       expect(await protocol.userCIDs(await alice.getAddress())).to.equal(digest);
       expect(await protocol.recordCount()).to.equal(1);
@@ -212,7 +369,7 @@ describe("VeriarfyProtocol", () => {
       await submit(alice, digest);
       await expect(submit(alice, other))
         .to.emit(protocol, "RecordSubmitted")
-        .withArgs(await alice.getAddress(), other, true);
+        .withArgs(await alice.getAddress(), other, true, true);
 
       expect(await protocol.recordCount()).to.equal(1);
       expect(await protocol.userCIDs(await alice.getAddress())).to.equal(other);
@@ -223,7 +380,7 @@ describe("VeriarfyProtocol", () => {
       await expect(
         protocol
           .connect(alice)
-          .submitRecord(ethers.ZeroHash, p.root, p.nullifierHash, p.commitment, p.a, p.b, p.c),
+          .submitRecord(ethers.ZeroHash, p.attested, p.root, p.nullifierHash, p.commitment, p.coverage, p.a, p.b, p.c),
       ).to.be.revertedWithCustomError(protocol, "EmptyCid");
     });
   });
@@ -241,7 +398,7 @@ describe("VeriarfyProtocol", () => {
       await expect(
         protocol
           .connect(outsider)
-          .submitRecord(digest, registry.root, 1n, 1n, zero, [zero, zero], zero),
+          .submitRecord(digest, true, registry.root, 1n, 1n, [0n, 0n, 0n, 0n, 0n], zero, [zero, zero], zero),
       ).to.be.revertedWithCustomError(protocol, "InvalidProvenanceProof");
     });
 
@@ -289,12 +446,74 @@ describe("VeriarfyProtocol", () => {
           .connect(alice)
           .submitRecord(
             digest,
+            true,
             rogueRegistry.root,
             provenance.computeProvenanceNullifier(2n, commitment),
             commitment,
+            provenance.coverageWords(PANEL),
             a, b, c,
           ),
       ).to.be.revertedWithCustomError(protocol, "UnknownAccreditedRoot");
+    });
+
+    it("KAPSAMA kaniti zincire yazilir ve uydurulamaz", async () => {
+      // Odeme kapsamaya gore dagitiliyor. Kapsama istemciden gelseydi
+      // "bende bu alan var" deyip bos gondermek, veri vermeden pay almak
+      // demekti. Devrenin ACIK CIKTISI oldugu icin uydurulamaz.
+      // Calisma paneli 5 varyantlik olsun; kapsama yalnizca `snpCount`
+      // kadar yazilir — devrenin PANEL'i (1000) degil, CALISMANIN boyutu
+      // belirler. Bu sinir bilincli: calisma disindaki alanlarin sayaci
+      // sisirilemez.
+      await protocol.connect(owner).configurePanel(5, 0, ethers.ZeroHash, "");
+
+      const withMissing = [...PANEL];
+      withMissing[0] = 3; // eksik
+      withMissing[1] = 3;
+
+      const p = await buildProof(alice, digest, { panel: withMissing });
+      await protocol
+        .connect(alice)
+        .submitRecord(digest, p.attested, p.root, p.nullifierHash, p.commitment, p.coverage, p.a, p.b, p.c);
+
+      const who = await alice.getAddress();
+      expect(await protocol.hasSnpCoverage(who, 0)).to.equal(false);
+      expect(await protocol.hasSnpCoverage(who, 1)).to.equal(false);
+      expect(await protocol.hasSnpCoverage(who, 2)).to.equal(true);
+
+      // Calisma disindaki alan (indeks 5) yazilmaz.
+      expect(await protocol.hasSnpCoverage(who, 5)).to.equal(false);
+    });
+
+    it("KAPSAMA SISIRILEMEZ — degistirilen kelime kaniti bozar", async () => {
+      // Saldirgan "hepsi bende var" demek istiyor: kapsama kelimelerini
+      // elle degistiriyor. Kelimeler acik SINYAL oldugu icin dogrulama duser.
+      const withMissing = [...PANEL];
+      withMissing[0] = 3;
+
+      const p = await buildProof(alice, digest, { panel: withMissing });
+      const inflated = [...p.coverage];
+      inflated[0] = inflated[0] | 1n; // 0. alani "var" gostermeye calis
+
+      await expect(
+        protocol
+          .connect(alice)
+          .submitRecord(digest, p.attested, p.root, p.nullifierHash, p.commitment, inflated, p.a, p.b, p.c),
+      ).to.be.revertedWithCustomError(protocol, "InvalidProvenanceProof");
+    });
+
+    it("EKSIK dozaj (3) artik kanit uretebiliyor", async () => {
+      // Devre onceden yalnizca {0,1,2} kabul ediyordu; gercek dosyalarda
+      // cagirilamamis genotip oldugu icin koken kaniti HIC uretilemiyordu.
+      const allMissing = PANEL.map(() => 3);
+      const p = await buildProof(alice, digest, { panel: allMissing });
+
+      await protocol
+        .connect(alice)
+        .submitRecord(digest, p.attested, p.root, p.nullifierHash, p.commitment, p.coverage, p.a, p.b, p.c);
+
+      // Hicbir alan kapsanmadi — dogru davranis.
+      expect(await protocol.hasSnpCoverage(await alice.getAddress(), 0)).to.equal(false);
+      expect(await protocol.snpCoverageCount(0)).to.equal(0);
     });
 
     it("baskasinin kaniti calinamaz (cuzdana bagli)", async () => {
@@ -303,7 +522,7 @@ describe("VeriarfyProtocol", () => {
       await expect(
         protocol
           .connect(bob)
-          .submitRecord(digest, p.root, p.nullifierHash, p.commitment, p.a, p.b, p.c),
+          .submitRecord(digest, p.attested, p.root, p.nullifierHash, p.commitment, p.coverage, p.a, p.b, p.c),
       ).to.be.revertedWithCustomError(protocol, "InvalidProvenanceProof");
     });
 
@@ -315,7 +534,7 @@ describe("VeriarfyProtocol", () => {
       await expect(
         protocol
           .connect(alice)
-          .submitRecord(otherDigest, p.root, p.nullifierHash, p.commitment, p.a, p.b, p.c),
+          .submitRecord(otherDigest, p.attested, p.root, p.nullifierHash, p.commitment, p.coverage, p.a, p.b, p.c),
       ).to.be.revertedWithCustomError(protocol, "InvalidProvenanceProof");
     });
 
@@ -324,12 +543,12 @@ describe("VeriarfyProtocol", () => {
 
       await protocol
         .connect(alice)
-        .submitRecord(digest, p.root, p.nullifierHash, p.commitment, p.a, p.b, p.c);
+        .submitRecord(digest, p.attested, p.root, p.nullifierHash, p.commitment, p.coverage, p.a, p.b, p.c);
 
       await expect(
         protocol
           .connect(alice)
-          .submitRecord(digest, p.root, p.nullifierHash, p.commitment, p.a, p.b, p.c),
+          .submitRecord(digest, p.attested, p.root, p.nullifierHash, p.commitment, p.coverage, p.a, p.b, p.c),
       ).to.be.revertedWithCustomError(protocol, "ProvenanceNullifierSpent");
     });
 
@@ -338,7 +557,7 @@ describe("VeriarfyProtocol", () => {
       await expect(
         protocol
           .connect(alice)
-          .submitRecord(digest, 12345n, p.nullifierHash, p.commitment, p.a, p.b, p.c),
+          .submitRecord(digest, true, 12345n, p.nullifierHash, p.commitment, p.coverage, p.a, p.b, p.c),
       ).to.be.revertedWithCustomError(protocol, "UnknownAccreditedRoot");
     });
 
