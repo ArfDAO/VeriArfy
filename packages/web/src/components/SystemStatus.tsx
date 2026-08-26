@@ -210,6 +210,15 @@ export function SystemStatus() {
             )}
           </div>
 
+          {state.minParticipants < 10 && (
+            <div className="notice notice--warn">
+              k-anonimlik eşiği {state.minParticipants}. Duman testi için
+              düşürülmüş; <strong>gerçek katılımcılarla yükseltilmelidir</strong> —
+              düşük eşik, açılan grup toplamlarından tek bir kişinin verisinin
+              geri çıkarılmasına izin verir.
+            </div>
+          )}
+
           {!state.genomic.matches && !state.genomic.unset && (
             <div className="notice notice--warn">
               Tarayıcıdaki panel ile zincirin ilan ettiği özet farklı. Bu haldeyken
@@ -292,7 +301,9 @@ export function SystemStatus() {
             <div className="kv__row">
               <span className="eyebrow">KATILIMCI</span>
               <span className="mono">
-                {state.participantCount} / {state.minParticipants} (k-anonimlik eşiği)
+                {state.participantCount} katılımcı · açılım eşiği{" "}
+                {state.minParticipants}
+                {state.minParticipants < 10 && " ⚠"}
               </span>
             </div>
           </div>
