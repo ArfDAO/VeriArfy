@@ -276,6 +276,100 @@
   color: var(--color-smoke);
 }
 
+.earnings {
+  display: grid;
+  gap: var(--spacing-24);
+}
+
+.earnings__heading,
+.earnings__query-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-24);
+}
+
+.earnings__heading {
+  align-items: end;
+}
+
+.earnings__heading h1 {
+  margin-top: var(--spacing-8);
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+
+.earnings__heading p,
+.earnings__summary p,
+.earnings__explanation {
+  margin-top: var(--spacing-12);
+  color: var(--color-smoke);
+}
+
+.earnings__heading p {
+  max-width: 48rem;
+}
+
+.earnings__summary strong {
+  display: block;
+  margin-top: var(--spacing-12);
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  letter-spacing: -0.06em;
+}
+
+.earnings__list {
+  display: grid;
+  gap: var(--spacing-12);
+}
+
+.earnings__query {
+  display: grid;
+  gap: var(--spacing-20);
+}
+
+.earnings__query-head {
+  align-items: start;
+}
+
+.earnings__query-head h2 {
+  margin-top: var(--spacing-4);
+  font-size: 1.15rem;
+}
+
+.earnings__fields {
+  display: grid;
+  gap: var(--spacing-4);
+  padding: var(--spacing-12);
+  border-radius: var(--radius-input);
+  background: var(--color-bone);
+  font-size: 0.82rem;
+}
+
+.earnings__facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--spacing-12);
+  margin: 0;
+}
+
+.earnings__facts div {
+  display: grid;
+  gap: var(--spacing-4);
+}
+
+.earnings__facts dt {
+  color: var(--color-smoke);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  letter-spacing: var(--tracking-mono);
+}
+
+.earnings__facts dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+}
+
 .login-page {
   width: min(100% - 3rem, 70rem);
   min-height: 100dvh;

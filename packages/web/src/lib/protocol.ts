@@ -125,6 +125,10 @@ export interface QuerySummary {
   weightedCoverage: number;
   /** Agirliklarin sorgu genelindeki toplami — payda. */
   weightedTotal: number;
+  /** Arastirmacinin istedigi genomik alan indeksleri. */
+  requestedSnps: number[];
+  /** Arastirmacinin istedigi biyobelirtec alan indeksleri. */
+  requestedMetrics: number[];
   /** Sorgunun ham kayit toplami (kac kisi x kac alan) — gosterim icin. */
   coverageTotal: number;
   claimed: boolean;
@@ -364,6 +368,10 @@ export async function readDashboard(
       ]);
 
       const requestId = Number(q.disclosureRequestId);
+      const [requestedSnps, requestedMetrics] = await Promise.all([
+        protocol.disclosureSnpIds(requestId) as Promise<bigint[]>,
+        protocol.disclosureMetricIds(requestId) as Promise<bigint[]>,
+      ]);
       let stage: QueryStage;
 
       if (q.refunded) {
@@ -407,6 +415,8 @@ export async function readDashboard(
         coverageTotal: Number(q.coverageTotal),
         weightedCoverage: Number(weighted),
         weightedTotal: Number(weightedAll),
+        requestedSnps: requestedSnps.map(Number),
+        requestedMetrics: requestedMetrics.map(Number),
       };
     }),
   );

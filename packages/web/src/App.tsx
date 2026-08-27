@@ -16,6 +16,7 @@ import { Giris } from "./routes/Giris";
 import { PanelPlaceholder } from "./routes/PanelPlaceholder";
 import { Ozet } from "./routes/panel/Ozet";
 import { VeriYukle } from "./routes/panel/VeriYukle";
+import { Kazanclar } from "./routes/panel/Kazanclar";
 
 function AnaSayfa() {
   const [participantCount, setParticipantCount] = useState<number | null>(null);
@@ -267,6 +268,7 @@ export default function App() {
       <Route path="/panel/*" element={<RoleGate role="veri-sahibi" />}>
         <Route index element={<Ozet />} />
         <Route path="veri-yukle" element={<VeriYukle />} />
+        <Route path="kazanclar" element={<Kazanclar />} />
       </Route>
       <Route path="/arastirma/*" element={<RoleGate role="arastirmaci" />}>
         <Route index element={<PanelPlaceholder role="arastirmaci" />} />
