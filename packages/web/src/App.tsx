@@ -17,6 +17,8 @@ import { PanelPlaceholder } from "./routes/PanelPlaceholder";
 import { Ozet } from "./routes/panel/Ozet";
 import { VeriYukle } from "./routes/panel/VeriYukle";
 import { Kazanclar } from "./routes/panel/Kazanclar";
+import { Gizlilik } from "./routes/panel/Gizlilik";
+import { Dogrulama } from "./routes/panel/Dogrulama";
 
 function AnaSayfa() {
   const [participantCount, setParticipantCount] = useState<number | null>(null);
@@ -269,6 +271,8 @@ export default function App() {
         <Route index element={<Ozet />} />
         <Route path="veri-yukle" element={<VeriYukle />} />
         <Route path="kazanclar" element={<Kazanclar />} />
+        <Route path="gizlilik" element={<Gizlilik />} />
+        <Route path="dogrulama" element={<Dogrulama />} />
       </Route>
       <Route path="/arastirma/*" element={<RoleGate role="arastirmaci" />}>
         <Route index element={<PanelPlaceholder role="arastirmaci" />} />

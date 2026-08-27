@@ -8,6 +8,8 @@ const ownerItems = [
   { to: "/panel", label: "Genel bakis", end: true },
   { to: "/panel/veri-yukle", label: "Veri yukle", end: false },
   { to: "/panel/kazanclar", label: "Kazanclar", end: false },
+  { to: "/panel/gizlilik", label: "Gizlilik", end: false },
+  { to: "/panel/dogrulama", label: "Dogrulama", end: false },
 ];
 const researcherItems = [{ to: "/arastirma", label: "Genel bakis", end: true }];
 

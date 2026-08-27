@@ -370,6 +370,11 @@
   font-size: 0.88rem;
 }
 
+.privacy {
+  display: grid;
+  gap: var(--spacing-24);
+}
+
 .login-page {
   width: min(100% - 3rem, 70rem);
   min-height: 100dvh;
