@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { Nav } from "./components/Nav";
 import { Hero } from "./components/Hero";
 import { Survey, SurveyResult } from "./components/Survey";
@@ -9,8 +10,12 @@ import { Contribute } from "./components/Contribute";
 import { SystemStatus } from "./components/SystemStatus";
 import { ResearchConsole } from "./components/ResearchConsole";
 import { submitSurvey, getResults, getStats, type AnalysisResults } from "./lib/api";
+import { PanelShell } from "./components/PanelShell";
+import { useSession, type SessionRole } from "./lib/session";
+import { Giris } from "./routes/Giris";
+import { PanelPlaceholder } from "./routes/PanelPlaceholder";
 
-export default function App() {
+function AnaSayfa() {
   const [participantCount, setParticipantCount] = useState<number | null>(null);
   const [results, setResults] = useState<AnalysisResults | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -229,5 +234,32 @@ export default function App() {
 
       <Footer />
     </div>
+  );
+}
+
+function RoleGate({ role }: { role: Exclude<SessionRole, null> }) {
+  const { address, role: selectedRole } = useSession();
+
+  if (!address || !selectedRole) return <Navigate to="/giris" replace />;
+  if (selectedRole !== role) {
+    return <Navigate to={selectedRole === "veri-sahibi" ? "/panel" : "/arastirma"} replace />;
+  }
+
+  return <PanelShell role={role} />;
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<AnaSayfa />} />
+      <Route path="/giris" element={<Giris />} />
+      <Route path="/panel/*" element={<RoleGate role="veri-sahibi" />}>
+        <Route index element={<PanelPlaceholder role="veri-sahibi" />} />
+      </Route>
+      <Route path="/arastirma/*" element={<RoleGate role="arastirmaci" />}>
+        <Route index element={<PanelPlaceholder role="arastirmaci" />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }

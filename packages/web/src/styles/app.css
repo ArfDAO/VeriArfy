@@ -5,6 +5,316 @@
   background: var(--color-paper);
 }
 
+/* --- Uygulama rotalari ve paneller --- */
+.panel-shell {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 15.5rem minmax(0, 1fr);
+  background: var(--color-bone);
+}
+
+.panel-shell__sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-32);
+  padding: var(--spacing-32) var(--spacing-24);
+  background: var(--color-paper);
+  border-right: 1px solid rgba(34, 34, 34, 0.08);
+}
+
+.panel-shell__brand,
+.login-page__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-8);
+  width: fit-content;
+  color: var(--color-ink);
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+
+.panel-shell__mark {
+  display: grid;
+  width: 1.9rem;
+  height: 1.9rem;
+  place-items: center;
+  border-radius: 0.55rem;
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-family: var(--font-mono);
+  font-size: 0.63rem;
+  letter-spacing: -0.08em;
+}
+
+.panel-shell__role {
+  margin-top: var(--spacing-24);
+  color: var(--color-smoke);
+  font-size: 0.875rem;
+}
+
+.panel-shell__nav {
+  display: grid;
+  gap: var(--spacing-4);
+}
+
+.panel-shell__link {
+  position: relative;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.55rem;
+  color: var(--color-smoke);
+  font-size: 0.875rem;
+  transition: color 180ms ease, background 180ms ease;
+}
+
+.panel-shell__link:hover,
+.panel-shell__link:focus-visible {
+  background: var(--color-bone);
+  color: var(--color-ink);
+}
+
+.panel-shell__link.is-active {
+  background: var(--color-bone);
+  color: var(--color-ink);
+  font-weight: 600;
+}
+
+.panel-shell__link.is-active::before {
+  position: absolute;
+  left: -0.4rem;
+  top: 50%;
+  width: 0.2rem;
+  height: 1.1rem;
+  border-radius: 0 1rem 1rem 0;
+  background: var(--color-iris);
+  content: "";
+  transform: translateY(-50%);
+}
+
+.panel-shell__body {
+  min-width: 0;
+}
+
+.panel-shell__header {
+  min-height: 4.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--spacing-20);
+  padding: 0 var(--spacing-32);
+  border-bottom: 1px solid rgba(34, 34, 34, 0.08);
+  background: color-mix(in srgb, var(--color-bone) 88%, white);
+}
+
+.panel-shell__network,
+.panel-shell__account {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-8);
+  color: var(--color-smoke);
+  font-size: 0.78rem;
+}
+
+.panel-shell__status {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: #2b8a62;
+}
+
+.panel-shell__status.is-warning {
+  background: #bb6d23;
+}
+
+.panel-shell__network-action,
+.panel-shell__signout {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--color-ink);
+  font-size: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.panel-shell__account {
+  padding-left: var(--spacing-20);
+  border-left: 1px solid rgba(34, 34, 34, 0.1);
+}
+
+.panel-shell__content {
+  width: min(100%, 80rem);
+  margin: 0 auto;
+  padding: clamp(2rem, 5vw, 4.5rem);
+}
+
+.panel-shell__registration-notice {
+  margin-bottom: var(--spacing-24);
+}
+
+.panel-placeholder {
+  max-width: 42rem;
+  padding: clamp(2rem, 6vw, 5rem) 0;
+}
+
+.panel-placeholder h1 {
+  margin-top: var(--spacing-12);
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  letter-spacing: -0.055em;
+  line-height: 1;
+}
+
+.panel-placeholder p {
+  max-width: 37rem;
+  margin-top: var(--spacing-20);
+  color: var(--color-smoke);
+  font-size: 1.05rem;
+}
+
+.login-page {
+  width: min(100% - 3rem, 70rem);
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(22rem, 1.15fr);
+  gap: clamp(2rem, 8vw, 8rem);
+  align-items: center;
+  margin: 0 auto;
+  padding: clamp(2rem, 6vw, 6rem) 0;
+}
+
+.login-page__intro {
+  display: grid;
+  align-content: start;
+  gap: var(--spacing-20);
+}
+
+.login-page__intro .eyebrow {
+  margin-top: var(--spacing-64);
+}
+
+.login-page__intro h1 {
+  max-width: 10ch;
+  font-size: clamp(2.6rem, 5vw, 4.5rem);
+  letter-spacing: -0.07em;
+  line-height: 0.95;
+  text-wrap: balance;
+}
+
+.login-page__intro p {
+  max-width: 34rem;
+  color: var(--color-smoke);
+}
+
+.login-page__flow {
+  display: grid;
+  gap: var(--spacing-16);
+}
+
+.login-page__connect,
+.login-page__role {
+  display: grid;
+  gap: var(--spacing-20);
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  border-radius: var(--radius-3xl);
+  background: var(--color-bone);
+}
+
+.login-page__connect p,
+.login-page__role p {
+  color: var(--color-smoke);
+}
+
+.login-page__roles {
+  display: grid;
+  gap: var(--spacing-16);
+}
+
+.login-page__role {
+  min-height: 15rem;
+  background: var(--color-paper);
+  box-shadow: 0 1rem 3rem rgba(88, 63, 75, 0.07);
+}
+
+.login-page__role h2 {
+  font-size: 1.5rem;
+  letter-spacing: -0.045em;
+}
+
+.login-page__role .pill {
+  width: fit-content;
+  margin-top: auto;
+}
+
+@media (max-width: 640px) {
+  .panel-shell {
+    display: block;
+  }
+
+  .panel-shell__sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: var(--spacing-12);
+    padding: var(--spacing-12) var(--spacing-16);
+    border-right: 0;
+    border-bottom: 1px solid rgba(34, 34, 34, 0.08);
+  }
+
+  .panel-shell__role {
+    display: none;
+  }
+
+  .panel-shell__nav {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-4);
+  }
+
+  .panel-shell__link {
+    padding: 0.45rem 0.6rem;
+    font-size: 0.75rem;
+  }
+
+  .panel-shell__link.is-active::before {
+    left: 50%;
+    top: auto;
+    bottom: -0.76rem;
+    width: 1.1rem;
+    height: 0.18rem;
+    border-radius: 1rem 1rem 0 0;
+    transform: translateX(-50%);
+  }
+
+  .panel-shell__header {
+    min-height: 3.5rem;
+    justify-content: space-between;
+    gap: var(--spacing-8);
+    padding: 0 var(--spacing-16);
+  }
+
+  .panel-shell__account {
+    padding-left: var(--spacing-8);
+  }
+
+  .panel-shell__content {
+    padding: var(--spacing-32) var(--spacing-20);
+  }
+
+  .login-page {
+    width: min(100% - 2.5rem, 35rem);
+    grid-template-columns: 1fr;
+    gap: var(--spacing-32);
+    padding: var(--spacing-32) 0 var(--spacing-64);
+  }
+
+  .login-page__intro .eyebrow {
+    margin-top: var(--spacing-20);
+  }
+}
+
 /* --- Ust navigasyon --- */
 .nav {
   height: 60px;
