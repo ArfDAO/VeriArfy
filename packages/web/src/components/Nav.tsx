@@ -16,9 +16,7 @@ export function Nav() {
         <span className="nav__word">veriarfy</span>
       </div>
       <div className="nav__links">
-        <a href="#durum" className="nav__link">Sistem Durumu</a>
-        <a href="#katil" className="nav__link">Katıl</a>
-        <a href="#arastirma" className="nav__link">Araştırma</a>
+        <a href="#anket" className="nav__link">Anket</a>
         <a href="#sonuclar" className="nav__link">Sonuçlar</a>
       </div>
     </nav>

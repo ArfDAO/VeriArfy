@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
-import type { BrowserProvider, Signer } from "ethers";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 
-import { CONTRACTS, SEPOLIA_CHAIN_ID } from "../config";
+import { SEPOLIA_CHAIN_ID } from "../config";
 import {
   GROUP,
   enroll,
@@ -9,10 +9,10 @@ import {
   type ContributionState,
 } from "../lib/protocol";
 import { checkGenomicPanel, checkMetricPanel } from "../lib/studyPanel";
-import { connectWallet, ensureSepolia, hasWallet, shortAddress } from "../lib/wallet";
+import { useSession } from "../lib/session";
+import { shortAddress } from "../lib/wallet";
 import { useTrace } from "../lib/useTrace";
 import {
-  addressEvidence,
   hashEvidence,
   noteEvidence,
   txEvidence,
@@ -47,11 +47,9 @@ import { TraceConsole } from "./TraceConsole";
 
 export function Contribute() {
   const trace = useTrace();
-
-  const [provider, setProvider] = useState<BrowserProvider | null>(null);
-  const [signer, setSigner] = useState<Signer | null>(null);
-  const [address, setAddress] = useState<string | null>(null);
-  const [chainId, setChainId] = useState<number | null>(null);
+  const traceRef = useRef(trace);
+  traceRef.current = trace;
+  const { address, chainId, provider, signer, error: sessionError, switchToSepolia } = useSession();
 
   const [state, setState] = useState<ContributionState | null>(null);
   const [panelOk, setPanelOk] = useState<boolean | null>(null);
@@ -61,7 +59,7 @@ export function Contribute() {
 
   /** Zincirden okur — her adimdan sonra cagrilir ki ekran gercegi gostersin. */
   const refresh = useCallback(
-    async (p: BrowserProvider, who: string, quiet = false) => {
+    async (p: NonNullable<typeof provider>, who: string, quiet = false) => {
       const next = await readContributionState(p, who);
       setState(next);
 
@@ -72,9 +70,9 @@ export function Contribute() {
       setPanelOk(genomic.matches && metrics.matches);
 
       if (!quiet) {
-        trace.begin("panel", "Panel özetleri zincire karşı doğrulandı");
+        traceRef.current.begin("panel", "Panel özetleri zincire karşı doğrulandı");
         if (genomic.matches && metrics.matches) {
-          trace.succeed(
+          traceRef.current.succeed(
             "panel",
             "Tarayıcıdaki paneller zincirin ilan ettiği özetlerle aynı",
             [
@@ -89,7 +87,7 @@ export function Contribute() {
             ],
           );
         } else {
-          trace.fail(
+          traceRef.current.fail(
             "panel",
             new Error(
               genomic.unset || metrics.unset
@@ -102,40 +100,8 @@ export function Contribute() {
 
       return next;
     },
-    [trace],
+    [],
   );
-
-  const connect = useCallback(async () => {
-    setError(null);
-    setBusy(true);
-    trace.begin("wallet", "Cüzdan bağlandı");
-    try {
-      const { provider: p, address: who, chainId: id } = await connectWallet();
-      if (id !== SEPOLIA_CHAIN_ID) {
-        await ensureSepolia();
-      }
-      const s = await p.getSigner();
-
-      setProvider(p);
-      setSigner(s);
-      setAddress(who);
-      setChainId(id);
-
-      const block = await p.getBlockNumber();
-      trace.succeed("wallet", `${shortAddress(who)} · Sepolia`, [
-        addressEvidence("cüzdan", who),
-        addressEvidence("protokol", CONTRACTS.VeriarfyProtocol),
-        valueEvidence("blok", block.toLocaleString("tr"), true),
-      ]);
-
-      await refresh(p, who);
-    } catch (err) {
-      trace.fail("wallet", err);
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  }, [trace, refresh]);
 
   const doEnroll = useCallback(async () => {
     if (!signer || !provider || !address) return;
@@ -203,9 +169,15 @@ export function Contribute() {
   );
 
   useEffect(() => {
-    if (!hasWallet()) return;
-    // Otomatik baglanmiyoruz: cuzdan izni kullanicinin kararidir.
-  }, []);
+    if (!provider || !address || chainId !== SEPOLIA_CHAIN_ID) {
+      setState(null);
+      setPanelOk(null);
+      return;
+    }
+    void refresh(provider, address).catch((nextError) =>
+      setError(nextError instanceof Error ? nextError.message : String(nextError)),
+    );
+  }, [address, chainId, provider, refresh]);
 
   const wrongChain = chainId !== null && chainId !== SEPOLIA_CHAIN_ID;
   const blocked = panelOk === false;
@@ -220,24 +192,14 @@ export function Contribute() {
             {address && <span className="badge badge--ok">{shortAddress(address)}</span>}
           </div>
 
-          {!hasWallet() ? (
-            <div className="notice notice--warn">
-              Ethereum cüzdanı bulunamadı. MetaMask kurulu bir tarayıcı gerekiyor.
-            </div>
-          ) : !address ? (
+          {!address ? (
             <>
               <p className="card__body">
-                Sepolia ağına bağlanın. Şifreleme tarayıcıda yapılır; özel
-                anahtarınız hiçbir yere gitmez.
+                Katkı akışını başlatmak için giriş ekranından cüzdanı bağlayın ve veri sahibi rolünü seçin.
               </p>
-              <button
-                className="pill pill--primary"
-                style={{ marginTop: 16 }}
-                onClick={() => void connect()}
-                disabled={busy}
-              >
-                {busy ? "bağlanıyor…" : "Cüzdanı bağla"}
-              </button>
+              <Link className="pill pill--primary" style={{ marginTop: 16 }} to="/giris">
+                Giriş ekranına git
+              </Link>
             </>
           ) : (
             <div className="kv">
@@ -251,6 +213,11 @@ export function Contribute() {
                 <span className="eyebrow">KATILIMCI SAYISI</span>
                 <span className="mono">{state?.participantCount ?? "—"}</span>
               </div>
+              {wrongChain && (
+                <button className="pill pill--ghost" onClick={() => void switchToSepolia()}>
+                  Sepolia'ya geç
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -345,7 +312,7 @@ export function Contribute() {
           />
         )}
 
-        {error && <div className="notice notice--warn">{error}</div>}
+        {(error || sessionError) && <div className="notice notice--warn">{error ?? sessionError}</div>}
       </div>
 
       <div className="contribute__trace">

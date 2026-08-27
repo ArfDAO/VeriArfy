@@ -25,25 +25,8 @@
  * mumkundur; bunu ancak imzalayan akredite bir kurum kapatabilir, ZK
  * kapatamaz. Ayrinti: docs/mimari/0017-kanitli-kapsama.md
  */
-import {
-  poseidon2,
-  poseidon3,
-  poseidon4,
-  poseidon5,
-  poseidon6,
-  poseidon7,
-  poseidon8,
-  poseidon9,
-  poseidon10,
-  poseidon11,
-  poseidon12,
-  poseidon13,
-  poseidon14,
-  poseidon15,
-  poseidon16,
-} from "poseidon-lite";
-
-import { SNARK_FIELD } from "./zk";
+import { poseidon2 } from "poseidon-lite/poseidon2";
+import { poseidon9 } from "poseidon-lite/poseidon9";
 
 /** Devrenin derlendigi panel boyutu — `DataProvenance(1000, 20)`. */
 export const PANEL_SIZE = 1000;
@@ -61,26 +44,14 @@ export const COVERAGE_BITS_PER_WORD = 240;
 export const DOSAGES_PER_CHUNK = 125;
 
 /**
- * `poseidon-lite` her arite icin AYRI fonksiyon verir (sabitler ariteye gore
- * degisir). Taahhut, parca sayisi + salt kadar girdi alir.
+ * Devrenin paneli 1000 alanla sabittir: sekiz 125-dozaj parcasi ve salt,
+ * yani kesin olarak Poseidon-9 gerekir. Diger ariteleri ithal etmek, bu
+ * tek akista hic kullanilmayan buyuk sabit tablolarini tarayiciya tasirdi.
  */
-const POSEIDON_BY_ARITY: Record<number, (i: bigint[]) => bigint> = {
-  2: poseidon2,
-  3: poseidon3,
-  4: poseidon4,
-  5: poseidon5,
-  6: poseidon6,
-  7: poseidon7,
-  8: poseidon8,
-  9: poseidon9,
-  10: poseidon10,
-  11: poseidon11,
-  12: poseidon12,
-  13: poseidon13,
-  14: poseidon14,
-  15: poseidon15,
-  16: poseidon16,
-};
+
+/** BN254 scalar field; `zk.ts` ile ayni devre parametresi. */
+const SNARK_FIELD =
+  21888242871839275222246405745257275088548364400416034343698204186575808495617n;
 
 /**
  * Calisma panelini devrenin boyutuna kadar EKSIK ile doldurur.
@@ -140,9 +111,7 @@ export function packPanel(dosages: number[]): bigint[] {
 /** Panelin taahhudu. Panel bundan geri cikarilamaz (salt bilinmedikce). */
 export function panelCommitment(dosages: number[], salt: bigint): bigint {
   const chunks = packPanel(dosages);
-  const hasher = POSEIDON_BY_ARITY[chunks.length + 1];
-  if (!hasher) throw new Error(`Poseidon ${chunks.length + 1} girdi icin tanimli degil`);
-  return hasher([...chunks, salt]);
+  return poseidon9([...chunks, salt]);
 }
 
 /**

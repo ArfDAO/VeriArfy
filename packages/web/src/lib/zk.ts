@@ -6,7 +6,7 @@
  * Kanit uretimi `snarkjs` gerektirir; kurulu degilse anlamli bir hata verilir.
  * (Web paketinde snarkjs opsiyonel bagimliliktir.)
  */
-import { poseidon2 } from "poseidon-lite";
+import { poseidon2 } from "poseidon-lite/poseidon2";
 
 export const SNARK_FIELD =
   21888242871839275222246405745257275088548364400416034343698204186575808495617n;

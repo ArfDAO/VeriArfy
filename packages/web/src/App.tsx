@@ -1,16 +1,27 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { Nav } from "./components/Nav";
 import { Hero } from "./components/Hero";
 import { Survey, SurveyResult } from "./components/Survey";
 import { FheResults } from "./components/FheResults";
-import { PrivacyPanel } from "./components/PrivacyPanel";
 import { SectionHead, FeatureRow, Footer, StatRow } from "./components/Marketing";
-import { Contribute } from "./components/Contribute";
-import { SystemStatus } from "./components/SystemStatus";
-import { ResearchConsole } from "./components/ResearchConsole";
 import { submitSurvey, getResults, getStats, type AnalysisResults } from "./lib/api";
+import { PanelShell } from "./components/PanelShell";
+import { useSession, type SessionRole } from "./lib/session";
 
-export default function App() {
+const Giris = lazy(async () => ({ default: (await import("./routes/Giris")).Giris }));
+const Ozet = lazy(async () => ({ default: (await import("./routes/panel/Ozet")).Ozet }));
+const VeriYukle = lazy(async () => ({ default: (await import("./routes/panel/VeriYukle")).VeriYukle }));
+const Kazanclar = lazy(async () => ({ default: (await import("./routes/panel/Kazanclar")).Kazanclar }));
+const Gizlilik = lazy(async () => ({ default: (await import("./routes/panel/Gizlilik")).Gizlilik }));
+const Dogrulama = lazy(async () => ({ default: (await import("./routes/panel/Dogrulama")).Dogrulama }));
+const Kayit = lazy(async () => ({ default: (await import("./routes/arastirma/Kayit")).Kayit }));
+const VeriAl = lazy(async () => ({ default: (await import("./routes/arastirma/VeriAl")).VeriAl }));
+const Sorgular = lazy(async () => ({ default: (await import("./routes/arastirma/Sorgular")).Sorgular }));
+const Sonuclar = lazy(async () => ({ default: (await import("./routes/arastirma/Sonuclar")).Sonuclar }));
+const Dugum = lazy(async () => ({ default: (await import("./routes/arastirma/Dugum")).Dugum }));
+
+function AnaSayfa() {
   const [participantCount, setParticipantCount] = useState<number | null>(null);
   const [results, setResults] = useState<AnalysisResults | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -60,40 +71,6 @@ export default function App() {
 
       <Hero />
       <StatRow participants={participantCount} />
-
-      {/* Sistem durumu — zincirden okunan gercek yapilandirma */}
-      <div className="section" style={{ marginTop: 48 }} id="durum">
-        <SectionHead
-          eyebrow="SİSTEM DURUMU"
-          title="Ne dağıtıldı, ne zorlanıyor"
-          sub="Aşağıdaki her satır sözleşmeden okundu. Panel özeti tarayıcıda yeniden hesaplanıp zincirdekiyle karşılaştırılır — tutmuyorsa katkı akışı kapanır."
-        />
-        <div style={{ maxWidth: 880, margin: "0 auto" }}>
-          <SystemStatus />
-        </div>
-      </div>
-
-      {/* Katki akisi — veri kategorisi 1 ve 2 */}
-      <div className="band" id="katil">
-        <div className="section">
-          <SectionHead
-            eyebrow="KATILIM"
-            title="Verinizi şifreli olarak paylaşın"
-            sub="Genomik dosyanız ve sürekli ölçümleriniz tarayıcıda şifrelenir. Sağdaki konsol her adımın kanıtını gösterir: işlem özeti, blok, gaz, ciphertext handle'ı ve zincirden geri okunan sonuç."
-          />
-          <Contribute />
-        </div>
-      </div>
-
-      {/* Arastirma konsolu — sifreli verinin kullanildigi yer */}
-      <div className="section" style={{ marginTop: 64 }} id="arastirma">
-        <SectionHead
-          eyebrow="ARAŞTIRMA"
-          title="Şifreli veriyi kullanmak"
-          sub="Ücret ödenir, yetkili düğümler M-of-N onaylar, itiraz süresi dolar, çözüm yetkisi araştırmacıya geçer. Çözülen şey grup toplamlarıdır — hiçbir bireyin verisi düz metne dönmez."
-        />
-        <ResearchConsole />
-      </div>
 
       {/* Survey Section */}
       <div className="band" id="anket">
@@ -203,18 +180,6 @@ export default function App() {
         <FheResults results={results} loading={submitting} />
       </div>
 
-      {/* Gizlilik Paneli — zincirden okunan gercek veri */}
-      <div className="section" style={{ marginTop: 64 }} id="panel">
-        <SectionHead
-          eyebrow="GİZLİLİK PANELİ"
-          title="Verileriniz üzerindeki kontrol"
-          sub="Kim erişebilir, ne kadar kazandınız, izni ne zaman geri alabilirsiniz — hepsi zincir üzerinde."
-        />
-        <div style={{ maxWidth: 780, margin: "0 auto" }}>
-          <PrivacyPanel />
-        </div>
-      </div>
-
       {/* Feature Row */}
       <div className="band">
         <div className="section">
@@ -229,5 +194,51 @@ export default function App() {
 
       <Footer />
     </div>
+  );
+}
+
+function RoleGate({ role }: { role: Exclude<SessionRole, null> }) {
+  const { address, role: selectedRole, restoring } = useSession();
+
+  if (restoring) {
+    return (
+      <main className="route-loading" aria-live="polite">
+        <span className="eyebrow">OTURUM GERI YUKLENIYOR</span>
+        <p>Cuzdan baglantisi dogrulaniyor.</p>
+      </main>
+    );
+  }
+
+  if (!address || !selectedRole) return <Navigate to="/giris" replace />;
+  if (selectedRole !== role) {
+    return <Navigate to={selectedRole === "veri-sahibi" ? "/panel" : "/arastirma"} replace />;
+  }
+
+  return <PanelShell role={role} />;
+}
+
+export default function App() {
+  return (
+    <Suspense fallback={<main className="route-loading">Panel yukleniyor...</main>}>
+      <Routes>
+        <Route path="/" element={<AnaSayfa />} />
+        <Route path="/giris" element={<Giris />} />
+        <Route path="/panel/*" element={<RoleGate role="veri-sahibi" />}>
+          <Route index element={<Ozet />} />
+          <Route path="veri-yukle" element={<VeriYukle />} />
+          <Route path="kazanclar" element={<Kazanclar />} />
+          <Route path="gizlilik" element={<Gizlilik />} />
+          <Route path="dogrulama" element={<Dogrulama />} />
+        </Route>
+        <Route path="/arastirma/*" element={<RoleGate role="arastirmaci" />}>
+          <Route index element={<Kayit />} />
+          <Route path="veri-al" element={<VeriAl />} />
+          <Route path="sorgular" element={<Sorgular />} />
+          <Route path="sonuclar" element={<Sonuclar />} />
+          <Route path="dugum" element={<Dugum />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 }

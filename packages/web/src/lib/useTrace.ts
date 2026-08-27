@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { createContext, createElement, useCallback, useContext, useRef, useState, type PropsWithChildren } from "react";
 
 import type { Evidence, TraceStep } from "./trace";
 
@@ -23,7 +23,9 @@ export interface TraceApi {
   reset(): void;
 }
 
-export function useTrace(): TraceApi {
+const TraceContext = createContext<TraceApi | null>(null);
+
+function useTraceStore(): TraceApi {
   const [steps, setSteps] = useState<TraceStep[]>([]);
   // Zaman damgalari React durumundan BAGIMSIZ tutulur: ardisik iki
   // `setSteps` arasinda okunan bir `Date.now()` yanlis sure verirdi.
@@ -101,4 +103,15 @@ export function useTrace(): TraceApi {
   }, []);
 
   return { steps, begin, succeed, fail, push, progress, reset };
+}
+
+export function TraceProvider({ children }: PropsWithChildren) {
+  const trace = useTraceStore();
+  return createElement(TraceContext.Provider, { value: trace }, children);
+}
+
+export function useTrace(): TraceApi {
+  const trace = useContext(TraceContext);
+  if (!trace) throw new Error("useTrace, TraceProvider icinde kullanilmalidir.");
+  return trace;
 }

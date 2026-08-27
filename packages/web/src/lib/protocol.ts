@@ -10,9 +10,7 @@ import {
   STAKING_ABI,
   STORAGE_ABI,
 } from "../config/abi";
-import { encryptBiomarkers, encryptDosages, encryptGroup } from "./fhe";
 import { DOSAGE_MISSING } from "./panel";
-import { handlesDigest, proveSelfProvenance, randomSalt } from "./provenance";
 import { BIOMARKER_MISSING } from "./metrics";
 import type { MetricPanel, MetricSpec } from "./metrics";
 
@@ -125,6 +123,10 @@ export interface QuerySummary {
   weightedCoverage: number;
   /** Agirliklarin sorgu genelindeki toplami — payda. */
   weightedTotal: number;
+  /** Arastirmacinin istedigi genomik alan indeksleri. */
+  requestedSnps: number[];
+  /** Arastirmacinin istedigi biyobelirtec alan indeksleri. */
+  requestedMetrics: number[];
   /** Sorgunun ham kayit toplami (kac kisi x kac alan) — gosterim icin. */
   coverageTotal: number;
   claimed: boolean;
@@ -143,6 +145,64 @@ export interface PoolMembership {
   leftAtBlock: number;
   /** Su an havuzda mi? */
   active: boolean;
+}
+
+/** Veri sahibi ozetinin gerektirdigi, odeme ve havuz durumunun dar gorunumu. */
+export interface PoolMembershipState {
+  poolParticipants: number;
+  membership: PoolMembership;
+  pendingRewards: bigint;
+  /** Log araligi okunamazsa `null` kalir; toplam kazanc tahmin edilmez. */
+  claimedRewards: bigint | null;
+  totalEarnings: bigint | null;
+  token: { symbol: string; decimals: number };
+}
+
+/**
+ * Kullaniciya ait havuz ve odul durumunu zincirden okur.
+ * `RewardClaimed` olaylari gecmis cekimleri tutan tek kanittir.
+ */
+export async function readPoolMembership(
+  provider: BrowserProvider,
+  account: string,
+): Promise<PoolMembershipState> {
+  const protocol = getProtocol(provider);
+  const payments = getPayments(provider);
+  const token = getPaymentToken(provider);
+
+  const [participantIndex, poolParticipants, leftAtBlock, pending, symbol, decimals] =
+    await Promise.all([
+      protocol.participantIndex(account) as Promise<bigint>,
+      protocol.participantCount() as Promise<bigint>,
+      protocol.leftPoolAtBlock(account) as Promise<bigint>,
+      payments.pendingRewards(account) as Promise<[bigint, bigint[]]>,
+      token.symbol() as Promise<string>,
+      token.decimals() as Promise<bigint>,
+    ]);
+
+  let claimedRewards: bigint | null = 0n;
+  try {
+    const events = await payments.queryFilter(payments.filters.RewardClaimed(null, account));
+    for (const event of events) {
+      const amount = (event as { args?: { amount?: bigint } }).args?.amount ?? 0n;
+      claimedRewards += amount;
+    }
+  } catch {
+    claimedRewards = null;
+  }
+
+  const pendingRewards = pending[0];
+  return {
+    poolParticipants: Number(poolParticipants),
+    membership: {
+      leftAtBlock: Number(leftAtBlock),
+      active: Number(participantIndex) > 0 && leftAtBlock === 0n,
+    },
+    pendingRewards,
+    claimedRewards,
+    totalEarnings: claimedRewards === null ? null : claimedRewards + pendingRewards,
+    token: { symbol, decimals: Number(decimals) },
+  };
 }
 
 /** Filecoin kalicilik durumu — rapor §2.9.2. */
@@ -306,6 +366,10 @@ export async function readDashboard(
       ]);
 
       const requestId = Number(q.disclosureRequestId);
+      const [requestedSnps, requestedMetrics] = await Promise.all([
+        protocol.disclosureSnpIds(requestId) as Promise<bigint[]>,
+        protocol.disclosureMetricIds(requestId) as Promise<bigint[]>,
+      ]);
       let stage: QueryStage;
 
       if (q.refunded) {
@@ -349,6 +413,8 @@ export async function readDashboard(
         coverageTotal: Number(q.coverageTotal),
         weightedCoverage: Number(weighted),
         weightedTotal: Number(weightedAll),
+        requestedSnps: requestedSnps.map(Number),
+        requestedMetrics: requestedMetrics.map(Number),
       };
     }),
   );
@@ -543,6 +609,7 @@ export async function contributeBiomarkers(
     onBatch?: (outcome: TxOutcome, from: number, to: number) => void;
   } = {},
 ): Promise<TxOutcome[]> {
+  const { encryptBiomarkers } = await import("./fhe");
   const { batchSize = 6, onBatch } = options;
 
   const biomarkers = getBiomarkers(signer);
@@ -601,6 +668,10 @@ export interface ContributionState {
   submittedMetrics: number;
   metricCount: number;
   metricsHash: string;
+  /** Gercek deger tasiyan genomik alan sayisi; eksikler sayilmaz. */
+  coveredSnps: number;
+  /** Gercek deger tasiyan biyobelirtec alan sayisi; eksikler sayilmaz. */
+  coveredMetrics: number;
   participantCount: number;
 }
 
@@ -623,11 +694,17 @@ export async function readContributionState(
   // Modul adresi ZINCIRDEN alinir, yapilandirmadan degil: sifreleme yanlis
   // adrese yapilirsa girdi kaniti reddedilir ve sebebi anlasilmaz.
   const biomarkers = new Contract(biomarkerModule, BIOMARKERS_ABI, runner);
-  const [submittedMetrics, metricCount, metricsHash] = await Promise.all([
+  const snpIds = Array.from({ length: Number(snpCount) }, (_, index) => index);
+  const [submittedMetrics, metricCount, metricsHash, coveredSnps] = await Promise.all([
     biomarkers.submittedMetrics(account),
     biomarkers.metricCount(),
     biomarkers.metricsHash(),
+    snpIds.length === 0 ? 0n : protocol.snpCoverageWeight(account, snpIds),
   ]);
+  const metricIds = Array.from({ length: Number(metricCount) }, (_, index) => index);
+  const coveredMetrics = metricIds.length === 0
+    ? 0n
+    : await biomarkers.metricCoverageWeight(account, metricIds);
 
   return {
     isEnrolled,
@@ -638,6 +715,8 @@ export async function readContributionState(
     submittedMetrics: Number(submittedMetrics),
     metricCount: Number(metricCount),
     metricsHash,
+    coveredSnps: Number(coveredSnps),
+    coveredMetrics: Number(coveredMetrics),
     participantCount: Number(participantCount),
   };
 }
@@ -659,6 +738,7 @@ export interface TxOutcome {
  *          degistirip tabloyu bozabilirdi.
  */
 export async function enroll(signer: Signer, group: number): Promise<TxOutcome> {
+  const { encryptGroup } = await import("./fhe");
   const protocol = getProtocol(signer);
   const contractAddress = await protocol.getAddress();
   const userAddress = await signer.getAddress();
@@ -699,6 +779,7 @@ export async function contributeDosages(
     onProgress?: (done: number, total: number) => void;
   } = {},
 ): Promise<TxOutcome[]> {
+  const { encryptDosages } = await import("./fhe");
   const { batchSize = 10, onBatch, onEncrypted, onProgress } = options;
 
   const protocol = getProtocol(signer);
@@ -797,6 +878,10 @@ export async function submitProvenanceRecord(
   const userAddress = await signer.getAddress();
 
   if ((await protocol.panelCommitment(userAddress)) !== 0n) return null;
+
+  // Poseidon ve Groth16 yalnızca ilk veri kaydında gerekir. Protokol okuma/
+  // sorgu rotalarının bu kanıt kodunu indirmemesi için burada yüklenir.
+  const { handlesDigest, proveSelfProvenance, randomSalt } = await import("./provenance");
 
   options.onStage?.("digest");
   const digest = await handlesDigest(handles);

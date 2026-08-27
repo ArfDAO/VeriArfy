@@ -73,6 +73,17 @@ let instancePromise: Promise<FheInstance> | null = null;
 const TFHE_WASM = `${import.meta.env.BASE_URL}fhe/tfhe_bg.wasm`;
 const KMS_WASM = `${import.meta.env.BASE_URL}fhe/kms_lib_bg.wasm`;
 
+/**
+ * FHE host-contract read-call'lari icin cüzdandan bagimsiz Sepolia RPC.
+ *
+ * Relayer SDK orneklenirken InputVerifier'in EIP-5267 `eip712Domain()`
+ * bilgisini okur. Bazi enjekte cüzdan saglayicilari bu salt-okunur cagrida
+ * `missing revert data` donduruyor; sifreleme daha baslamadan kesiliyor.
+ * SDK'ye URL vermek, bu zincir okumalarini dogrudan RPC'ye yollar. Imzalama
+ * ve state-degistiren islemler yine secili cüzdanda kalir.
+ */
+const FHE_READ_RPC = "https://ethereum-sepolia-rpc.publicnode.com";
+
 /** SDK'yi bir kez baslatir ve ornegi paylasir. */
 export function getFheInstance(): Promise<FheInstance> {
   if (!instancePromise) {
@@ -85,7 +96,7 @@ export function getFheInstance(): Promise<FheInstance> {
 
       return createInstance({
         ...SepoliaConfig,
-        network: (window as any).ethereum,
+        network: FHE_READ_RPC,
       }) as unknown as FheInstance;
     })();
   }
