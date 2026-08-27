@@ -14,6 +14,7 @@ const ownerItems = [
 const researcherItems = [
   { to: "/arastirma", label: "Kayit ve hazirlik", end: true },
   { to: "/arastirma/veri-al", label: "Veri satin al", end: false },
+  { to: "/arastirma/sorgular", label: "Sorgular", end: false },
 ];
 
 export function PanelShell({ role }: { role: Exclude<SessionRole, null> }) {

@@ -20,6 +20,7 @@ import { Gizlilik } from "./routes/panel/Gizlilik";
 import { Dogrulama } from "./routes/panel/Dogrulama";
 import { Kayit } from "./routes/arastirma/Kayit";
 import { VeriAl } from "./routes/arastirma/VeriAl";
+import { Sorgular } from "./routes/arastirma/Sorgular";
 
 function AnaSayfa() {
   const [participantCount, setParticipantCount] = useState<number | null>(null);
@@ -278,6 +279,7 @@ export default function App() {
       <Route path="/arastirma/*" element={<RoleGate role="arastirmaci" />}>
         <Route index element={<Kayit />} />
         <Route path="veri-al" element={<VeriAl />} />
+        <Route path="sorgular" element={<Sorgular />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { SEPOLIA_CHAIN_ID } from "../../config";
 import {
   formatToken,
+  findOpenQuery,
   getBiomarkers,
   getPayments,
   getProtocol,
@@ -30,6 +32,11 @@ interface Quote {
   records: number;
 }
 
+interface ActiveQuery {
+  queryId: number;
+  requestId: number;
+}
+
 function multiplierBps(count: number, participants: number, cap: number): number {
   if (count === 0) return 0;
   return Math.min(Math.max(Math.floor((participants * 10_000) / count), 10_000), cap);
@@ -49,6 +56,7 @@ export function VeriAl() {
   const [selectedSnps, setSelectedSnps] = useState<Set<number>>(() => new Set([0]));
   const [selectedMetrics, setSelectedMetrics] = useState<Set<number>>(() => new Set());
   const [quote, setQuote] = useState<Quote | null>(null);
+  const [activeQuery, setActiveQuery] = useState<ActiveQuery | null>(null);
   const [loading, setLoading] = useState(false);
   const [pricing, setPricing] = useState(false);
   const [opening, setOpening] = useState(false);
@@ -67,10 +75,11 @@ export function VeriAl() {
       const biomarkers = getBiomarkers(provider);
       const payments = getPayments(provider);
       const readiness = await readResearcherReadiness(provider, address);
-      const [snpCounts, metricCounts, maxScarcityBps] = await Promise.all([
+      const [snpCounts, metricCounts, maxScarcityBps, open] = await Promise.all([
         Promise.all(GENOMIC_PANEL.variants.map((_, index) => protocol.snpCoverageCount(index) as Promise<bigint>)),
         Promise.all(METRIC_PANEL.metrics.map((_, index) => biomarkers.metricCoverageCount(index) as Promise<bigint>)),
         payments.maxScarcityBps() as Promise<bigint>,
+        findOpenQuery(provider, address),
       ]);
       const cap = Number(maxScarcityBps);
 
@@ -85,8 +94,10 @@ export function VeriAl() {
           return { count: total, multiplierBps: multiplierBps(total, readiness.participants, cap) };
         }),
       });
+      setActiveQuery(open ? { queryId: open.queryId, requestId: open.requestId } : null);
     } catch (error) {
       setPurchaseState(null);
+      setActiveQuery(null);
       setNotice({
         kind: "warn",
         text: error instanceof Error ? error.message : "Alan kapsamalari zincirden okunamadi.",
@@ -141,7 +152,7 @@ export function VeriAl() {
   };
 
   const open = useCallback(async () => {
-    if (!signer || !purchaseState || !quote || snpIds.length === 0 || wrongNetwork) return;
+    if (!signer || !purchaseState || !quote || activeQuery || snpIds.length === 0 || wrongNetwork) return;
     if (!purchaseState.readiness.registered || purchaseState.readiness.participants === 0) return;
     if (purchaseState.readiness.balance < quote.fee) return;
 
@@ -162,7 +173,7 @@ export function VeriAl() {
     } finally {
       setOpening(false);
     }
-  }, [metricIds, purchaseState, quote, refresh, signer, snpIds, wrongNetwork]);
+  }, [activeQuery, metricIds, purchaseState, quote, refresh, signer, snpIds, wrongNetwork]);
 
   const readiness = purchaseState?.readiness;
   const balanceEnough = readiness && quote ? readiness.balance >= quote.fee : false;
@@ -172,6 +183,7 @@ export function VeriAl() {
     readiness.participants > 0 &&
     balanceEnough &&
     quote &&
+    !activeQuery &&
     snpIds.length > 0 &&
     !wrongNetwork &&
     !pricing &&
@@ -272,6 +284,11 @@ export function VeriAl() {
           {!readiness?.registered && <div className="notice notice--warn">Once kayit ve hazirlik ekranindan arastirmaci kimliginizi dogrulayin.</div>}
           {readiness?.participants === 0 && <div className="notice notice--warn">Havuz bosken sorgu acilamaz.</div>}
           {quote && readiness && !balanceEnough && <div className="notice notice--warn">Secilen alanlar icin token bakiyesi yetersiz.</div>}
+          {activeQuery && (
+            <div className="notice notice--info">
+              Sorgu #{activeQuery.queryId} halen acik. Ikinci bir odeme yapilamaz; ilerlemeyi <Link to="/arastirma/sorgular">sorgular ekranindan</Link> takip edin.
+            </div>
+          )}
           <button className="pill pill--primary" disabled={!canOpen} onClick={() => void open()}>
             {opening ? "Sorgu aciliyor..." : "Ucreti ode ve sorguyu ac"}
           </button>
