@@ -210,6 +210,35 @@
   gap: var(--spacing-16);
 }
 
+.login-page__session {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-16);
+  padding: 0.7rem 0.9rem;
+  border: 1px solid rgba(34, 34, 34, 0.1);
+  border-radius: var(--radius-xl);
+  background: var(--color-paper);
+  color: var(--color-smoke);
+  font-size: 0.78rem;
+}
+
+.login-page__session-actions {
+  display: inline-flex;
+  gap: var(--spacing-12);
+}
+
+.login-page__session-actions button,
+.wallet-dialog__head > button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--color-ink);
+  font-size: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
 .login-page__connect,
 .login-page__role {
   display: grid;
@@ -267,6 +296,38 @@
   letter-spacing: var(--tracking-mono);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.wallet-dialog-backdrop {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--spacing-20);
+  background: rgba(34, 34, 34, 0.32);
+}
+
+.wallet-dialog {
+  width: min(100%, 28rem);
+  padding: var(--spacing-24);
+  border-radius: var(--radius-2xl);
+  background: var(--color-paper);
+  box-shadow: 0 1.5rem 4rem rgba(55, 38, 45, 0.24);
+}
+
+.wallet-dialog__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-16);
+  margin-bottom: var(--spacing-20);
+}
+
+.wallet-dialog__head h2 {
+  margin-top: var(--spacing-4);
+  font-size: 1.4rem;
+  letter-spacing: -0.045em;
 }
 
 .login-page__roles {
@@ -357,6 +418,11 @@
 
   .login-page__intro .eyebrow {
     margin-top: var(--spacing-20);
+  }
+
+  .login-page__session {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 

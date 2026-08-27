@@ -38,11 +38,13 @@ interface SessionState {
   switchToSepolia: () => Promise<void>;
   selectRole: (role: Exclude<SessionRole, null>) => void;
   signOut: () => void;
+  disconnect: () => void;
   refresh: () => Promise<void>;
 }
 
 const ROLE_STORAGE_KEY = "veriarfy.session.role";
 const WALLET_RDNS_STORAGE_KEY = "veriarfy.session.wallet-rdns";
+const AUTO_CONNECT_DISABLED_STORAGE_KEY = "veriarfy.session.auto-connect-disabled";
 const SessionContext = createContext<SessionState | null>(null);
 
 function readStoredRole(): SessionRole {
@@ -59,10 +61,14 @@ function messageOf(error: unknown, fallback: string): string {
 }
 
 function mergeWallets(current: WalletOption[], next: WalletOption): WalletOption[] {
-  const duplicate = current.some(
+  // EIP-6963 duyurusu geldiyse `window.ethereum` fallback'leri artik güvenilir
+  // kimlik tasimaz. Ornegin bazi provider wrapper'lari `isMetaMask` bayragini
+  // miras alir ve Trust Wallet'i MetaMask gibi gosterebilir.
+  const candidates = next.rdns ? current.filter((wallet) => wallet.rdns !== null) : current;
+  const duplicate = candidates.some(
     (wallet) => wallet.id === next.id || wallet.provider === next.provider,
   );
-  return duplicate ? current : [...current, next];
+  return duplicate ? candidates : [...candidates, next];
 }
 
 export function SessionProvider({ children }: PropsWithChildren) {
@@ -75,6 +81,10 @@ export function SessionProvider({ children }: PropsWithChildren) {
   const [activeWallet, setActiveWallet] = useState<WalletOption | null>(null);
   const [preferredRdns, setPreferredRdns] = useState<string | null>(
     () => window.localStorage.getItem(WALLET_RDNS_STORAGE_KEY),
+  );
+  const [discoveryReady, setDiscoveryReady] = useState(false);
+  const [autoConnectEnabled, setAutoConnectEnabled] = useState(
+    () => window.localStorage.getItem(AUTO_CONNECT_DISABLED_STORAGE_KEY) !== "true",
   );
   const [restoring, setRestoring] = useState(true);
   const [researcherRegistered, setResearcherRegistered] = useState<boolean | null>(null);
@@ -93,7 +103,15 @@ export function SessionProvider({ children }: PropsWithChildren) {
     }
     requestWalletAnnouncements();
 
-    return () => window.removeEventListener("eip6963:announceProvider", handleAnnouncement);
+    // EIP-6963 yanitlari olay dongusunde yeniden duyurulur. Bu pencere
+    // bitmeden `window.ethereum` fallback'i ile otomatik baglanmak, secilen
+    // MetaMask yerine Trust Wallet'a baglanmaya yol aciyordu.
+    const readyTimer = window.setTimeout(() => setDiscoveryReady(true), 100);
+
+    return () => {
+      window.clearTimeout(readyTimer);
+      window.removeEventListener("eip6963:announceProvider", handleAnnouncement);
+    };
   }, []);
 
   const clearAccount = useCallback(() => {
@@ -187,8 +205,12 @@ export function SessionProvider({ children }: PropsWithChildren) {
   }, [hydrate]);
 
   useEffect(() => {
+    if (!discoveryReady || !autoConnectEnabled) {
+      setRestoring(false);
+      return;
+    }
     void hydrate(false).finally(() => setRestoring(false));
-  }, [hydrate]);
+  }, [autoConnectEnabled, discoveryReady, hydrate]);
 
   useEffect(() => {
     if (!activeWallet?.provider.on) return;
@@ -206,6 +228,8 @@ export function SessionProvider({ children }: PropsWithChildren) {
   const connect = useCallback(
     async (walletId?: string) => {
       setError(null);
+      window.localStorage.removeItem(AUTO_CONNECT_DISABLED_STORAGE_KEY);
+      setAutoConnectEnabled(true);
       await hydrate(true, walletId);
     },
     [hydrate],
@@ -235,6 +259,19 @@ export function SessionProvider({ children }: PropsWithChildren) {
     setError(null);
   }, []);
 
+  const disconnect = useCallback(() => {
+    // Eklentinin izinlerini tarayicidan geri cekemeyiz; bu, dapp'in bu
+    // tarayicidaki cüzdan/rol oturumunu unutmasidir. Bir sonraki baglanma
+    // butonu bu opt-out'u kaldirir ve kullanicidan yeniden onay ister.
+    window.localStorage.removeItem(ROLE_STORAGE_KEY);
+    window.localStorage.setItem(AUTO_CONNECT_DISABLED_STORAGE_KEY, "true");
+    setRole(null);
+    setAutoConnectEnabled(false);
+    setActiveWallet(null);
+    clearAccount();
+    setError(null);
+  }, [clearAccount]);
+
   const value = useMemo<SessionState>(
     () => ({
       provider,
@@ -252,6 +289,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       switchToSepolia,
       selectRole,
       signOut,
+      disconnect,
       refresh,
     }),
     [
@@ -259,6 +297,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       address,
       chainId,
       connect,
+      disconnect,
       error,
       provider,
       refresh,

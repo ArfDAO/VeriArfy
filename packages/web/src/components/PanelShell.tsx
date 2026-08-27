@@ -54,7 +54,7 @@ export function PanelShell({ role }: { role: Exclude<SessionRole, null> }) {
           </div>
           <div className="panel-shell__account">
             <span className="mono">{address ? shortAddress(address) : "Bagli degil"}</span>
-            <button className="panel-shell__signout" onClick={leave}>Cikis</button>
+            <button className="panel-shell__signout" onClick={leave}>Giris ekranina don</button>
           </div>
         </header>
 
