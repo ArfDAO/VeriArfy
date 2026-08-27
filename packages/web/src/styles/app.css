@@ -258,6 +258,24 @@
   max-width: 43rem;
 }
 
+.data-upload {
+  display: grid;
+  gap: var(--spacing-32);
+}
+
+.data-upload__heading h1 {
+  margin-top: var(--spacing-8);
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+
+.data-upload__heading p {
+  max-width: 44rem;
+  margin-top: var(--spacing-12);
+  color: var(--color-smoke);
+}
+
 .login-page {
   width: min(100% - 3rem, 70rem);
   min-height: 100dvh;

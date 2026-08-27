@@ -310,6 +310,13 @@ export function GenomicStep({
         <em>olan</em> alanları isterse pay alırsınız.
       </p>
 
+      {submitted > 0 && !complete && (
+        <div className="notice notice--info" style={{ marginTop: 16 }}>
+          Kaldığınız yerden devam edin: zincirde {submitted}/{snpCount} SNP kaydı var. Aynı panel
+          sırasıyla kalan veriyi gönderin; sözleşme sırayı doğrular.
+        </div>
+      )}
+
       <input
         ref={fileInput}
         type="file"
