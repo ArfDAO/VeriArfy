@@ -4,11 +4,7 @@ import { Nav } from "./components/Nav";
 import { Hero } from "./components/Hero";
 import { Survey, SurveyResult } from "./components/Survey";
 import { FheResults } from "./components/FheResults";
-import { PrivacyPanel } from "./components/PrivacyPanel";
 import { SectionHead, FeatureRow, Footer, StatRow } from "./components/Marketing";
-import { Contribute } from "./components/Contribute";
-import { SystemStatus } from "./components/SystemStatus";
-import { ResearchConsole } from "./components/ResearchConsole";
 import { submitSurvey, getResults, getStats, type AnalysisResults } from "./lib/api";
 import { PanelShell } from "./components/PanelShell";
 import { useSession, type SessionRole } from "./lib/session";
@@ -74,40 +70,6 @@ function AnaSayfa() {
 
       <Hero />
       <StatRow participants={participantCount} />
-
-      {/* Sistem durumu — zincirden okunan gercek yapilandirma */}
-      <div className="section" style={{ marginTop: 48 }} id="durum">
-        <SectionHead
-          eyebrow="SİSTEM DURUMU"
-          title="Ne dağıtıldı, ne zorlanıyor"
-          sub="Aşağıdaki her satır sözleşmeden okundu. Panel özeti tarayıcıda yeniden hesaplanıp zincirdekiyle karşılaştırılır — tutmuyorsa katkı akışı kapanır."
-        />
-        <div style={{ maxWidth: 880, margin: "0 auto" }}>
-          <SystemStatus />
-        </div>
-      </div>
-
-      {/* Katki akisi — veri kategorisi 1 ve 2 */}
-      <div className="band" id="katil">
-        <div className="section">
-          <SectionHead
-            eyebrow="KATILIM"
-            title="Verinizi şifreli olarak paylaşın"
-            sub="Genomik dosyanız ve sürekli ölçümleriniz tarayıcıda şifrelenir. Sağdaki konsol her adımın kanıtını gösterir: işlem özeti, blok, gaz, ciphertext handle'ı ve zincirden geri okunan sonuç."
-          />
-          <Contribute />
-        </div>
-      </div>
-
-      {/* Arastirma konsolu — sifreli verinin kullanildigi yer */}
-      <div className="section" style={{ marginTop: 64 }} id="arastirma">
-        <SectionHead
-          eyebrow="ARAŞTIRMA"
-          title="Şifreli veriyi kullanmak"
-          sub="Ücret ödenir, yetkili düğümler M-of-N onaylar, itiraz süresi dolar, çözüm yetkisi araştırmacıya geçer. Çözülen şey grup toplamlarıdır — hiçbir bireyin verisi düz metne dönmez."
-        />
-        <ResearchConsole />
-      </div>
 
       {/* Survey Section */}
       <div className="band" id="anket">
@@ -215,18 +177,6 @@ function AnaSayfa() {
           sub="Gerçek kullanıcı verileri üzerinde iki modelin doğruluk karşılaştırması."
         />
         <FheResults results={results} loading={submitting} />
-      </div>
-
-      {/* Gizlilik Paneli — zincirden okunan gercek veri */}
-      <div className="section" style={{ marginTop: 64 }} id="panel">
-        <SectionHead
-          eyebrow="GİZLİLİK PANELİ"
-          title="Verileriniz üzerindeki kontrol"
-          sub="Kim erişebilir, ne kadar kazandınız, izni ne zaman geri alabilirsiniz — hepsi zincir üzerinde."
-        />
-        <div style={{ maxWidth: 780, margin: "0 auto" }}>
-          <PrivacyPanel />
-        </div>
       </div>
 
       {/* Feature Row */}
