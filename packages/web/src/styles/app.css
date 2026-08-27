@@ -669,6 +669,104 @@
   margin-top: var(--spacing-24);
 }
 
+.research-queries__handoff {
+  margin-top: var(--spacing-24);
+  color: var(--color-smoke);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.research-results,
+.node-panel {
+  display: grid;
+  gap: var(--spacing-24);
+}
+
+.research-results__heading,
+.node-panel__heading,
+.research-results__action,
+.node-panel__stake {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-24);
+}
+
+.research-results__heading,
+.node-panel__heading {
+  align-items: end;
+}
+
+.research-results__heading h1,
+.node-panel__heading h1,
+.research-results__action h2,
+.node-panel__stake h2 {
+  margin-top: var(--spacing-8);
+  letter-spacing: -0.05em;
+}
+
+.research-results__heading h1,
+.node-panel__heading h1 {
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  line-height: 1;
+}
+
+.research-results__heading p,
+.node-panel__heading p,
+.research-results__action p,
+.node-panel__stake p,
+.node-panel__state p {
+  margin-top: var(--spacing-12);
+  color: var(--color-smoke);
+}
+
+.research-results__heading p,
+.node-panel__heading p {
+  max-width: 48rem;
+}
+
+.research-results__action,
+.node-panel__stake {
+  align-items: center;
+  padding: clamp(1.5rem, 3vw, 2.5rem);
+}
+
+.research-results__action h2,
+.node-panel__stake h2 {
+  font-size: clamp(1.35rem, 2.5vw, 2rem);
+}
+
+.research-results__table {
+  overflow: hidden;
+}
+
+.research-results__settle {
+  justify-self: start;
+}
+
+.node-panel__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--spacing-12);
+}
+
+.node-panel__state {
+  min-height: 13rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.node-panel__status {
+  margin-top: var(--spacing-24);
+  font-size: clamp(1.3rem, 2.5vw, 2rem);
+  letter-spacing: -0.05em;
+}
+
+.node-panel__state p {
+  margin-top: auto;
+  padding-top: var(--spacing-20);
+  font-size: 0.84rem;
+}
+
 .data-upload {
   display: grid;
   gap: var(--spacing-32);
@@ -1067,6 +1165,18 @@
 
   .research-queries__next {
     position: static;
+  }
+
+  .research-results__heading,
+  .node-panel__heading,
+  .research-results__action,
+  .node-panel__stake {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .node-panel__grid {
+    grid-template-columns: 1fr;
   }
 
   .owner-overview__metric {

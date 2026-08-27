@@ -9,7 +9,6 @@ import {
   getPaymentToken,
   QUERY_TYPE,
   readDisclosure,
-  settleQuery,
   type DisclosureState,
 } from "../../lib/protocol";
 import { useSession } from "../../lib/session";
@@ -112,7 +111,7 @@ export function Sorgular() {
   const { address, chainId, provider, signer } = useSession();
   const [query, setQuery] = useState<QueryState | null>(null);
   const [loading, setLoading] = useState(false);
-  const [action, setAction] = useState<"execute" | "settle" | null>(null);
+  const [action, setAction] = useState<"execute" | null>(null);
   const [notice, setNotice] = useState<{ kind: "warn" | "ok" | "info"; text: string } | null>(null);
   const wrongNetwork = chainId !== null && chainId !== SEPOLIA_CHAIN_ID;
 
@@ -185,21 +184,6 @@ export function Sorgular() {
     }
   }, [query, refresh, signer]);
 
-  const settle = useCallback(async () => {
-    if (!signer || !query || !query.disclosure.executed || query.settled || query.refunded) return;
-    setAction("settle");
-    setNotice({ kind: "info", text: "Emanet odemesi protokol kurallarina gore dagitiliyor..." });
-    try {
-      await settleQuery(signer, query.queryId);
-      await refresh();
-      setNotice({ kind: "ok", text: "Odeme dagitildi." });
-    } catch (error) {
-      setNotice({ kind: "warn", text: error instanceof Error ? error.message : "Odeme dagitilamadi." });
-    } finally {
-      setAction(null);
-    }
-  }, [query, refresh, signer]);
-
   const steps = useMemo(() => query ? stepsFor(query) : [], [query]);
 
   return (
@@ -254,7 +238,7 @@ export function Sorgular() {
               {query.disclosure.finalized && !query.disclosure.executed && query.disclosure.currentBlock < query.disclosure.challengeEndsAtBlock && <div><dt>Kalan blok</dt><dd>{(query.disclosure.challengeEndsAtBlock - query.disclosure.currentBlock).toLocaleString("tr-TR")}</dd></div>}
             </dl>
             {query.disclosure.canExecute && <button className="pill pill--primary" disabled={action !== null} onClick={() => void execute()}>{action === "execute" ? "Yetki veriliyor..." : "Acilim yetkisini ver"}</button>}
-            {query.disclosure.executed && !query.settled && !query.refunded && <button className="pill pill--primary" disabled={action !== null} onClick={() => void settle()}>{action === "settle" ? "Dagitiliyor..." : "Odemeyi dagit"}</button>}
+            {query.disclosure.executed && !query.settled && !query.refunded && <p className="research-queries__handoff">Cozulmus grup toplamlari ve odeme dagitimi Sonuclar ekranindan ilerletilir.</p>}
           </aside>
         </div>
       )}

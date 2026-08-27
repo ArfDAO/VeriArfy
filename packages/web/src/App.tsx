@@ -21,6 +21,8 @@ import { Dogrulama } from "./routes/panel/Dogrulama";
 import { Kayit } from "./routes/arastirma/Kayit";
 import { VeriAl } from "./routes/arastirma/VeriAl";
 import { Sorgular } from "./routes/arastirma/Sorgular";
+import { Sonuclar } from "./routes/arastirma/Sonuclar";
+import { Dugum } from "./routes/arastirma/Dugum";
 
 function AnaSayfa() {
   const [participantCount, setParticipantCount] = useState<number | null>(null);
@@ -280,6 +282,8 @@ export default function App() {
         <Route index element={<Kayit />} />
         <Route path="veri-al" element={<VeriAl />} />
         <Route path="sorgular" element={<Sorgular />} />
+        <Route path="sonuclar" element={<Sonuclar />} />
+        <Route path="dugum" element={<Dugum />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
