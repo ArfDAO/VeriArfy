@@ -11,7 +11,14 @@ import { BrowserProvider, type Signer } from "ethers";
 
 import { SEPOLIA_CHAIN_ID } from "../config";
 import { readResearcherReadiness } from "./protocol";
-import { connectWallet, ensureSepolia, hasWallet } from "./wallet";
+import {
+  announcedWallet,
+  connectWallet,
+  ensureSepolia,
+  legacyWallets,
+  requestWalletAnnouncements,
+  type WalletOption,
+} from "./wallet";
 
 export type SessionRole = "veri-sahibi" | "arastirmaci" | null;
 
@@ -21,11 +28,13 @@ interface SessionState {
   address: string | null;
   chainId: number | null;
   role: SessionRole;
+  wallets: WalletOption[];
+  activeWallet: WalletOption | null;
   walletAvailable: boolean;
   restoring: boolean;
   researcherRegistered: boolean | null;
   error: string | null;
-  connect: () => Promise<void>;
+  connect: (walletId?: string) => Promise<void>;
   switchToSepolia: () => Promise<void>;
   selectRole: (role: Exclude<SessionRole, null>) => void;
   signOut: () => void;
@@ -33,6 +42,7 @@ interface SessionState {
 }
 
 const ROLE_STORAGE_KEY = "veriarfy.session.role";
+const WALLET_RDNS_STORAGE_KEY = "veriarfy.session.wallet-rdns";
 const SessionContext = createContext<SessionState | null>(null);
 
 function readStoredRole(): SessionRole {
@@ -48,16 +58,43 @@ function messageOf(error: unknown, fallback: string): string {
   return fallback;
 }
 
+function mergeWallets(current: WalletOption[], next: WalletOption): WalletOption[] {
+  const duplicate = current.some(
+    (wallet) => wallet.id === next.id || wallet.provider === next.provider,
+  );
+  return duplicate ? current : [...current, next];
+}
+
 export function SessionProvider({ children }: PropsWithChildren) {
   const [provider, setProvider] = useState<BrowserProvider | null>(null);
   const [signer, setSigner] = useState<Signer | null>(null);
   const [address, setAddress] = useState<string | null>(null);
   const [chainId, setChainId] = useState<number | null>(null);
   const [role, setRole] = useState<SessionRole>(() => readStoredRole());
-  const [walletAvailable, setWalletAvailable] = useState(() => hasWallet());
+  const [wallets, setWallets] = useState<WalletOption[]>(() => legacyWallets());
+  const [activeWallet, setActiveWallet] = useState<WalletOption | null>(null);
+  const [preferredRdns, setPreferredRdns] = useState<string | null>(
+    () => window.localStorage.getItem(WALLET_RDNS_STORAGE_KEY),
+  );
   const [restoring, setRestoring] = useState(true);
   const [researcherRegistered, setResearcherRegistered] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // EIP-6963, provider duyurularinin sayfa omru boyunca dinlenmesini ister.
+  useEffect(() => {
+    const handleAnnouncement = (event: Event) => {
+      const wallet = announcedWallet(event);
+      if (wallet) setWallets((current) => mergeWallets(current, wallet));
+    };
+
+    window.addEventListener("eip6963:announceProvider", handleAnnouncement);
+    for (const wallet of legacyWallets()) {
+      setWallets((current) => mergeWallets(current, wallet));
+    }
+    requestWalletAnnouncements();
+
+    return () => window.removeEventListener("eip6963:announceProvider", handleAnnouncement);
+  }, []);
 
   const clearAccount = useCallback(() => {
     setProvider(null);
@@ -84,45 +121,66 @@ export function SessionProvider({ children }: PropsWithChildren) {
     [],
   );
 
-  const hydrate = useCallback(async (requestAccess: boolean) => {
-    setWalletAvailable(hasWallet());
-    if (!hasWallet()) {
-      clearAccount();
-      return;
-    }
+  const chooseWallet = useCallback(
+    (walletId?: string): WalletOption | null => {
+      if (walletId) return wallets.find((wallet) => wallet.id === walletId) ?? null;
+      if (activeWallet) return activeWallet;
+      if (preferredRdns) {
+        const preferred = wallets.find((wallet) => wallet.rdns === preferredRdns);
+        if (preferred) return preferred;
+      }
+      return wallets[0] ?? null;
+    },
+    [activeWallet, preferredRdns, wallets],
+  );
 
-    try {
-      const result = requestAccess
-        ? await connectWallet()
-        : await (async () => {
-            const nextProvider = new BrowserProvider(window.ethereum!);
-            const accounts = (await nextProvider.send("eth_accounts", [])) as string[];
-            if (!accounts[0]) return null;
-            const network = await nextProvider.getNetwork();
-            return {
-              provider: nextProvider,
-              address: accounts[0],
-              chainId: Number(network.chainId),
-            };
-          })();
-
-      if (!result) {
+  const hydrate = useCallback(
+    async (requestAccess: boolean, walletId?: string) => {
+      const wallet = chooseWallet(walletId);
+      if (!wallet) {
         clearAccount();
         return;
       }
 
-      const nextSigner = await result.provider.getSigner(result.address);
-      setProvider(result.provider);
-      setSigner(nextSigner);
-      setAddress(result.address);
-      setChainId(result.chainId);
-      setError(null);
-      await updateResearcherRegistration(result.provider, result.address, result.chainId);
-    } catch (nextError) {
-      clearAccount();
-      if (requestAccess) setError(messageOf(nextError, "Cuzdan baglanamadi."));
-    }
-  }, [clearAccount, updateResearcherRegistration]);
+      try {
+        const result = requestAccess
+          ? await connectWallet(wallet.provider)
+          : await (async () => {
+              const nextProvider = new BrowserProvider(wallet.provider);
+              const accounts = (await nextProvider.send("eth_accounts", [])) as string[];
+              if (!accounts[0]) return null;
+              const network = await nextProvider.getNetwork();
+              return {
+                provider: nextProvider,
+                address: accounts[0],
+                chainId: Number(network.chainId),
+              };
+            })();
+
+        if (!result) {
+          clearAccount();
+          return;
+        }
+
+        const nextSigner = await result.provider.getSigner(result.address);
+        setActiveWallet(wallet);
+        if (wallet.rdns) {
+          window.localStorage.setItem(WALLET_RDNS_STORAGE_KEY, wallet.rdns);
+          setPreferredRdns(wallet.rdns);
+        }
+        setProvider(result.provider);
+        setSigner(nextSigner);
+        setAddress(result.address);
+        setChainId(result.chainId);
+        setError(null);
+        await updateResearcherRegistration(result.provider, result.address, result.chainId);
+      } catch (nextError) {
+        clearAccount();
+        if (requestAccess) setError(messageOf(nextError, "Cuzdan baglanamadi."));
+      }
+    },
+    [chooseWallet, clearAccount, updateResearcherRegistration],
+  );
 
   const refresh = useCallback(async () => {
     await hydrate(false);
@@ -133,32 +191,38 @@ export function SessionProvider({ children }: PropsWithChildren) {
   }, [hydrate]);
 
   useEffect(() => {
-    if (!window.ethereum?.on) return;
-
+    if (!activeWallet?.provider.on) return;
     const onAccountsChanged = () => void refresh();
     const onChainChanged = () => void refresh();
-    window.ethereum.on("accountsChanged", onAccountsChanged);
-    window.ethereum.on("chainChanged", onChainChanged);
+    activeWallet.provider.on("accountsChanged", onAccountsChanged);
+    activeWallet.provider.on("chainChanged", onChainChanged);
 
     return () => {
-      window.ethereum?.removeListener?.("accountsChanged", onAccountsChanged);
-      window.ethereum?.removeListener?.("chainChanged", onChainChanged);
+      activeWallet.provider.removeListener?.("accountsChanged", onAccountsChanged);
+      activeWallet.provider.removeListener?.("chainChanged", onChainChanged);
     };
-  }, [refresh]);
+  }, [activeWallet, refresh]);
 
-  const connect = useCallback(async () => {
-    setError(null);
-    await hydrate(true);
-  }, [hydrate]);
+  const connect = useCallback(
+    async (walletId?: string) => {
+      setError(null);
+      await hydrate(true, walletId);
+    },
+    [hydrate],
+  );
 
   const switchToSepolia = useCallback(async () => {
+    if (!activeWallet) {
+      setError("Once bir cuzdan secin.");
+      return;
+    }
     try {
-      await ensureSepolia();
+      await ensureSepolia(activeWallet.provider);
       await refresh();
     } catch (nextError) {
       setError(messageOf(nextError, "Sepolia'ya gecilemedi."));
     }
-  }, [refresh]);
+  }, [activeWallet, refresh]);
 
   const selectRole = useCallback((nextRole: Exclude<SessionRole, null>) => {
     window.localStorage.setItem(ROLE_STORAGE_KEY, nextRole);
@@ -178,7 +242,9 @@ export function SessionProvider({ children }: PropsWithChildren) {
       address,
       chainId,
       role,
-      walletAvailable,
+      wallets,
+      activeWallet,
+      walletAvailable: wallets.length > 0,
       restoring,
       researcherRegistered,
       error,
@@ -189,6 +255,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       refresh,
     }),
     [
+      activeWallet,
       address,
       chainId,
       connect,
@@ -201,7 +268,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       signer,
       signOut,
       switchToSepolia,
-      walletAvailable,
+      wallets,
     ],
   );
 

@@ -25,7 +25,17 @@ const roles: Array<{
 
 export function Giris() {
   const navigate = useNavigate();
-  const { address, chainId, connect, error, restoring, switchToSepolia, selectRole, walletAvailable } = useSession();
+  const {
+    address,
+    chainId,
+    connect,
+    error,
+    restoring,
+    switchToSepolia,
+    selectRole,
+    walletAvailable,
+    wallets,
+  } = useSession();
   const wrongNetwork = chainId !== null && chainId !== SEPOLIA_CHAIN_ID;
 
   const chooseRole = (role: Exclude<SessionRole, null>, destination: string) => {
@@ -47,10 +57,21 @@ export function Giris() {
           <div className="notice notice--warn">Ethereum cuzdani bulunamadi. MetaMask gibi bir cuzdani etkinlestirip sayfayi yenileyin.</div>
         ) : !address ? (
           <div className="login-page__connect">
-            <p>{restoring ? "Mevcut cuzdan oturumu kontrol ediliyor..." : "Devam etmek icin cuzdaninizi baglayin."}</p>
-            <button className="pill pill--primary" disabled={restoring} onClick={() => void connect()}>
-              Cuzdani bagla
-            </button>
+            <p>{restoring ? "Mevcut cuzdan oturumu kontrol ediliyor..." : "Devam etmek icin bir cuzdan secin."}</p>
+            <div className="wallet-picker" aria-label="Cuzdan secimi">
+              {wallets.map((wallet) => (
+                <button
+                  className="wallet-picker__option"
+                  disabled={restoring}
+                  key={wallet.id}
+                  onClick={() => void connect(wallet.id)}
+                  type="button"
+                >
+                  <span>{wallet.name}</span>
+                  {wallet.rdns && <span className="wallet-picker__rdns">{wallet.rdns}</span>}
+                </button>
+              ))}
+            </div>
           </div>
         ) : wrongNetwork ? (
           <div className="login-page__connect">

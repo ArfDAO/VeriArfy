@@ -224,6 +224,51 @@
   color: var(--color-smoke);
 }
 
+.wallet-picker {
+  display: grid;
+  gap: var(--spacing-8);
+}
+
+.wallet-picker__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-16);
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(34, 34, 34, 0.12);
+  border-radius: var(--radius-xl);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: left;
+  transition: border-color 180ms ease, transform 180ms ease, background 180ms ease;
+}
+
+.wallet-picker__option:hover:not(:disabled),
+.wallet-picker__option:focus-visible {
+  border-color: var(--color-slate-plum);
+  background: var(--color-rose-mist);
+  transform: translateY(-1px);
+}
+
+.wallet-picker__option:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.wallet-picker__rdns {
+  overflow: hidden;
+  color: var(--color-smoke);
+  font-family: var(--font-mono);
+  font-size: 0.67rem;
+  font-weight: 400;
+  letter-spacing: var(--tracking-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .login-page__roles {
   display: grid;
   gap: var(--spacing-16);
