@@ -10,7 +10,6 @@ import {
 import { BrowserProvider, type Signer } from "ethers";
 
 import { SEPOLIA_CHAIN_ID } from "../config";
-import { readResearcherReadiness } from "./protocol";
 import {
   announcedWallet,
   connectWallet,
@@ -129,6 +128,9 @@ export function SessionProvider({ children }: PropsWithChildren) {
         return;
       }
       try {
+        // Protokol/FHE istemcisi, landing ilk yüklendiğinde gerekli değildir.
+        // Araştırmacı yetki okuması gerçekten gerektiğinde ayrı parçada yüklenir.
+        const { readResearcherReadiness } = await import("./protocol");
         const readiness = await readResearcherReadiness(nextProvider, nextAddress);
         setResearcherRegistered(readiness.registered);
       } catch {

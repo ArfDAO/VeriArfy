@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Nav } from "./components/Nav";
 import { Hero } from "./components/Hero";
@@ -8,17 +8,18 @@ import { SectionHead, FeatureRow, Footer, StatRow } from "./components/Marketing
 import { submitSurvey, getResults, getStats, type AnalysisResults } from "./lib/api";
 import { PanelShell } from "./components/PanelShell";
 import { useSession, type SessionRole } from "./lib/session";
-import { Giris } from "./routes/Giris";
-import { Ozet } from "./routes/panel/Ozet";
-import { VeriYukle } from "./routes/panel/VeriYukle";
-import { Kazanclar } from "./routes/panel/Kazanclar";
-import { Gizlilik } from "./routes/panel/Gizlilik";
-import { Dogrulama } from "./routes/panel/Dogrulama";
-import { Kayit } from "./routes/arastirma/Kayit";
-import { VeriAl } from "./routes/arastirma/VeriAl";
-import { Sorgular } from "./routes/arastirma/Sorgular";
-import { Sonuclar } from "./routes/arastirma/Sonuclar";
-import { Dugum } from "./routes/arastirma/Dugum";
+
+const Giris = lazy(async () => ({ default: (await import("./routes/Giris")).Giris }));
+const Ozet = lazy(async () => ({ default: (await import("./routes/panel/Ozet")).Ozet }));
+const VeriYukle = lazy(async () => ({ default: (await import("./routes/panel/VeriYukle")).VeriYukle }));
+const Kazanclar = lazy(async () => ({ default: (await import("./routes/panel/Kazanclar")).Kazanclar }));
+const Gizlilik = lazy(async () => ({ default: (await import("./routes/panel/Gizlilik")).Gizlilik }));
+const Dogrulama = lazy(async () => ({ default: (await import("./routes/panel/Dogrulama")).Dogrulama }));
+const Kayit = lazy(async () => ({ default: (await import("./routes/arastirma/Kayit")).Kayit }));
+const VeriAl = lazy(async () => ({ default: (await import("./routes/arastirma/VeriAl")).VeriAl }));
+const Sorgular = lazy(async () => ({ default: (await import("./routes/arastirma/Sorgular")).Sorgular }));
+const Sonuclar = lazy(async () => ({ default: (await import("./routes/arastirma/Sonuclar")).Sonuclar }));
+const Dugum = lazy(async () => ({ default: (await import("./routes/arastirma/Dugum")).Dugum }));
 
 function AnaSayfa() {
   const [participantCount, setParticipantCount] = useState<number | null>(null);
@@ -218,24 +219,26 @@ function RoleGate({ role }: { role: Exclude<SessionRole, null> }) {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<AnaSayfa />} />
-      <Route path="/giris" element={<Giris />} />
-      <Route path="/panel/*" element={<RoleGate role="veri-sahibi" />}>
-        <Route index element={<Ozet />} />
-        <Route path="veri-yukle" element={<VeriYukle />} />
-        <Route path="kazanclar" element={<Kazanclar />} />
-        <Route path="gizlilik" element={<Gizlilik />} />
-        <Route path="dogrulama" element={<Dogrulama />} />
-      </Route>
-      <Route path="/arastirma/*" element={<RoleGate role="arastirmaci" />}>
-        <Route index element={<Kayit />} />
-        <Route path="veri-al" element={<VeriAl />} />
-        <Route path="sorgular" element={<Sorgular />} />
-        <Route path="sonuclar" element={<Sonuclar />} />
-        <Route path="dugum" element={<Dugum />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <Suspense fallback={<main className="route-loading">Panel yukleniyor...</main>}>
+      <Routes>
+        <Route path="/" element={<AnaSayfa />} />
+        <Route path="/giris" element={<Giris />} />
+        <Route path="/panel/*" element={<RoleGate role="veri-sahibi" />}>
+          <Route index element={<Ozet />} />
+          <Route path="veri-yukle" element={<VeriYukle />} />
+          <Route path="kazanclar" element={<Kazanclar />} />
+          <Route path="gizlilik" element={<Gizlilik />} />
+          <Route path="dogrulama" element={<Dogrulama />} />
+        </Route>
+        <Route path="/arastirma/*" element={<RoleGate role="arastirmaci" />}>
+          <Route index element={<Kayit />} />
+          <Route path="veri-al" element={<VeriAl />} />
+          <Route path="sorgular" element={<Sorgular />} />
+          <Route path="sonuclar" element={<Sonuclar />} />
+          <Route path="dugum" element={<Dugum />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 }
