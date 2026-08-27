@@ -14,6 +14,8 @@ import { PanelShell } from "./components/PanelShell";
 import { useSession, type SessionRole } from "./lib/session";
 import { Giris } from "./routes/Giris";
 import { PanelPlaceholder } from "./routes/PanelPlaceholder";
+import { Ozet } from "./routes/panel/Ozet";
+import { VeriYukle } from "./routes/panel/VeriYukle";
 
 function AnaSayfa() {
   const [participantCount, setParticipantCount] = useState<number | null>(null);
@@ -263,7 +265,8 @@ export default function App() {
       <Route path="/" element={<AnaSayfa />} />
       <Route path="/giris" element={<Giris />} />
       <Route path="/panel/*" element={<RoleGate role="veri-sahibi" />}>
-        <Route index element={<PanelPlaceholder role="veri-sahibi" />} />
+        <Route index element={<Ozet />} />
+        <Route path="veri-yukle" element={<VeriYukle />} />
       </Route>
       <Route path="/arastirma/*" element={<RoleGate role="arastirmaci" />}>
         <Route index element={<PanelPlaceholder role="arastirmaci" />} />

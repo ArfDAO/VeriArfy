@@ -145,6 +145,64 @@ export interface PoolMembership {
   active: boolean;
 }
 
+/** Veri sahibi ozetinin gerektirdigi, odeme ve havuz durumunun dar gorunumu. */
+export interface PoolMembershipState {
+  poolParticipants: number;
+  membership: PoolMembership;
+  pendingRewards: bigint;
+  /** Log araligi okunamazsa `null` kalir; toplam kazanc tahmin edilmez. */
+  claimedRewards: bigint | null;
+  totalEarnings: bigint | null;
+  token: { symbol: string; decimals: number };
+}
+
+/**
+ * Kullaniciya ait havuz ve odul durumunu zincirden okur.
+ * `RewardClaimed` olaylari gecmis cekimleri tutan tek kanittir.
+ */
+export async function readPoolMembership(
+  provider: BrowserProvider,
+  account: string,
+): Promise<PoolMembershipState> {
+  const protocol = getProtocol(provider);
+  const payments = getPayments(provider);
+  const token = getPaymentToken(provider);
+
+  const [participantIndex, poolParticipants, leftAtBlock, pending, symbol, decimals] =
+    await Promise.all([
+      protocol.participantIndex(account) as Promise<bigint>,
+      protocol.participantCount() as Promise<bigint>,
+      protocol.leftPoolAtBlock(account) as Promise<bigint>,
+      payments.pendingRewards(account) as Promise<[bigint, bigint[]]>,
+      token.symbol() as Promise<string>,
+      token.decimals() as Promise<bigint>,
+    ]);
+
+  let claimedRewards: bigint | null = 0n;
+  try {
+    const events = await payments.queryFilter(payments.filters.RewardClaimed(null, account));
+    for (const event of events) {
+      const amount = (event as { args?: { amount?: bigint } }).args?.amount ?? 0n;
+      claimedRewards += amount;
+    }
+  } catch {
+    claimedRewards = null;
+  }
+
+  const pendingRewards = pending[0];
+  return {
+    poolParticipants: Number(poolParticipants),
+    membership: {
+      leftAtBlock: Number(leftAtBlock),
+      active: Number(participantIndex) > 0 && leftAtBlock === 0n,
+    },
+    pendingRewards,
+    claimedRewards,
+    totalEarnings: claimedRewards === null ? null : claimedRewards + pendingRewards,
+    token: { symbol, decimals: Number(decimals) },
+  };
+}
+
 /** Filecoin kalicilik durumu — rapor §2.9.2. */
 export interface PersistenceState {
   /** Kalicilik defteri dagitildi mi? */
@@ -601,6 +659,10 @@ export interface ContributionState {
   submittedMetrics: number;
   metricCount: number;
   metricsHash: string;
+  /** Gercek deger tasiyan genomik alan sayisi; eksikler sayilmaz. */
+  coveredSnps: number;
+  /** Gercek deger tasiyan biyobelirtec alan sayisi; eksikler sayilmaz. */
+  coveredMetrics: number;
   participantCount: number;
 }
 
@@ -623,11 +685,17 @@ export async function readContributionState(
   // Modul adresi ZINCIRDEN alinir, yapilandirmadan degil: sifreleme yanlis
   // adrese yapilirsa girdi kaniti reddedilir ve sebebi anlasilmaz.
   const biomarkers = new Contract(biomarkerModule, BIOMARKERS_ABI, runner);
-  const [submittedMetrics, metricCount, metricsHash] = await Promise.all([
+  const snpIds = Array.from({ length: Number(snpCount) }, (_, index) => index);
+  const [submittedMetrics, metricCount, metricsHash, coveredSnps] = await Promise.all([
     biomarkers.submittedMetrics(account),
     biomarkers.metricCount(),
     biomarkers.metricsHash(),
+    snpIds.length === 0 ? 0n : protocol.snpCoverageWeight(account, snpIds),
   ]);
+  const metricIds = Array.from({ length: Number(metricCount) }, (_, index) => index);
+  const coveredMetrics = metricIds.length === 0
+    ? 0n
+    : await biomarkers.metricCoverageWeight(account, metricIds);
 
   return {
     isEnrolled,
@@ -638,6 +706,8 @@ export async function readContributionState(
     submittedMetrics: Number(submittedMetrics),
     metricCount: Number(metricCount),
     metricsHash,
+    coveredSnps: Number(coveredSnps),
+    coveredMetrics: Number(coveredMetrics),
     participantCount: Number(participantCount),
   };
 }

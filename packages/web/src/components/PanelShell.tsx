@@ -4,7 +4,10 @@ import { SEPOLIA_CHAIN_ID } from "../config";
 import { useSession, type SessionRole } from "../lib/session";
 import { shortAddress } from "../lib/wallet";
 
-const ownerItems = [{ to: "/panel", label: "Genel bakis", end: true }];
+const ownerItems = [
+  { to: "/panel", label: "Genel bakis", end: true },
+  { to: "/panel/veri-yukle", label: "Veri yukle", end: false },
+];
 const researcherItems = [{ to: "/arastirma", label: "Genel bakis", end: true }];
 
 export function PanelShell({ role }: { role: Exclude<SessionRole, null> }) {
