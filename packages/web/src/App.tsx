@@ -238,7 +238,16 @@ function AnaSayfa() {
 }
 
 function RoleGate({ role }: { role: Exclude<SessionRole, null> }) {
-  const { address, role: selectedRole } = useSession();
+  const { address, role: selectedRole, restoring } = useSession();
+
+  if (restoring) {
+    return (
+      <main className="route-loading" aria-live="polite">
+        <span className="eyebrow">OTURUM GERI YUKLENIYOR</span>
+        <p>Cuzdan baglantisi dogrulaniyor.</p>
+      </main>
+    );
+  }
 
   if (!address || !selectedRole) return <Navigate to="/giris" replace />;
   if (selectedRole !== role) {

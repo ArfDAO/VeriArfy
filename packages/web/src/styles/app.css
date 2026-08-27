@@ -13,6 +13,20 @@
   background: var(--color-bone);
 }
 
+.route-loading {
+  min-height: 100dvh;
+  display: grid;
+  place-content: center;
+  gap: var(--spacing-12);
+  padding: var(--spacing-32);
+  background: var(--color-bone);
+  text-align: center;
+}
+
+.route-loading p {
+  color: var(--color-smoke);
+}
+
 .panel-shell__sidebar {
   display: flex;
   flex-direction: column;
