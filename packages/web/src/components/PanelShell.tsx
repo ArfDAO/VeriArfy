@@ -11,7 +11,10 @@ const ownerItems = [
   { to: "/panel/gizlilik", label: "Gizlilik", end: false },
   { to: "/panel/dogrulama", label: "Dogrulama", end: false },
 ];
-const researcherItems = [{ to: "/arastirma", label: "Kayit ve hazirlik", end: true }];
+const researcherItems = [
+  { to: "/arastirma", label: "Kayit ve hazirlik", end: true },
+  { to: "/arastirma/veri-al", label: "Veri satin al", end: false },
+];
 
 export function PanelShell({ role }: { role: Exclude<SessionRole, null> }) {
   const navigate = useNavigate();
