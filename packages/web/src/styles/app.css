@@ -258,6 +258,108 @@
   max-width: 43rem;
 }
 
+.researcher-setup {
+  display: grid;
+  gap: var(--spacing-24);
+}
+
+.researcher-setup__heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--spacing-24);
+}
+
+.researcher-setup__heading h1,
+.researcher-setup__action h2 {
+  margin-top: var(--spacing-8);
+  letter-spacing: -0.05em;
+}
+
+.researcher-setup__heading h1 {
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  line-height: 1;
+}
+
+.researcher-setup__heading p,
+.researcher-setup__action p,
+.researcher-setup__item p {
+  margin-top: var(--spacing-12);
+  color: var(--color-smoke);
+}
+
+.researcher-setup__heading p {
+  max-width: 47rem;
+}
+
+.researcher-setup__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(17rem, 0.85fr);
+  gap: var(--spacing-16);
+  align-items: stretch;
+}
+
+.researcher-setup__list {
+  display: grid;
+  gap: var(--spacing-8);
+  margin: var(--spacing-20) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.researcher-setup__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--spacing-12);
+  padding: var(--spacing-16) 0;
+  border-top: 1px solid rgba(34, 34, 34, 0.08);
+}
+
+.researcher-setup__item strong {
+  font-size: 0.95rem;
+}
+
+.researcher-setup__item p {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.researcher-setup__check {
+  display: grid;
+  width: 1.5rem;
+  height: 1.5rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-meringue);
+  color: var(--color-slate-plum);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.researcher-setup__check.is-complete {
+  background: var(--color-seafoam);
+  color: #1f5a44;
+}
+
+.researcher-setup__action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: clamp(1.5rem, 3vw, 2.5rem);
+}
+
+.researcher-setup__action h2 {
+  font-size: clamp(1.35rem, 2.6vw, 2rem);
+}
+
+.researcher-setup__action .pill {
+  margin-top: var(--spacing-24);
+}
+
 .data-upload {
   display: grid;
   gap: var(--spacing-32);
@@ -621,6 +723,15 @@
 
   .owner-overview__metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .researcher-setup__heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .researcher-setup__grid {
+    grid-template-columns: 1fr;
   }
 
   .owner-overview__metric {

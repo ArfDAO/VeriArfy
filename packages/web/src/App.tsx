@@ -13,12 +13,12 @@ import { submitSurvey, getResults, getStats, type AnalysisResults } from "./lib/
 import { PanelShell } from "./components/PanelShell";
 import { useSession, type SessionRole } from "./lib/session";
 import { Giris } from "./routes/Giris";
-import { PanelPlaceholder } from "./routes/PanelPlaceholder";
 import { Ozet } from "./routes/panel/Ozet";
 import { VeriYukle } from "./routes/panel/VeriYukle";
 import { Kazanclar } from "./routes/panel/Kazanclar";
 import { Gizlilik } from "./routes/panel/Gizlilik";
 import { Dogrulama } from "./routes/panel/Dogrulama";
+import { Kayit } from "./routes/arastirma/Kayit";
 
 function AnaSayfa() {
   const [participantCount, setParticipantCount] = useState<number | null>(null);
@@ -275,7 +275,7 @@ export default function App() {
         <Route path="dogrulama" element={<Dogrulama />} />
       </Route>
       <Route path="/arastirma/*" element={<RoleGate role="arastirmaci" />}>
-        <Route index element={<PanelPlaceholder role="arastirmaci" />} />
+        <Route index element={<Kayit />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
