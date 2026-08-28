@@ -1,11 +1,15 @@
 # Sifreli cikarim koprusu CI'i icin en dar, kanitla uyumlu ortam.
 #
-# Bu test `concrete.ml`/PyTorch, scikit-learn veya FastAPI kullanmaz; yalnizca
-# Concrete'in `fhe` ve `tfhers` API'leriyle Rust tarayici sifreleyicisi arasindaki
-# anahtar/ciphertext sozlesmesini denetler. `concrete-ml` eklenirse GPU PyTorch
-# tekerlekleri (`nvidia-*`, `triton`) de indirilir ve GitHub runner diski dolar.
+# Bu test `concrete.ml`, scikit-learn veya FastAPI kullanmaz; yalnizca Concrete'in
+# `fhe`/`tfhers` API'leriyle Rust tarayici sifreleyicisi arasindaki anahtar/ciphertext
+# sozlesmesini denetler. Fakat concrete-python'in kendi `torch>=1.13` bagimliligi
+# sinirsizdir; PyPI'nin guncel Torch tekerlegi GPU paketlerini (`nvidia-*`, `triton`)
+# getirip GitHub runner diskini doldurur. Bu nedenle CPU-only Torch tekerlegini Zama
+# ve Concrete surumlerini degistirmeden acikca sabitliyoruz.
 # Uygulamanin tam ML ortami `requirements.txt` olarak kalir.
 
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.7.1+cpu
 concrete-python==2.10.0
 numpy==1.26.4
 pytest==8.3.5
