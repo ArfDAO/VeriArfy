@@ -1,3 +1,4 @@
+import { userError } from "../../lib/userError";
 import { useCallback, useEffect, useState } from "react";
 
 import { SEPOLIA_CHAIN_ID } from "../../config";
@@ -37,7 +38,7 @@ export function Kazanclar() {
       setState(await readDashboard(provider, address));
     } catch (nextError) {
       setState(null);
-      setError(nextError instanceof Error ? nextError.message : "Kazanclar zincirden okunamadi.");
+      setError(userError(nextError, "Kazanclar zincirden okunamadi."));
     } finally {
       setLoading(false);
     }
@@ -55,7 +56,7 @@ export function Kazanclar() {
       await claimReward(signer, queryId);
       await refresh();
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Odul cekilemedi.");
+      setError(userError(nextError, "Odul cekilemedi."));
     } finally {
       setClaiming(null);
     }

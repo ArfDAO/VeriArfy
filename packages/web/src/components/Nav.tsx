@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 export function Nav() {
   return (
     <nav className="nav section">
@@ -18,6 +20,11 @@ export function Nav() {
       <div className="nav__links">
         <a href="#anket" className="nav__link">Anket</a>
         <a href="#sonuclar" className="nav__link">Sonuçlar</a>
+      </div>
+      <div className="nav__actions">
+        <Link className="pill pill--primary" to="/giris">
+          Giriş
+        </Link>
       </div>
     </nav>
   );

@@ -1,3 +1,4 @@
+import { userError } from "../../lib/userError";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -35,7 +36,7 @@ export function Ozet() {
       setOverview({ contribution, membership });
     } catch (nextError) {
       setOverview(null);
-      setError(nextError instanceof Error ? nextError.message : "Panel zincirden okunamadi.");
+      setError(userError(nextError, "Panel zincirden okunamadi."));
     } finally {
       setLoading(false);
     }

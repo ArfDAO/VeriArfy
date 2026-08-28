@@ -1,3 +1,4 @@
+import { userError } from "../../lib/userError";
 import { useCallback, useEffect, useState } from "react";
 // @ts-expect-error JS study package does not ship TS declarations through its export map.
 import { benjaminiHochberg, chiSquareTest, compareGroups, formatP } from "@veriarfy/study";
@@ -71,7 +72,7 @@ export function Sonuclar() {
     } catch (error) {
       setOpen(null);
       setDisclosure(null);
-      setNotice({ kind: "warn", text: error instanceof Error ? error.message : "Cozum durumu zincirden okunamadi." });
+      setNotice({ kind: "warn", text: userError(error, "Cozum durumu zincirden okunamadi.") });
     } finally {
       setLoading(false);
     }
@@ -133,7 +134,7 @@ export function Sonuclar() {
       setMetrics(nextMetrics);
       setNotice({ kind: "ok", text: `${pairs.length} sifreli handle icinden yalnizca grup toplamlari cozuldu; ki-kare, Welch t ve BH-FDR hesaplandi.` });
     } catch (error) {
-      setNotice({ kind: "warn", text: error instanceof Error ? error.message : "Sifreli toplamlar cozulup analiz edilemedi." });
+      setNotice({ kind: "warn", text: userError(error, "Sifreli toplamlar cozulup analiz edilemedi.") });
     } finally {
       setAnalyzing(false);
     }
@@ -148,7 +149,7 @@ export function Sonuclar() {
       setNotice({ kind: "ok", text: "Odeme dagitildi. Veri sahiplerinin cekilebilir paylari zincirde olustu." });
       await refresh();
     } catch (error) {
-      setNotice({ kind: "warn", text: error instanceof Error ? error.message : "Odeme dagitilamadi." });
+      setNotice({ kind: "warn", text: userError(error, "Odeme dagitilamadi.") });
     } finally {
       setSettling(false);
     }

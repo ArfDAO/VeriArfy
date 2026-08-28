@@ -49,7 +49,7 @@ export function Giris() {
   };
 
   return (
-    <main className="login-page">
+    <main className="login-page" id="main-content">
       <section className="login-page__intro">
         <Link className="login-page__brand" to="/">veriarfy</Link>
         <span className="eyebrow">ERISIM SECIMI</span>

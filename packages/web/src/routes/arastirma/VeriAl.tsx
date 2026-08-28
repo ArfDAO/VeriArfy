@@ -1,3 +1,4 @@
+import { userError } from "../../lib/userError";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -100,7 +101,7 @@ export function VeriAl() {
       setActiveQuery(null);
       setNotice({
         kind: "warn",
-        text: error instanceof Error ? error.message : "Alan kapsamalari zincirden okunamadi.",
+        text: userError(error, "Alan kapsamalari zincirden okunamadi."),
       });
     } finally {
       setLoading(false);
@@ -129,7 +130,7 @@ export function VeriAl() {
         setQuote(null);
         setNotice({
           kind: "warn",
-          text: error instanceof Error ? error.message : "Secilen alanlarin fiyati okunamadi.",
+          text: userError(error, "Secilen alanlarin fiyati okunamadi."),
         });
       })
       .finally(() => {
@@ -168,7 +169,7 @@ export function VeriAl() {
     } catch (error) {
       setNotice({
         kind: "warn",
-        text: error instanceof Error ? error.message : "Sorgu acilamadi.",
+        text: userError(error, "Sorgu acilamadi."),
       });
     } finally {
       setOpening(false);

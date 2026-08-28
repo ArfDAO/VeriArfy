@@ -1,3 +1,4 @@
+import { userError } from "../../lib/userError";
 import { useCallback, useEffect, useState } from "react";
 import { formatEther } from "ethers";
 
@@ -26,7 +27,7 @@ export function Dugum() {
     } catch (error) {
       setAuthorized(null);
       setStake(null);
-      setNotice({ kind: "warn", text: error instanceof Error ? error.message : "Dugum durumu zincirden okunamadi." });
+      setNotice({ kind: "warn", text: userError(error, "Dugum durumu zincirden okunamadi.") });
     } finally {
       setLoading(false);
     }
@@ -46,7 +47,7 @@ export function Dugum() {
       await refresh();
       setNotice({ kind: "ok", text: "Teminat guncellendi; onay yeterliligi zincirden yeniden okundu." });
     } catch (error) {
-      setNotice({ kind: "warn", text: error instanceof Error ? error.message : "Teminat yatirilamadi." });
+      setNotice({ kind: "warn", text: userError(error, "Teminat yatirilamadi.") });
     } finally {
       setStaking(false);
     }

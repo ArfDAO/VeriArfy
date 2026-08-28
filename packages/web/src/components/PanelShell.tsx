@@ -33,6 +33,7 @@ export function PanelShell({ role }: { role: Exclude<SessionRole, null> }) {
 
   return (
     <div className="panel-shell">
+      <a className="skip-link" href="#main-content">Ana içeriğe geç</a>
       <aside className="panel-shell__sidebar" aria-label={`${title} menusu`}>
         <NavLink className="panel-shell__brand" to="/">
           <span className="panel-shell__mark" aria-hidden="true">va</span>

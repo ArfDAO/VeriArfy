@@ -1,214 +1,98 @@
-/*
- * VeriArfy tasarim sistemi — Hume AI "bilimsel pastel enstruman paneli".
- * Yakin-siyah tipografi, sicak beyaz zemin, pastel suluboya veri yikamalari.
- */
+/* VeriArfy tasarım sistemi — evidence-grade research instrument. */
 :root {
-  /* Renkler */
-  --color-ink: #222222;
-  --color-paper: #ffffff;
-  --color-bone: #fff9f3;
-  --color-smoke: #7a7876;
-  --color-carbon: #000000;
-  --color-iris: #c094e4;
-  --gradient-iris: linear-gradient(90deg, #c094e4 0%, #f7bbe6 50%, #ffb760 100%);
-  --color-blush: #fce0ee;
-  --color-rose-mist: #fdebf7;
-  --color-meringue: #ffe9cf;
-  --color-mint: #daf7ee;
-  --color-seafoam: #cef1e1;
-  --color-sky: #ccdff1;
-  --color-slate-plum: #574853;
+  /* Semantic colour roles */
+  --surface-canvas: #f3f5f2;
+  --surface-base: #f9faf7;
+  --surface-raised: #fcfdfb;
+  --surface-muted: #e9eeeb;
+  --surface-accent: #e1eeeb;
+  --text-primary: #172a31;
+  --text-secondary: #53636a;
+  --text-tertiary: #718087;
+  --border-subtle: #d7dfdb;
+  --border-strong: #aebdb8;
+  --accent-primary: #3d7773;
+  --accent-strong: #285c59;
+  --accent-soft: #d8e9e6;
+  --status-success: #2f7568;
+  --status-success-surface: #deece7;
+  --status-warning: #8a682c;
+  --status-warning-surface: #f2ead9;
+  --status-danger: #914d4a;
+  --status-danger-surface: #f3e3e1;
 
-  /* Tipografi — aileler (Fellix -> Inter, PP Fraktion Mono -> JetBrains Mono) */
-  --font-fellix: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", Roboto, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    monospace;
-
-  /* Tipografi — olcek */
-  --text-caption: 10px;
-  --text-body: 16px;
-  --text-subheading: 18px;
-  --text-heading-sm: 20px;
-  --text-heading: 24px;
-  --text-heading-lg: 30px;
-  --text-heading-xl: 36px;
-  --text-display: 48px;
-
+  /* Typography */
+  --font-sans: "Segoe UI Variable", "Aptos", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  --text-caption: 0.75rem;
+  --text-body: 1rem;
+  --text-subheading: 1.125rem;
+  --text-heading-sm: 1.25rem;
+  --text-heading: 1.5rem;
+  --text-heading-lg: 1.875rem;
+  --text-heading-xl: 2.25rem;
+  --text-display: clamp(2.6rem, 6vw, 4.75rem);
   --tracking-tight: -0.025em;
-  --tracking-mono: 0.025em;
-
+  --tracking-mono: 0.015em;
   --weight-regular: 400;
-  --weight-medium: 520; /* Fellix 520 -> Inter 500/600 arasi; 500 kullaniyoruz */
+  --weight-medium: 500;
+  --weight-semibold: 600;
 
-  /* Bosluk */
-  --spacing-4: 4px;
-  --spacing-8: 8px;
-  --spacing-12: 12px;
-  --spacing-16: 16px;
-  --spacing-20: 20px;
-  --spacing-24: 24px;
-  --spacing-32: 32px;
-  --spacing-48: 48px;
-  --spacing-64: 64px;
-  --spacing-96: 96px;
+  /* Spacing */
+  --spacing-4: 0.25rem;
+  --spacing-8: 0.5rem;
+  --spacing-12: 0.75rem;
+  --spacing-16: 1rem;
+  --spacing-20: 1.25rem;
+  --spacing-24: 1.5rem;
+  --spacing-32: 2rem;
+  --spacing-48: 3rem;
+  --spacing-64: 4rem;
+  --spacing-96: 6rem;
 
-  /* Yaricap */
-  --radius-input: 8px;
-  --radius-xl: 12px;
-  --radius-2xl: 16px;
-  --radius-3xl: 24px;
-  --radius-pill: 9999px;
-
-  /* Yerlesim */
-  --page-max: 1200px;
-  --page-pad: 73px;
+  /* Shape, elevation and layout */
+  --radius-control: 0.5rem;
+  --radius-panel: 0.75rem;
+  --radius-section: 0.75rem;
+  --shadow-raised: 0 0.75rem 2rem rgb(23 42 49 / 0.06);
+  --page-max: 76rem;
+  --page-pad: clamp(1.25rem, 5vw, 4.5rem);
 }
 
-* {
-  box-sizing: border-box;
-}
-
-html,
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
 body {
   margin: 0;
-  padding: 0;
-}
-
-body {
-  background: var(--color-paper);
-  color: var(--color-ink);
-  font-family: var(--font-fellix);
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
   font-size: var(--text-body);
   line-height: 1.5;
-  letter-spacing: var(--tracking-tight);
+  letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
-
-h1,
-h2,
-h3,
-h4 {
-  margin: 0;
-  font-weight: 500;
-  letter-spacing: var(--tracking-tight);
-  color: var(--color-ink);
-}
-
-p {
-  margin: 0;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-button {
-  font-family: inherit;
-  cursor: pointer;
-}
-
-/* --- Yardimci siniflar --- */
-
-.mono {
-  font-family: var(--font-mono);
-  letter-spacing: var(--tracking-mono);
-  font-feature-settings: "calt" 0, "liga" 0;
-}
-
-/* "Lab label" — mono, buyuk harf, aralikli. */
-.eyebrow {
-  font-family: var(--font-mono);
-  font-size: var(--text-caption);
-  letter-spacing: var(--tracking-mono);
-  text-transform: uppercase;
-  color: var(--color-smoke);
-  font-feature-settings: "calt" 0, "liga" 0;
-}
-
-.eyebrow--12 {
-  font-size: 12px;
-}
-
-.gradient-text {
-  background: var(--gradient-iris);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-/* Pill butonlar — sistemin en guclu imzasi. */
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-8);
-  border: none;
-  border-radius: var(--radius-pill);
-  padding: 14px 24px;
-  font-family: var(--font-fellix);
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: var(--tracking-tight);
-  transition: opacity 0.15s ease, background 0.15s ease;
-}
-
-.pill--primary {
-  background: var(--color-ink);
-  color: var(--color-paper);
-}
-
-.pill--primary:hover {
-  opacity: 0.88;
-}
-
-.pill--primary:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.pill--ghost {
-  background: transparent;
-  color: var(--color-ink);
-  padding: 14px 16px;
-}
-
-.pill--ghost:hover {
-  opacity: 0.6;
-}
-
-/* Kartlar — pastel/bone zeminde beyaz, golge yok. */
-.card {
-  background: var(--color-paper);
-  border-radius: var(--radius-2xl);
-  padding: var(--spacing-32);
-}
-
-.section {
-  max-width: var(--page-max);
-  margin: 0 auto;
-  padding-left: var(--page-pad);
-  padding-right: var(--page-pad);
-}
-
-.tag {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-8);
-  border-radius: var(--radius-pill);
-  padding: 6px 12px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: var(--tracking-mono);
-  text-transform: uppercase;
-  background: var(--color-bone);
-  color: var(--color-ink);
-  font-feature-settings: "calt" 0, "liga" 0;
-}
-
-@media (max-width: 820px) {
-  :root {
-    --page-pad: 24px;
-  }
-}
+h1, h2, h3, h4 { margin: 0; color: var(--text-primary); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-tight); text-wrap: balance; }
+p { margin: 0; text-wrap: pretty; }
+a { color: inherit; text-decoration: none; }
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent-primary) 55%, transparent); outline-offset: 3px; }
+.skip-link { position: fixed; z-index: 20; top: 0.75rem; left: 0.75rem; padding: 0.5rem 0.75rem; background: var(--text-primary); color: var(--surface-raised); border-radius: var(--radius-control); transform: translateY(-150%); transition: transform 160ms ease; }
+.skip-link:focus-visible { transform: translateY(0); }
+.mono { font-family: var(--font-mono); letter-spacing: var(--tracking-mono); font-feature-settings: "calt" 0, "liga" 0; font-variant-numeric: tabular-nums; }
+.eyebrow { color: var(--text-tertiary); font-size: var(--text-caption); font-weight: var(--weight-semibold); letter-spacing: 0.06em; text-transform: uppercase; }
+.eyebrow--12 { font-size: 0.75rem; }
+.pill { display: inline-flex; align-items: center; justify-content: center; gap: var(--spacing-8); min-height: 2.75rem; border: 1px solid transparent; border-radius: var(--radius-control); padding: 0.625rem 1rem; font-size: 0.875rem; font-weight: var(--weight-semibold); line-height: 1.2; transition: background 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease; }
+.pill:hover:not(:disabled) { transform: translateY(-1px); }
+.pill:active:not(:disabled) { transform: translateY(0); }
+.pill--primary { background: var(--text-primary); color: var(--surface-raised); }
+.pill--primary:hover:not(:disabled) { background: var(--accent-strong); }
+.pill--primary:disabled { opacity: 0.48; }
+.pill--ghost { border-color: var(--border-subtle); background: transparent; color: var(--text-primary); }
+.pill--ghost:hover:not(:disabled) { border-color: var(--accent-primary); background: var(--surface-accent); }
+.card { background: var(--surface-raised); border: 1px solid var(--border-subtle); border-radius: var(--radius-panel); padding: var(--spacing-24); }
+.section { width: min(100%, var(--page-max)); margin: 0 auto; padding-inline: var(--page-pad); }
+.tag, .badge { display: inline-flex; align-items: center; gap: var(--spacing-8); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); padding: 0.3rem 0.55rem; background: var(--surface-muted); color: var(--text-secondary); font-size: 0.75rem; font-weight: var(--weight-medium); letter-spacing: 0; text-transform: none; }
+@media (max-width: 820px) { :root { --page-pad: 1.25rem; } }

@@ -1,3 +1,4 @@
+import { userError } from "../../lib/userError";
 import { useCallback, useEffect, useState } from "react";
 
 import { CIRCUIT_WASM, CIRCUIT_ZKEY, SEPOLIA_CHAIN_ID } from "../../config";
@@ -76,7 +77,7 @@ export function Kayit() {
       setReadiness(null);
       setNotice({
         kind: "warn",
-        text: error instanceof Error ? error.message : "Hazirlik durumu zincirden okunamadi.",
+        text: userError(error, "Hazirlik durumu zincirden okunamadi."),
       });
     } finally {
       setLoading(false);
@@ -146,7 +147,7 @@ export function Kayit() {
     } catch (error) {
       setNotice({
         kind: "warn",
-        text: error instanceof Error ? error.message : "ZK kimlik kaydi basarisiz.",
+        text: userError(error, "ZK kimlik kaydi basarisiz."),
       });
     } finally {
       setAction(null);
@@ -167,7 +168,7 @@ export function Kayit() {
     } catch (error) {
       setNotice({
         kind: "warn",
-        text: error instanceof Error ? error.message : "Harcama izni verilemedi.",
+        text: userError(error, "Harcama izni verilemedi."),
       });
     } finally {
       setAction(null);

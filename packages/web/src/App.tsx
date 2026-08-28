@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
+import { userError } from "./lib/userError";
 import { Nav } from "./components/Nav";
 import { Hero } from "./components/Hero";
 import { Survey, SurveyResult } from "./components/Survey";
@@ -53,7 +54,7 @@ function AnaSayfa() {
       const newResults = await getResults();
       setResults(newResults);
     } catch (err: any) {
-      setError(err?.message ?? "Gönderim başarısız. Backend çalışıyor mu?");
+      setError(userError(err, "Gönderim başarısız. Bağlantıyı kontrol edip yeniden deneyin."));
     } finally {
       setSubmitting(false);
     }
@@ -61,6 +62,7 @@ function AnaSayfa() {
 
   return (
     <div className="app">
+      <a className="skip-link" href="#main-content">Ana içeriğe geç</a>
       <Nav />
 
       {error && (
@@ -69,8 +71,9 @@ function AnaSayfa() {
         </div>
       )}
 
-      <Hero />
-      <StatRow participants={participantCount} />
+      <main id="main-content">
+        <Hero />
+        <StatRow participants={participantCount} />
 
       {/* Survey Section */}
       <div className="band" id="anket">
@@ -92,24 +95,23 @@ function AnaSayfa() {
                     </div>
                     <div className="card__row">
                       <span className="eyebrow">ŞİFRESİZ MODEL TAHMİNİ</span>
-                      <span className="mono" style={{ color: lastPrediction.plain_correct ? "#4fbf9a" : "#e74c3c" }}>
+                      <span className="mono" style={{ color: lastPrediction.plain_correct ? "var(--status-success)" : "var(--status-danger)" }}>
                         {lastPrediction.plain_pred === 1 ? "Yüksek Kaygı" : "Sakin"} {lastPrediction.plain_correct ? "✓" : "✗"}
                       </span>
                     </div>
                     <div className="card__row">
                       <span className="eyebrow">ŞİFRELİ (FHE) MODEL TAHMİNİ</span>
-                      <span className="mono" style={{ color: lastPrediction.fhe_correct ? "#4fbf9a" : "#e74c3c" }}>
+                      <span className="mono" style={{ color: lastPrediction.fhe_correct ? "var(--status-success)" : "var(--status-danger)" }}>
                         {lastPrediction.fhe_pred === 1 ? "Yüksek Kaygı" : "Sakin"} {lastPrediction.fhe_correct ? "✓" : "✗"}
                       </span>
                     </div>
 
                     {lastPrediction.crypto_proof && (
-                      <div style={{ marginTop: 24, background: "rgba(192, 148, 228, 0.08)", borderRadius: 12, padding: 20, textAlign: "left", border: "1px solid rgba(192, 148, 228, 0.2)" }}>
+                      <div style={{ marginTop: 24, background: "var(--surface-accent)", borderRadius: 12, padding: 20, textAlign: "left", border: "1px solid var(--border-subtle)" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                          <span style={{ fontSize: 18 }}>🔒</span>
-                          <span className="eyebrow" style={{ color: "var(--color-iris)", margin: 0 }}>FHE ŞİFRELEME KANITI</span>
+                          <span className="eyebrow" style={{ color: "var(--accent-primary)", margin: 0 }}>FHE ŞİFRELEME KANITI</span>
                         </div>
-                        <p style={{ fontSize: 13, color: "var(--color-smoke)", marginBottom: 12, lineHeight: 1.5 }}>
+                        <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12, lineHeight: 1.5 }}>
                           Verileriniz Zama Concrete ML kullanılarak şifrelendi ve tahmin işlemi bu şifreli devre (ciphertext) üzerinde yapıldı.
                         </p>
                         <div style={{ fontSize: 13, display: "grid", gap: 8 }}>
@@ -118,7 +120,7 @@ function AnaSayfa() {
                           </div>
                           <div>
                             <strong>Ciphertext Hex Özeti:</strong> 
-                            <div className="mono" style={{ fontSize: 11, background: "rgba(0,0,0,0.04)", padding: 8, borderRadius: 6, marginTop: 4, wordBreak: "break-all" }}>
+                            <div className="mono" style={{ fontSize: 11, background: "var(--surface-muted)", padding: 8, borderRadius: 6, marginTop: 4, wordBreak: "break-all" }}>
                               {lastPrediction.crypto_proof.ciphertext_hex}
                             </div>
                           </div>
@@ -126,7 +128,7 @@ function AnaSayfa() {
                           <div style={{ marginTop: 8 }}>
                             <button 
                               className="pill pill--ghost" 
-                              style={{ fontSize: 12, padding: "6px 12px", border: "1px solid var(--color-iris)", color: "var(--color-iris)" }}
+                              style={{ fontSize: 12, padding: "6px 12px", border: "1px solid var(--accent-primary)", color: "var(--accent-primary)" }}
                               onClick={() => {
                                 const hex = lastPrediction.crypto_proof.ciphertext_full_hex;
                                 if (!hex) return;
@@ -192,7 +194,8 @@ function AnaSayfa() {
         </div>
       </div>
 
-      <Footer />
+        <Footer />
+      </main>
     </div>
   );
 }

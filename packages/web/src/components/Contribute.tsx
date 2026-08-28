@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { userError } from "../lib/userError";
 
 import { SEPOLIA_CHAIN_ID } from "../config";
 import {
@@ -175,7 +176,7 @@ export function Contribute() {
       return;
     }
     void refresh(provider, address).catch((nextError) =>
-      setError(nextError instanceof Error ? nextError.message : String(nextError)),
+      setError(userError(nextError, "Katkı durumu zincirden okunamadı.")),
     );
   }, [address, chainId, provider, refresh]);
 

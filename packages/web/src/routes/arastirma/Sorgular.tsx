@@ -1,3 +1,4 @@
+import { userError } from "../../lib/userError";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { SEPOLIA_CHAIN_ID } from "../../config";
@@ -153,7 +154,7 @@ export function Sorgular() {
       });
     } catch (error) {
       setQuery(null);
-      setNotice({ kind: "warn", text: error instanceof Error ? error.message : "Sorgu durumu zincirden okunamadi." });
+      setNotice({ kind: "warn", text: userError(error, "Sorgu durumu zincirden okunamadi.") });
     } finally {
       setLoading(false);
     }
@@ -178,7 +179,7 @@ export function Sorgular() {
       await refresh();
       setNotice({ kind: "ok", text: "Cozum yetkisi verildi; artik odeme dagitilabilir." });
     } catch (error) {
-      setNotice({ kind: "warn", text: error instanceof Error ? error.message : "Acilim yetkisi verilemedi." });
+      setNotice({ kind: "warn", text: userError(error, "Acilim yetkisi verilemedi.") });
     } finally {
       setAction(null);
     }
