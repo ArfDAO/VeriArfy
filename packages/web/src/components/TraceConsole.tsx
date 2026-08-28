@@ -67,8 +67,8 @@ export function TraceConsole({
   );
 
   return (
-    <div className="card trace">
-      <div className="card__head">
+    <section className="trace" aria-label={title}>
+      <div className="trace__intro">
         <h3>{title}</h3>
         <span className="eyebrow">
           {steps.length === 0
@@ -91,22 +91,19 @@ export function TraceConsole({
               <li key={step.id} className={`trace__step trace__step--${step.status}`}>
                 <div className="trace__head">
                   <span className={`trace__dot trace__dot--${step.status}`} />
-                  <span className="trace__label">{step.label}</span>
+                  <div className="trace__copy">
+                    <strong className="trace__label">{step.label}</strong>
+                    {step.detail && (
+                      <p className={step.status === "fail" ? "trace__detail trace__detail--fail" : "trace__detail"}>
+                        {step.detail}
+                      </p>
+                    )}
+                  </div>
                   <span className="eyebrow trace__status">
                     {STATUS_LABEL[step.status]}
                     {ms !== null && ` · ${ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`}`}
                   </span>
                 </div>
-
-                {step.detail && (
-                  <p
-                    className={
-                      step.status === "fail" ? "trace__detail trace__detail--fail" : "trace__detail"
-                    }
-                  >
-                    {step.detail}
-                  </p>
-                )}
 
                 {step.evidence.length > 0 && (
                   <div className="trace__evidence">
@@ -120,6 +117,6 @@ export function TraceConsole({
           })}
         </ol>
       )}
-    </div>
+    </section>
   );
 }

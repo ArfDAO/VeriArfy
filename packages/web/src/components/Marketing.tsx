@@ -1,74 +1,19 @@
-export function SectionHead({ eyebrow, title, sub }: { eyebrow: string, title: string, sub: string }) {
-  return (
-    <div style={{ textAlign: "center", marginBottom: 48 }}>
-      <span className="eyebrow">{eyebrow}</span>
-      <h2 style={{ fontSize: 32, margin: "16px 0", letterSpacing: "-0.02em" }}>{title}</h2>
-      <p style={{ color: "var(--color-smoke)", maxWidth: 500, margin: "0 auto", lineHeight: 1.5 }}>
-        {sub}
-      </p>
-    </div>
-  );
+export function SectionHead({ eyebrow, title, sub }: { eyebrow: string; title: string; sub: string }) {
+  return <div className="section-head"><p className="section-head__context">{eyebrow}</p><h2>{title}</h2><p>{sub}</p></div>;
 }
 
 export function StatRow({ participants }: { participants: number | null }) {
-  return (
-    <div className="section" style={{ display: "flex", gap: 24, justifyContent: "center", flexWrap: "wrap", margin: "48px auto" }}>
-      <div className="card" style={{ padding: "24px 32px", textAlign: "center", minWidth: 200 }}>
-        <div className="mono" style={{ fontSize: 32, marginBottom: 8 }}>{participants ?? "—"}</div>
-        <div className="eyebrow">Katılımcı</div>
-      </div>
-      <div className="card" style={{ padding: "24px 32px", textAlign: "center", minWidth: 200 }}>
-        <div className="mono" style={{ fontSize: 32, marginBottom: 8 }}>12</div>
-        <div className="eyebrow">Anket Sorusu</div>
-      </div>
-      <div className="card" style={{ padding: "24px 32px", textAlign: "center", minWidth: 200 }}>
-        <div className="mono" style={{ fontSize: 32, marginBottom: 8 }}>2</div>
-        <div className="eyebrow">ML Modeli (Plain + FHE)</div>
-      </div>
-    </div>
-  );
+  return <section className="section stats" aria-label="Çalışma kapsamı"><div className="stats__item"><strong className="mono">{participants ?? "—"}</strong><span>Katılımcı kaydı</span></div><div className="stats__item"><strong className="mono">12</strong><span>Çalışma sorusu</span></div><div className="stats__item"><strong className="mono">2</strong><span>Hesaplama yolu</span></div></section>;
 }
 
 export function FeatureRow() {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24 }}>
-      <div className="card">
-        <div style={{ fontSize: 32, marginBottom: 16 }}>📊</div>
-        <h3 style={{ fontSize: 18, marginBottom: 8 }}>Sentetik Eğitim</h3>
-        <p style={{ color: "var(--color-smoke)", fontSize: 14, lineHeight: 1.5 }}>
-          1000 kişilik sahte veri ile eğitilen model, gerçek kullanıcı cevaplarını tahmin eder.
-        </p>
-      </div>
-      <div className="card">
-        <div style={{ fontSize: 32, marginBottom: 16 }}>🔒</div>
-        <h3 style={{ fontSize: 18, marginBottom: 8 }}>FHE Şifreleme</h3>
-        <p style={{ color: "var(--color-smoke)", fontSize: 14, lineHeight: 1.5 }}>
-          Zama Concrete ML ile cevaplarınız şifrelenir. Model kör kutu içinde tahmin yapar.
-        </p>
-      </div>
-      <div className="card">
-        <div style={{ fontSize: 32, marginBottom: 16 }}>⚖️</div>
-        <h3 style={{ fontSize: 18, marginBottom: 8 }}>Doğruluk Karşılaştırması</h3>
-        <p style={{ color: "var(--color-smoke)", fontSize: 14, lineHeight: 1.5 }}>
-          Şifreli ve şifresiz modelin doğruluğu yan yana gösterilir.
-        </p>
-      </div>
-    </div>
-  );
+  return <div className="archive-flow" id="yontem">
+    <article className="archive-flow__owner"><span className="mono">01 / VERİ SAHİBİ</span><h3>Kişisel kaydı hazırlayın.</h3><p>Dosya uyumu görülür, alanlar yerelde şifrelenir ve izin kaydı oluşur.</p><div className="archive-flow__ledger"><span>İzin kaydı</span><span className="mono">ACTIVE</span><span>Alan kapsamı</span><span className="mono">12 / 12</span></div></article>
+    <article className="archive-flow__research"><span className="mono">02 / ARAŞTIRMACI</span><h3>Çalışma protokolünü tanımlayın.</h3><p>Yalnız gerekli alanlar ve sonuç koşulları kayda alınır; talep bir çalışma nesnesi olarak ilerler.</p></article>
+    <article className="archive-flow__node"><span className="mono">03 / DOĞRULAMA DÜĞÜMÜ</span><h3>İşlem defterini denetleyin.</h3><p>Onay, itiraz penceresi ve çözüm sırası tek bir denetlenebilir kayıtta tutulur.</p><div className="archive-flow__ledger"><span>Onay durumu</span><span className="mono">PENDING</span><span>Kanıt yolu</span><span className="mono">0x7C…A11</span></div></article>
+  </div>;
 }
 
 export function Footer() {
-  return (
-    <footer style={{ borderTop: "1px solid rgba(34,34,34,0.1)", padding: "32px 0", marginTop: 64 }}>
-      <div className="section" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
-        <div style={{ color: "var(--color-smoke)", fontSize: 13 }}>
-          VeriArfy · Araştırma amaçlıdır, tıbbi tavsiye değildir.
-        </div>
-        <div className="tag" style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--color-bone)" }}>
-          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--color-iris)" }} />
-          <span className="mono" style={{ fontSize: 11 }}>FHE POWERED</span>
-        </div>
-      </div>
-    </footer>
-  );
+  return <footer className="footer"><div className="section footer__content"><p>VeriArfy araştırma amaçlıdır; tıbbi değerlendirme veya tavsiye sunmaz.</p><p className="mono">FHE · ZK · SEPOLIA</p></div></footer>;
 }

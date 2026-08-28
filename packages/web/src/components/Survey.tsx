@@ -100,7 +100,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
   };
 
   return (
-    <div className="card card--bone" style={{ padding: "32px" }}>
+    <div className="survey">
       <div className="survey-question">
         <div className="survey-question__header">
           <span className="survey-question__num">01</span>
@@ -383,7 +383,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
         </div>
       </div>
 
-      <div style={{ marginTop: 40, textAlign: "center" }}>
+      <div className="survey__footer">
         <button
           className="pill pill--primary"
           onClick={handleSubmit}

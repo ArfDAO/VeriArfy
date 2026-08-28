@@ -41,9 +41,9 @@ const STAGE_LABEL: Record<string, string> = {
 };
 
 const STAGE_COLOR: Record<string, string> = {
-  iptal: "#8e2b2b",
-  "itiraz-suresi": "#1f5a44",
-  "yurutme-bekliyor": "#1f5a44",
+  iptal: "var(--status-danger)",
+  "itiraz-suresi": "var(--status-success)",
+  "yurutme-bekliyor": "var(--status-success)",
 };
 
 /** 32 baytlik digest'i okunabilir kisaltmaya cevirir. */
@@ -173,7 +173,7 @@ export function PrivacyPanel() {
   if (!address) {
     return (
       <div className="card card--bone" style={{ textAlign: "center", padding: 40 }}>
-        <p style={{ marginBottom: 20, color: "var(--color-smoke)" }}>
+        <p style={{ marginBottom: 20, color: "var(--text-secondary)" }}>
           Verilerinizi, izinlerinizi ve kazancinizi gormek icin cuzdaninizi baglayin.
         </p>
         <button className="pill pill--primary" onClick={connect}>
@@ -237,7 +237,7 @@ export function PrivacyPanel() {
       <div className="card">
         <h3 style={{ marginBottom: 12 }}>Veri Kasasi</h3>
         {state?.vault.participantIndex === 0 && !state?.vault.cidDigest ? (
-          <p style={{ color: "var(--color-smoke)", fontSize: 14 }}>
+          <p style={{ color: "var(--text-secondary)", fontSize: 14 }}>
             Bu cuzdanla henuz veri yuklenmemis.
           </p>
         ) : (
@@ -286,7 +286,7 @@ export function PrivacyPanel() {
                * (bkz. MK-0010). Kullaniciya "3 saglayici" deyip bunun nereden
                * geldigini soylememek, olmayan bir kesinlik satmak olurdu.
                */
-              <p style={{ fontSize: 12, color: "var(--color-smoke)", marginTop: 8 }}>
+              <p style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 8 }}>
                 Bu sayı bir <strong>tanık beyanıdır</strong>; anlaşmalar Filecoin
                 zincirinde yaşar ve Ethereum onları doğrudan göremez. Kayıtlar
                 anlaşma kimliğiyle birlikte tutulur, böylece Filecoin'in herkese
@@ -294,7 +294,7 @@ export function PrivacyPanel() {
                 denetim günlük olarak otomatik koşar.
               </p>
             )}
-            <p style={{ fontSize: 12, color: "var(--color-smoke)", marginTop: 12 }}>
+            <p style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 12 }}>
               Panelinizin kendisi zincire hic yazilmaz. Taahhut tek yonludur; salt
               bilinmedikce panel geri cikarilamaz.
             </p>
@@ -305,7 +305,7 @@ export function PrivacyPanel() {
       {/* --- Nadirlik Carpani (rapor §4.3) -------------------------------- */}
       <div className="card">
         <h3 style={{ marginBottom: 4 }}>Nadirlik Carpani</h3>
-        <p style={{ fontSize: 13, color: "var(--color-smoke)", marginBottom: 16 }}>
+        <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 16 }}>
           Nadir bir varyant tasiyorsaniz veriniz daha degerlidir ve payiniz{" "}
           <strong>R = log₂(1 + havuz / tasiyici)</strong> kati olur. Bunu olcmek
           icin genomunuz <em>acilmaz</em>: yalnizca “nadir mi?” sorusunun{" "}
@@ -314,11 +314,11 @@ export function PrivacyPanel() {
         </p>
 
         {!state?.vault.hasAggregated ? (
-          <p style={{ color: "var(--color-smoke)", fontSize: 14 }}>
+          <p style={{ color: "var(--text-secondary)", fontSize: 14 }}>
             Once sifreli dozajinizi havuza gonderin.
           </p>
         ) : !rarity ? (
-          <p style={{ color: "var(--color-smoke)", fontSize: 14 }}>Okunuyor…</p>
+          <p style={{ color: "var(--text-secondary)", fontSize: 14 }}>Okunuyor…</p>
         ) : (
           <>
             <div className="card__row">
@@ -395,7 +395,7 @@ export function PrivacyPanel() {
       <div className="card">
         <h3 style={{ marginBottom: 4 }}>Havuzdaki durumunuz</h3>
 
-        <p style={{ fontSize: 13, color: "var(--color-smoke)", marginBottom: 16 }}>
+        <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 16 }}>
           Verinizi yuklemek, calismanin havuzuna katilmayi kabul etmektir.
           Arastirmaci bazinda ayri bir izin YOKTUR — cunku acilim{" "}
           <strong>grup toplamlarini</strong> cozer ve toplam tektir; "su kuruma
@@ -442,7 +442,7 @@ export function PrivacyPanel() {
       {/* --- Sorgular ve kazanc ------------------------------------------ */}
       <div className="card">
         <h3 style={{ marginBottom: 4 }}>Sorgular ve Kazanc</h3>
-        <p style={{ fontSize: 13, color: "var(--color-smoke)", marginBottom: 16 }}>
+        <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 16 }}>
           Verinizin kullanildigi her sorgudan pay alirsiniz. Ucretin %80'i
           katilimcilara ayrilir ve IKIYE bolunur: buyuk kismi{" "}
           <strong>kullanima gore</strong> (arastirmacinin istedigi alanlarin
@@ -452,7 +452,7 @@ export function PrivacyPanel() {
         </p>
 
         {state?.queries.length === 0 && (
-          <p style={{ color: "var(--color-smoke)", fontSize: 14 }}>
+          <p style={{ color: "var(--text-secondary)", fontSize: 14 }}>
             Henuz sorgu acilmamis.
           </p>
         )}
@@ -466,19 +466,19 @@ export function PrivacyPanel() {
               alignItems: "center",
               gap: 12,
               padding: "12px 0",
-              borderTop: "1px solid rgba(0,0,0,0.06)",
+              borderTop: "1px solid var(--border-subtle)",
             }}
           >
             <div>
               <div style={{ fontSize: 13 }}>
                 Sorgu #{q.id} · {short(q.researcher)}
               </div>
-              <div style={{ fontSize: 12, color: "var(--color-smoke)" }}>
+              <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                 {q.snapshotCount} katilimci · blok {q.openedAtBlock} ·{" "}
                 {formatToken(q.fee, decimals, symbol)}
               </div>
               {q.coverageTotal > 0 && (
-                <div style={{ fontSize: 12, color: "var(--color-smoke)" }}>
+                <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                   {/*
                    * Kullanim payinin dayanagi ACIKCA gosterilir: "kac alanina
                    * veri verdin / toplam kac alan istendi". Kullanici payinin
@@ -509,7 +509,7 @@ export function PrivacyPanel() {
               )}
             </div>
             {q.refunded ? (
-              <span className="eyebrow" style={{ color: "var(--color-smoke)" }}>IADE EDILDI</span>
+              <span className="eyebrow" style={{ color: "var(--text-secondary)" }}>IADE EDILDI</span>
             ) : !q.settled ? (
               // Rapor §2.6: ucret, onay ve itiraz sureci bitene kadar
               // emanette bekler. Ama bu SUREC DORT ASAMALIDIR ve katilimci
@@ -520,7 +520,7 @@ export function PrivacyPanel() {
                 {STAGE_LABEL[q.stage]}
               </span>
             ) : q.claimed ? (
-              <span className="eyebrow" style={{ color: "var(--color-smoke)" }}>ÇEKILDI</span>
+              <span className="eyebrow" style={{ color: "var(--text-secondary)" }}>ÇEKILDI</span>
             ) : q.claimable > 0n ? (
               <button
                 className="pill pill--primary"
@@ -537,7 +537,7 @@ export function PrivacyPanel() {
                   : `${formatToken(q.claimable, decimals, symbol)} cek`}
               </button>
             ) : (
-              <span className="eyebrow" style={{ color: "var(--color-smoke)" }}>
+              <span className="eyebrow" style={{ color: "var(--text-secondary)" }}>
                 KAPSAM DISI
               </span>
             )}
@@ -545,7 +545,7 @@ export function PrivacyPanel() {
         ))}
       </div>
 
-      <p style={{ fontSize: 12, color: "var(--color-smoke)", textAlign: "center" }}>
+      <p style={{ fontSize: 12, color: "var(--text-secondary)", textAlign: "center" }}>
         Protokol:{" "}
         <a href={explorerAddress(CONTRACTS.VeriarfyProtocol)} target="_blank" rel="noreferrer">
           {short(CONTRACTS.VeriarfyProtocol)}

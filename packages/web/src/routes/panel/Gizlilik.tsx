@@ -1,3 +1,4 @@
+import { userError } from "../../lib/userError";
 import { useCallback, useEffect, useState } from "react";
 
 import { SEPOLIA_CHAIN_ID } from "../../config";
@@ -21,7 +22,7 @@ export function Gizlilik() {
       setState(dashboard);
       setPersistence(await readPersistence(provider, dashboard.vault.cidDigest));
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Gizlilik durumu zincirden okunamadi.");
+      setError(userError(nextError, "Gizlilik durumu zincirden okunamadi."));
     }
   }, [address, chainId, provider]);
 
@@ -35,7 +36,7 @@ export function Gizlilik() {
       await leavePool(signer);
       await refresh();
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Havuzdan cikilamadi.");
+      setError(userError(nextError, "Havuzdan cikilamadi."));
     } finally { setBusy(false); }
   }, [refresh, signer]);
 
