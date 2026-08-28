@@ -1426,11 +1426,10 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-control);
   padding: 12px 14px;
-  outline: none;
 }
-.field input:focus,
-.field select:focus {
-  border-color: var(--text-primary);
+.field input:focus-visible,
+.field select:focus-visible {
+  border-color: var(--accent-primary);
 }
 
 .notice {
@@ -1989,10 +1988,9 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-control);
   padding: 13px 18px;
-  outline: none;
 }
-.select:focus {
-  border-color: var(--text-primary);
+.select:focus-visible {
+  border-color: var(--accent-primary);
 }
 
 /* --- Rozetler --- */
@@ -2130,10 +2128,9 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-control);
   padding: 9px 11px;
-  outline: none;
 }
-.metric__input input:focus {
-  border-color: var(--text-primary);
+.metric__input input:focus-visible {
+  border-color: var(--accent-primary);
 }
 .metric__input input.input--bad {
   border-color: var(--status-danger);
