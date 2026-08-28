@@ -86,7 +86,7 @@ function AnaSayfa() {
           <div style={{ maxWidth: 780, margin: "0 auto" }}>
             {submitted ? (
               <div className="card card--bone" style={{ textAlign: "center", padding: 48 }}>
-                <h3 style={{ marginBottom: 16 }}>✅ Anketiniz başarıyla gönderildi!</h3>
+                <h3 style={{ marginBottom: 16 }}>Anket kaydı alındı.</h3>
                 {lastPrediction && (
                   <div style={{ marginTop: 16 }}>
                     <div className="card__row">
@@ -96,13 +96,13 @@ function AnaSayfa() {
                     <div className="card__row">
                       <span className="eyebrow">ŞİFRESİZ MODEL TAHMİNİ</span>
                       <span className="mono" style={{ color: lastPrediction.plain_correct ? "var(--status-success)" : "var(--status-danger)" }}>
-                        {lastPrediction.plain_pred === 1 ? "Yüksek Kaygı" : "Sakin"} {lastPrediction.plain_correct ? "✓" : "✗"}
+                        {lastPrediction.plain_pred === 1 ? "Yüksek Kaygı" : "Sakin"} {lastPrediction.plain_correct ? "doğrulandı" : "uyuşmadı"}
                       </span>
                     </div>
                     <div className="card__row">
                       <span className="eyebrow">ŞİFRELİ (FHE) MODEL TAHMİNİ</span>
                       <span className="mono" style={{ color: lastPrediction.fhe_correct ? "var(--status-success)" : "var(--status-danger)" }}>
-                        {lastPrediction.fhe_pred === 1 ? "Yüksek Kaygı" : "Sakin"} {lastPrediction.fhe_correct ? "✓" : "✗"}
+                        {lastPrediction.fhe_pred === 1 ? "Yüksek Kaygı" : "Sakin"} {lastPrediction.fhe_correct ? "doğrulandı" : "uyuşmadı"}
                       </span>
                     </div>
 
@@ -149,7 +149,7 @@ function AnaSayfa() {
                                 URL.revokeObjectURL(url);
                               }}
                             >
-                              ↓ Şifreli Veriyi İndir (.bin)
+                              Şifreli veriyi indir (.bin)
                             </button>
                           </div>
                         </div>
