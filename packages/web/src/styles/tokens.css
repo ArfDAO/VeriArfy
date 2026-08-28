@@ -90,8 +90,9 @@
 
   /* Shape, elevation and layout */
   --radius-control: 0.25rem;
-  --radius-panel: 0.5rem;
+  --radius-panel: 0.25rem;
   --radius-section: 0.625rem;
+  --control-height: 2.625rem;
   --shadow-raised: 0 0.75rem 2rem rgb(23 42 49 / 0.06);
   --page-max: 76rem;
   --page-pad: clamp(1.25rem, 5vw, 4.5rem);
@@ -122,7 +123,7 @@ button:disabled { cursor: not-allowed; }
 .mono { font-family: var(--font-mono); letter-spacing: var(--tracking-mono); font-feature-settings: "calt" 0, "liga" 0; font-variant-numeric: tabular-nums; }
 .eyebrow { color: var(--text-tertiary); font-size: var(--text-caption); font-weight: var(--weight-semibold); letter-spacing: 0.06em; text-transform: uppercase; }
 .eyebrow--12 { font-size: 0.75rem; }
-.pill { display: inline-flex; align-items: center; justify-content: center; min-height: 2.625rem; border: 1px solid transparent; border-radius: var(--radius-control); padding: 0.625rem 0.875rem; font-family: var(--font-interface); font-size: 0.75rem; font-weight: var(--weight-medium); letter-spacing: var(--tracking-mono); line-height: 1; text-align: center; white-space: nowrap; transition: background 180ms ease, border-color 180ms ease, color 180ms ease; }
+.pill { display: inline-flex; align-items: center; justify-content: center; min-height: var(--control-height); border: 1px solid transparent; border-radius: var(--radius-control); padding: 0.625rem 0.875rem; font-family: var(--font-interface); font-size: 0.75rem; font-weight: var(--weight-medium); letter-spacing: var(--tracking-mono); line-height: 1; text-align: center; white-space: nowrap; transition: background 180ms ease, border-color 180ms ease, color 180ms ease; }
 .pill--primary { background: var(--text-primary); color: var(--surface-raised); }
 .pill--primary:hover:not(:disabled) { border-color: var(--accent-primary); background: var(--accent-strong); }
 .pill--primary:disabled, .pill--ghost:disabled { opacity: 0.48; }

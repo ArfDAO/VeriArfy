@@ -28,19 +28,19 @@ export function FheResults({ results, loading }: FheResultsProps) {
   return (
     <div className="fhe-results">
       <div className="accuracy-grid">
-        <div className="accuracy-card" style={{ background: "var(--surface-accent)" }}>
+        <div className="accuracy-card accuracy-card--plain">
           <div className="eyebrow">ŞİFRESİZ MODEL DOĞRULUĞU</div>
           <div className="accuracy-card__value">{(plain_accuracy * 100).toFixed(1)}%</div>
           <div className="accuracy-card__label">Geleneksel ML</div>
         </div>
         
-        <div className="accuracy-card" style={{ background: "var(--text-primary)", opacity: 0.96, color: "var(--surface-raised)" }}>
-          <div className="eyebrow" style={{ color: "var(--surface-raised)" }}>ŞİFRELİ (FHE) MODEL DOĞRULUĞU</div>
+        <div className="accuracy-card accuracy-card--fhe">
+          <div className="eyebrow">ŞİFRELİ (FHE) MODEL DOĞRULUĞU</div>
           <div className="accuracy-card__value">{(fhe_accuracy * 100).toFixed(1)}%</div>
-          <div className="accuracy-card__label" style={{ color: "var(--surface-raised)" }}>Zama Concrete ML</div>
+          <div className="accuracy-card__label">Zama Concrete ML</div>
         </div>
         
-        <div className="accuracy-card" style={{ background: accuracy_drop > 0 ? "var(--status-warning-surface)" : "var(--status-success-surface)" }}>
+        <div className={`accuracy-card ${accuracy_drop > 0 ? "accuracy-card--warning" : "accuracy-card--success"}`}>
           <div className="eyebrow">DOĞRULUK KAYBI</div>
           <div className="accuracy-card__value">{(accuracy_drop * 100).toFixed(2)}%</div>
           <div className="accuracy-card__label">FHE Şifreleme Maliyeti</div>
@@ -48,7 +48,7 @@ export function FheResults({ results, loading }: FheResultsProps) {
       </div>
 
       <div className="training-banner">
-        <div className="eyebrow" style={{ marginRight: "auto" }}>EĞİTİM SETİ PERFORMANSI (1000 Sentetik Veri)</div>
+        <div className="eyebrow training-banner__title">EĞİTİM SETİ PERFORMANSI (1000 Sentetik Veri)</div>
         <div className="training-banner__item">
           <span>Şifresiz:</span>
           <span className="mono">{(training_plain_accuracy * 100).toFixed(1)}%</span>
@@ -59,10 +59,10 @@ export function FheResults({ results, loading }: FheResultsProps) {
         </div>
       </div>
 
-      <div className="card" style={{ padding: "24px 0", overflowX: "auto" }}>
-        <div style={{ padding: "0 24px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div className="results-table">
+        <div className="results-table__head">
           <div className="eyebrow">BİREYSEL TAHMİNLER</div>
-          <div className="tag" style={{ background: "var(--surface-base)" }}>{total_participants} Katılımcı</div>
+          <div className="tag">{total_participants} Katılımcı</div>
         </div>
         <table className="predictions-table">
           <thead>
@@ -80,7 +80,7 @@ export function FheResults({ results, loading }: FheResultsProps) {
             {individual_results.map((res, i) => (
               <tr key={i}>
                 <td>{i + 1}</td>
-                <td className="mono" style={{ fontSize: 11, letterSpacing: -0.5 }}>
+                <td className="mono predictions-table__inputs">
                   [{res.features.join(", ")}]
                 </td>
                 <td>{res.true_label}</td>

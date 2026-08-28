@@ -83,52 +83,49 @@ function AnaSayfa() {
             title="Anketi doldurun"
             sub="6 basit soru cevaplayın. Cevaplarınız hem normal hem de FHE ile şifreli olarak işlenecek."
           />
-          <div style={{ maxWidth: 780, margin: "0 auto" }}>
+          <div className="survey-shell">
             {submitted ? (
-              <div className="card card--bone" style={{ textAlign: "center", padding: 48 }}>
-                <h3 style={{ marginBottom: 16 }}>Anket kaydı alındı.</h3>
+              <section className="survey-completion" aria-live="polite">
+                <span className="eyebrow">KAYIT TAMAMLANDI</span>
+                <h3>Anket kaydı alındı.</h3>
                 {lastPrediction && (
-                  <div style={{ marginTop: 16 }}>
+                  <div className="survey-completion__outcomes">
                     <div className="card__row">
                       <span className="eyebrow">GERÇEK CEVABINIZ</span>
                       <span className="mono">{lastPrediction.true_label === 1 ? "Yüksek Kaygı" : "Sakin"}</span>
                     </div>
                     <div className="card__row">
                       <span className="eyebrow">ŞİFRESİZ MODEL TAHMİNİ</span>
-                      <span className="mono" style={{ color: lastPrediction.plain_correct ? "var(--status-success)" : "var(--status-danger)" }}>
+                      <span className={`mono survey-completion__prediction ${lastPrediction.plain_correct ? "is-verified" : "is-mismatch"}`}>
                         {lastPrediction.plain_pred === 1 ? "Yüksek Kaygı" : "Sakin"} {lastPrediction.plain_correct ? "doğrulandı" : "uyuşmadı"}
                       </span>
                     </div>
                     <div className="card__row">
                       <span className="eyebrow">ŞİFRELİ (FHE) MODEL TAHMİNİ</span>
-                      <span className="mono" style={{ color: lastPrediction.fhe_correct ? "var(--status-success)" : "var(--status-danger)" }}>
+                      <span className={`mono survey-completion__prediction ${lastPrediction.fhe_correct ? "is-verified" : "is-mismatch"}`}>
                         {lastPrediction.fhe_pred === 1 ? "Yüksek Kaygı" : "Sakin"} {lastPrediction.fhe_correct ? "doğrulandı" : "uyuşmadı"}
                       </span>
                     </div>
 
                     {lastPrediction.crypto_proof && (
-                      <div style={{ marginTop: 24, background: "var(--surface-accent)", borderRadius: 12, padding: 20, textAlign: "left", border: "1px solid var(--border-subtle)" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                          <span className="eyebrow" style={{ color: "var(--accent-primary)", margin: 0 }}>FHE ŞİFRELEME KANITI</span>
-                        </div>
-                        <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12, lineHeight: 1.5 }}>
+                      <article className="survey-proof">
+                        <span className="eyebrow">FHE ŞİFRELEME KANITI</span>
+                        <p>
                           Verileriniz Zama Concrete ML kullanılarak şifrelendi ve tahmin işlemi bu şifreli devre (ciphertext) üzerinde yapıldı.
                         </p>
-                        <div style={{ fontSize: 13, display: "grid", gap: 8 }}>
-                          <div>
-                            <strong>Şifreli Veri Boyutu:</strong> <span className="mono">{lastPrediction.crypto_proof.ciphertext_size_bytes} Byte</span>
+                        <div className="survey-proof__facts">
+                          <div className="card__row">
+                            <span>Şifreli veri boyutu</span><strong className="mono">{lastPrediction.crypto_proof.ciphertext_size_bytes} Byte</strong>
                           </div>
-                          <div>
-                            <strong>Ciphertext Hex Özeti:</strong> 
-                            <div className="mono" style={{ fontSize: 11, background: "var(--surface-muted)", padding: 8, borderRadius: 6, marginTop: 4, wordBreak: "break-all" }}>
+                          <div className="survey-proof__hash">
+                            <span>Ciphertext hex özeti</span>
+                            <div className="mono">
                               {lastPrediction.crypto_proof.ciphertext_hex}
                             </div>
                           </div>
-                          
-                          <div style={{ marginTop: 8 }}>
-                            <button 
-                              className="pill pill--ghost" 
-                              style={{ fontSize: 12, padding: "6px 12px", border: "1px solid var(--accent-primary)", color: "var(--accent-primary)" }}
+                          <div>
+                            <button
+                              className="pill pill--ghost"
                               onClick={() => {
                                 const hex = lastPrediction.crypto_proof.ciphertext_full_hex;
                                 if (!hex) return;
@@ -153,18 +150,17 @@ function AnaSayfa() {
                             </button>
                           </div>
                         </div>
-                      </div>
+                      </article>
                     )}
                   </div>
                 )}
                 <button
                   className="pill pill--primary"
-                  style={{ marginTop: 24 }}
                   onClick={() => setSubmitted(false)}
                 >
                   Tekrar Doldur
                 </button>
-              </div>
+              </section>
             ) : (
               <Survey onComplete={handleSubmit} disabled={submitting} />
             )}
@@ -173,7 +169,7 @@ function AnaSayfa() {
       </div>
 
       {/* Results Section */}
-      <div className="section" style={{ marginTop: 64 }} id="sonuclar">
+      <div className="section results-section" id="sonuclar">
         <SectionHead
           eyebrow="CANLI SONUÇLAR"
           title="Şifreli vs Şifresiz Model"
