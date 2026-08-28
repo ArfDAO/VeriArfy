@@ -17,11 +17,12 @@ export function Nav() {
         </div>
         <span className="nav__word">veriarfy</span>
       </div>
-      <div className="nav__links">
-        <a href="#anket" className="nav__link">Anket</a>
-        <a href="#sonuclar" className="nav__link">Sonuçlar</a>
-      </div>
       <div className="nav__actions">
+        <div className="nav__links" aria-label="Arşiv bölümleri">
+          <a href="#anket" className="nav__link">Anket</a>
+          <a href="#sonuclar" className="nav__link">Sonuçlar</a>
+        </div>
+        <span className="nav__divider" aria-hidden="true" />
         <Link className="pill pill--primary" to="/giris">
           Giriş
         </Link>

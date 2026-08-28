@@ -228,30 +228,40 @@ export function Kayit() {
           <span className="eyebrow">SONRAKI ADIM</span>
           {!readiness?.registered ? (
             <>
-              <h2>Kimliginizi ZK ile kaydedin</h2>
-              <p>Gizli kimlik tarayicida uretilir. Kurator yalnizca taahhudu gorur; zincir ise kimliginizin akredite agacta oldugunu kanitlar.</p>
-              <button className="pill pill--primary" disabled={action !== null || loading || wrongNetwork || !provider || !signer || !readiness} onClick={() => void register()}>
-                {action === "register" ? "Isleniyor..." : "ZK kimlik kaydini baslat"}
-              </button>
+              <div className="researcher-setup__action-body">
+                <h2>Kimliginizi ZK ile kaydedin</h2>
+                <p>Gizli kimlik tarayicida uretilir. Kurator yalnizca taahhudu gorur; zincir ise kimliginizin akredite agacta oldugunu kanitlar.</p>
+              </div>
+              <div className="researcher-setup__action-footer">
+                <button className="pill pill--primary" disabled={action !== null || loading || wrongNetwork || !provider || !signer || !readiness} onClick={() => void register()}>
+                  {action === "register" ? "Isleniyor..." : "ZK kimlik kaydini baslat"}
+                </button>
+                <p className="researcher-setup__action-note">Kanit cihazinizda uretilir; cüzdanda yalniz zincir kaydi imzalanir.</p>
+              </div>
             </>
           ) : !balanceReady ? (
-            <>
+            <div className="researcher-setup__action-body">
               <h2>Token bakiyesi gerekli</h2>
               <p>Varsayilan sorgu fiyati kadar {readiness?.symbol ?? "token"} olmadan sorgu acilamaz. Bakiye geldikten sonra bu ekran otomatik olarak gercek durumu gosterecek.</p>
-            </>
+            </div>
           ) : !allowanceReady ? (
             <>
-              <h2>Harcama iznini verin</h2>
-              <p>Yalnizca guncel varsayilan sorgu ucreti kadar izin verilir; sinirsiz token izni istenmez.</p>
-              <button className="pill pill--primary" disabled={action !== null || wrongNetwork || !signer} onClick={() => void approve()}>
-                {action === "approve" ? "Onaylaniyor..." : "Ucret kadar izin ver"}
-              </button>
+              <div className="researcher-setup__action-body">
+                <h2>Harcama iznini verin</h2>
+                <p>Yalnizca guncel varsayilan sorgu ucreti kadar izin verilir; sinirsiz token izni istenmez.</p>
+              </div>
+              <div className="researcher-setup__action-footer">
+                <button className="pill pill--primary" disabled={action !== null || wrongNetwork || !signer} onClick={() => void approve()}>
+                  {action === "approve" ? "Onaylaniyor..." : "Ucret kadar izin ver"}
+                </button>
+                <p className="researcher-setup__action-note">Izin tutari, zincirdeki guncel sorgu ucretini asmaz.</p>
+              </div>
             </>
           ) : (
-            <>
+            <div className="researcher-setup__action-body">
               <h2>Arastirma cuzdani hazir</h2>
               <p>Kimlik, bakiye ve harcama izni mevcut. Veri alimi ekraninda alanlari secip anlik fiyatla sorgu acabilirsiniz.</p>
-            </>
+            </div>
           )}
         </aside>
       </div>
