@@ -1,4 +1,40 @@
 /* VeriArfy tasarım sistemi — evidence-grade research instrument. */
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("../assets/fonts/ibm-plex-sans-400.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("../assets/fonts/ibm-plex-sans-500.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("../assets/fonts/ibm-plex-sans-600.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("../assets/fonts/ibm-plex-mono-400.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("../assets/fonts/ibm-plex-mono-500.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   /* Semantic colour roles */
   --surface-canvas: #f3f5f2;
@@ -22,8 +58,8 @@
   --status-danger-surface: #f3e3e1;
 
   /* Typography */
-  --font-sans: "Segoe UI Variable", "Aptos", "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  --font-sans: "IBM Plex Sans", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", Consolas, monospace;
   --text-caption: 0.75rem;
   --text-body: 1rem;
   --text-subheading: 1.125rem;
@@ -51,9 +87,9 @@
   --spacing-96: 6rem;
 
   /* Shape, elevation and layout */
-  --radius-control: 0.5rem;
-  --radius-panel: 0.75rem;
-  --radius-section: 0.75rem;
+  --radius-control: 0.375rem;
+  --radius-panel: 0.5rem;
+  --radius-section: 0.625rem;
   --shadow-raised: 0 0.75rem 2rem rgb(23 42 49 / 0.06);
   --page-max: 76rem;
   --page-pad: clamp(1.25rem, 5vw, 4.5rem);
@@ -94,5 +130,5 @@ button:disabled { cursor: not-allowed; }
 .pill--ghost:hover:not(:disabled) { border-color: var(--accent-primary); background: var(--surface-accent); }
 .card { background: var(--surface-raised); border: 1px solid var(--border-subtle); border-radius: var(--radius-panel); padding: var(--spacing-24); }
 .section { width: min(100%, var(--page-max)); margin: 0 auto; padding-inline: var(--page-pad); }
-.tag, .badge { display: inline-flex; align-items: center; gap: var(--spacing-8); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); padding: 0.3rem 0.55rem; background: var(--surface-muted); color: var(--text-secondary); font-size: 0.75rem; font-weight: var(--weight-medium); letter-spacing: 0; text-transform: none; }
+.tag, .badge { display: inline-flex; align-items: center; gap: var(--spacing-8); border: 1px solid var(--border-subtle); border-radius: 0.25rem; padding: 0.3rem 0.55rem; background: transparent; color: var(--text-secondary); font-family: var(--font-mono); font-size: 0.68rem; font-weight: var(--weight-medium); letter-spacing: var(--tracking-mono); text-transform: uppercase; }
 @media (max-width: 820px) { :root { --page-pad: 1.25rem; } }
