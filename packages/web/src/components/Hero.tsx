@@ -6,7 +6,7 @@ export function Hero() {
     <header className="hero section">
       <div className="hero__content">
         <p className="hero__context">KİŞİSEL VERİ ARŞİVİ / KAYIT 04–SEPOLIA</p>
-        <h1 className="hero__title">Veri, izin verilene kadar kapalı kalır.</h1>
+        <h1 className="hero__title">Veri, izin verilene kadar <em>kapalı</em> kalır.</h1>
         <p className="hero__sub">Genomik ve biyobelirteç kayıtları cihazınızda şifrelenir. Araştırma isteği yalnızca verdiğiniz izin kapsamına göre çalışır; işlem kaydı sonradan doğrulanabilir.</p>
         <div className="hero__actions"><Link className="pill pill--primary" to="/giris">Çalışma alanına girin</Link><a href="#yontem" className="pill pill--ghost">Kayıt akışını inceleyin</a></div>
       </div>
