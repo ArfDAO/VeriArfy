@@ -2,6 +2,7 @@ import { writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { ethers, network } from "hardhat";
+import { parseAuthorizedNodeAddresses } from "./node-addresses";
 
 /**
  * Calisma kontratlarini deploy eder:
@@ -11,6 +12,10 @@ import { ethers, network } from "hardhat";
  * yoksa bos agac koku kullanilir ve sonra `push-root` ile guncellenir.
  */
 async function main() {
+  // Ilk zincir islemi veya signer kullanimi oncesinde fail-closed dogrulama.
+  const authorizedNodes = parseAuthorizedNodeAddresses(
+    process.env.AUTHORIZED_NODE_ADDRESSES,
+  );
   const { IdentityTree } = await import("@veriarfy/circuits");
 
   const [deployer] = await ethers.getSigners();
@@ -111,6 +116,13 @@ async function main() {
   await protocol.waitForDeployment();
   const protocolAddress = await protocol.getAddress();
   console.log(`VeriarfyProtocol: ${protocolAddress} (esik ${threshold}, min ${minParticipants} katilimci)`);
+
+  // Yetki yalnizca public adres listesinden verilir; deployer private key'i
+  // dugum anahtari olarak okunmaz ve fonlama/teminat islemi yapilmaz.
+  for (const nodeAddress of authorizedNodes) {
+    await (await protocol.authorizeNode(nodeAddress)).wait();
+    console.log(`  yetkili dugum: ${nodeAddress}`);
+  }
 
   // --- Odeme katmani -------------------------------------------------------
   //
@@ -350,6 +362,7 @@ async function main() {
     network: network.name,
     chainId: Number((await ethers.provider.getNetwork()).chainId),
     deployer: deployer.address,
+    authorizedNodes,
     contracts: {
       Groth16Verifier: verifierAddress,
       DataProvenanceVerifier: provenanceVerifierAddress,
