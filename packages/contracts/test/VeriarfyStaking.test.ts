@@ -328,6 +328,27 @@ describe("VeriarfyStaking — guvenilmez dugum riski (rapor §2.7)", () => {
     });
   });
 
+  describe("D15 M-of-N contract regression", () => {
+    it("D15: tek onay acilimi finalize etmez, iki bagimsiz stake onayi eder", async () => {
+      expect(await protocol.stakingModule()).to.equal(await staking.getAddress());
+      expect(await protocol.isAuthorizedNode(await nodeA.getAddress())).to.equal(true);
+      expect(await protocol.isAuthorizedNode(await nodeB.getAddress())).to.equal(true);
+
+      await stakeAll([nodeA, nodeB]);
+      expect(await staking.stakeOf(await nodeA.getAddress())).to.equal(BASE_STAKE);
+      expect(await staking.stakeOf(await nodeB.getAddress())).to.equal(BASE_STAKE);
+
+      const requestId = await openRequest();
+      expect(await protocol.requiredApprovals(STATISTICS)).to.equal(2);
+
+      await protocol.connect(nodeA).approveDisclosure(requestId);
+      expect(await protocol.isDisclosureFinalized(requestId)).to.equal(false);
+
+      await protocol.connect(nodeB).approveDisclosure(requestId);
+      expect(await protocol.isDisclosureFinalized(requestId)).to.equal(true);
+    });
+  });
+
   // ===================================================================================
   // 3) Itiraz suresi — rapor §2.7.1
   // ===================================================================================
