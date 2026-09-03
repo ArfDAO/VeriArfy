@@ -140,14 +140,67 @@ npm run contracts:deploy:sepolia
 
 Adresler `packages/web/src/config/deployment.json` dosyasına otomatik yazılır.
 
-### 4. Kurator servisi
+### 4. Sepolia canli kontrolu (D/15, dort asamali)
+
+Deploy ciktisindaki `packages/contracts/deployments/sepolia.json` icindeki
+`authorizedNodes` public topolojinin tek kaynagidir. `prepare` asamasi
+`LIVE_CHECK_QUERY_TYPE` icin yalnizca `1` (GWAS), `2` (ML) veya `4`
+(STATISTICS) kabul eder; zincirde `requiredApprovals(type) === 2` degilse
+ilk mutation/proof oncesi fail-closed durur. Gercek Sepolia islemleri gas ve
+onceden yatirilmis node stake'i gerektirir; deploy veya live-check otomatik
+fonlama/stake yapmaz.
+
+PowerShell'de deployer ve her node icin ayri operator/key-custody shell'i
+kullanin. `NODE_PRIVATE_KEY` shared `.env` dosyasina yazilmaz; node-1 ve
+node-2 ayni proseste veya ayni private key ile calistirilmaz. Handoff id'leri
+public'tir ve prepare ciktisindan kopyalanir. Live-check shared `.env` dosyasini
+yuklemez; asagidaki stage/key degerleri her operator prosesinde explicit verilir:
+
+```powershell
+# Deployer shell: prepare
+$env:DEPLOYER_PRIVATE_KEY = '<deployer-key>'
+$env:NODE_PRIVATE_KEY = ''
+$env:LIVE_CHECK_STAGE = 'prepare'
+$env:LIVE_CHECK_QUERY_TYPE = '2'       # 1, 2 veya 4
+npm run chain:live-check
+# Ciktilardan LIVE_CHECK_QUERY_ID ve LIVE_CHECK_REQUEST_ID'yi kopyalayin.
+
+# Node-1 operator shell (ayri custody/process)
+$env:DEPLOYER_PRIVATE_KEY = ''
+$env:NODE_PRIVATE_KEY = '<node-1-key>'
+$env:LIVE_CHECK_STAGE = 'node-1'
+$env:LIVE_CHECK_QUERY_ID = '<public-query-id>'
+$env:LIVE_CHECK_REQUEST_ID = '<public-request-id>'
+npm run chain:live-check
+
+# Node-2 operator shell (node-1'den ayri custody/process)
+$env:DEPLOYER_PRIVATE_KEY = ''
+$env:NODE_PRIVATE_KEY = '<node-2-key>'
+$env:LIVE_CHECK_STAGE = 'node-2'
+$env:LIVE_CHECK_QUERY_ID = '<public-query-id>'
+$env:LIVE_CHECK_REQUEST_ID = '<public-request-id>'
+npm run chain:live-check
+
+# Deployer shell: complete
+$env:DEPLOYER_PRIVATE_KEY = '<deployer-key>'
+$env:NODE_PRIVATE_KEY = ''
+$env:LIVE_CHECK_STAGE = 'complete'
+$env:LIVE_CHECK_QUERY_ID = '<public-query-id>'
+$env:LIVE_CHECK_REQUEST_ID = '<public-request-id>'
+npm run chain:live-check
+```
+
+Bu kanit yalniz M-of-N authorization ve iki ayri signer handoff'unu gosterir;
+HSM, DKG veya gercek threshold decryption uygulandigi iddia edilmez.
+
+### 5. Kurator servisi
 
 ```bash
 npm run curator              # http://localhost:8787
 npm run curator:push-root    # ağacın kökünü zincire yazar
 ```
 
-### 5. Arayüz
+### 6. Arayüz
 
 ```bash
 npm run web:dev

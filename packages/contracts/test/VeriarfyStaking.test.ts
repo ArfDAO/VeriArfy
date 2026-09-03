@@ -340,6 +340,10 @@ describe("VeriarfyStaking — guvenilmez dugum riski (rapor §2.7)", () => {
 
       const requestId = await openRequest();
       expect(await protocol.requiredApprovals(STATISTICS)).to.equal(2);
+      expect(await protocol.disclosureRequiredApprovals(requestId)).to.equal(2);
+      await expect(
+        protocol.disclosureRequiredApprovals(requestId + 1n),
+      ).to.be.revertedWithCustomError(protocol, "UnknownRequest");
 
       await protocol.connect(nodeA).approveDisclosure(requestId);
       expect(await protocol.isDisclosureFinalized(requestId)).to.equal(false);

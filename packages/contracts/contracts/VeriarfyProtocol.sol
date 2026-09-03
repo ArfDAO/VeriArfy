@@ -2039,6 +2039,14 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         return _requests[requestId].finalized;
     }
 
+    /// @notice Talep aninda sabitlenen onay sayisi.
+    /// @dev Bilinmeyen talepler diger disclosure view'leri gibi fail-closed reddedilir.
+    function disclosureRequiredApprovals(uint256 requestId) external view returns (uint32) {
+        DisclosureRequest storage request = _requests[requestId];
+        if (request.requester == address(0)) revert UnknownRequest(requestId);
+        return request.requiredApprovals;
+    }
+
     /// @notice Itiraz suresinin bittigi blok (0 = esige henuz ulasilmadi).
     function challengeWindowEnd(uint256 requestId) external view returns (uint256) {
         return _requests[requestId].challengeEndsAtBlock;
