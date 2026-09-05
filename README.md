@@ -150,45 +150,49 @@ ilk mutation/proof oncesi fail-closed durur. Gercek Sepolia islemleri gas ve
 onceden yatirilmis node stake'i gerektirir; deploy veya live-check otomatik
 fonlama/stake yapmaz.
 
-PowerShell'de deployer ve her node icin ayri operator/key-custody shell'i
-kullanin. `NODE_PRIVATE_KEY` shared `.env` dosyasina yazilmaz; node-1 ve
-node-2 ayni proseste veya ayni private key ile calistirilmaz. Handoff id'leri
-public'tir ve prepare ciktisindan kopyalanir. Live-check shared `.env` dosyasini
-yuklemez; asagidaki stage/key degerleri her operator prosesinde explicit verilir:
+Onayli D/15 test profili `packages/contracts/ops/d15-sepolia.json` icinde
+yalniz public adresleri tutar: deployer, node-1 ve node-2 farklidir; sorgu ML
+(`2`), esik 2/2 ve `MIN_PARTICIPANTS=1` yalniz bu test deployment'i icindir.
+Bu profil k-anonimlik kaniti degil, M-of-N authorization kanitidir.
+
+Tum operator komutlari `scripts/d15-sepolia.ps1` uzerinden calistirilir.
+Private key dosyaya veya komut satirina yazilmaz: PowerShell maskeli prompt ile
+alir, yalniz ilgili child process'e aktarir ve `finally` icinde environment'tan
+siler. Shared `.env` yuklenmez. State-changing asamalar hem `-Execute` hem de
+elle yazilan asama-ozel onay cumlesi olmadan calismaz.
+
+Once private key kullanmayan public readiness'i, sonra transaction gondermeyen
+ve yine private key yuklemeyen deployer preflight'ini calistirin:
 
 ```powershell
-# Deployer shell: prepare
-$env:DEPLOYER_PRIVATE_KEY = '<deployer-key>'
-$env:NODE_PRIVATE_KEY = ''
-$env:LIVE_CHECK_STAGE = 'prepare'
-$env:LIVE_CHECK_QUERY_TYPE = '2'       # 1, 2 veya 4
-npm run chain:live-check
-# Ciktilardan LIVE_CHECK_QUERY_ID ve LIVE_CHECK_REQUEST_ID'yi kopyalayin.
-
-# Node-1 operator shell (ayri custody/process)
-$env:DEPLOYER_PRIVATE_KEY = ''
-$env:NODE_PRIVATE_KEY = '<node-1-key>'
-$env:LIVE_CHECK_STAGE = 'node-1'
-$env:LIVE_CHECK_QUERY_ID = '<public-query-id>'
-$env:LIVE_CHECK_REQUEST_ID = '<public-request-id>'
-npm run chain:live-check
-
-# Node-2 operator shell (node-1'den ayri custody/process)
-$env:DEPLOYER_PRIVATE_KEY = ''
-$env:NODE_PRIVATE_KEY = '<node-2-key>'
-$env:LIVE_CHECK_STAGE = 'node-2'
-$env:LIVE_CHECK_QUERY_ID = '<public-query-id>'
-$env:LIVE_CHECK_REQUEST_ID = '<public-request-id>'
-npm run chain:live-check
-
-# Deployer shell: complete
-$env:DEPLOYER_PRIVATE_KEY = '<deployer-key>'
-$env:NODE_PRIVATE_KEY = ''
-$env:LIVE_CHECK_STAGE = 'complete'
-$env:LIVE_CHECK_QUERY_ID = '<public-query-id>'
-$env:LIVE_CHECK_REQUEST_ID = '<public-request-id>'
-npm run chain:live-check
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage readiness
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage preflight
 ```
+
+Asagidaki komutlar dokumantasyon amaclidir ve Sepolia transaction'i
+gonderebilir. Yalniz ayri operasyon onayindan sonra sirasiyla kullanilir.
+Deployment komutu bilerek `--no-compile` kullanir; once ayri cihaz-yuku onayi
+ile compile ve hedef testler yeniden gecmis olmalidir:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage deploy -Execute
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage stake-node-1          # salt-okunur stake plani
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage stake-node-1 -Execute
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage stake-node-2
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage stake-node-2 -Execute
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage prepare -Execute
+
+# Prepare ciktisindaki public id'leri iki operator de aynen kullanir.
+$queryId = Read-Host "LIVE_CHECK_QUERY_ID"
+$requestId = Read-Host "LIVE_CHECK_REQUEST_ID"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage node-1 -QueryId $queryId -RequestId $requestId -Execute
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage node-2 -QueryId $queryId -RequestId $requestId -Execute
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage complete -QueryId $queryId -RequestId $requestId -Execute
+```
+
+Node operatorleri kendi ayri shell/custody ortamlarinda yalniz kendi test-only
+private key'lerini girer. Seed phrase, private key ve wallet parolasi hicbir
+zaman repository'ye, sohbete veya ortak `.env` dosyasina konmaz.
 
 Bu kanit yalniz M-of-N authorization ve iki ayri signer handoff'unu gosterir;
 HSM, DKG veya gercek threshold decryption uygulandigi iddia edilmez.

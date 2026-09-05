@@ -2,6 +2,7 @@ import { writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { ethers, network } from "hardhat";
+import { D15_PROFILE_ID, loadD15Profile, sameAddress } from "./d15-profile";
 import { parseAuthorizedNodeAddresses } from "./node-addresses";
 
 /**
@@ -16,9 +17,43 @@ async function main() {
   const authorizedNodes = parseAuthorizedNodeAddresses(
     process.env.AUTHORIZED_NODE_ADDRESSES,
   );
+  const d15Profile =
+    process.env.D15_PROFILE === D15_PROFILE_ID ? loadD15Profile() : null;
+  if (process.env.D15_PROFILE && !d15Profile) {
+    throw new Error(`bilinmeyen D15_PROFILE: ${process.env.D15_PROFILE}`);
+  }
+  if (d15Profile) {
+    if (network.name !== d15Profile.network) {
+      throw new Error(`D15 deploy yalniz ${d15Profile.network} aginda calisir`);
+    }
+    if (process.env.D15_EXECUTION_ACK !== "deploy") {
+      throw new Error("D15 deploy icin D15_EXECUTION_ACK=deploy zorunludur");
+    }
+    if (
+      authorizedNodes.length !== 2 ||
+      !sameAddress(authorizedNodes[0], d15Profile.authorizedNodes[0]) ||
+      !sameAddress(authorizedNodes[1], d15Profile.authorizedNodes[1])
+    ) {
+      throw new Error("AUTHORIZED_NODE_ADDRESSES D15 public profile ile eslesmiyor");
+    }
+    if (process.env.PAYMENT_TOKEN) {
+      throw new Error("D15 test profile harici PAYMENT_TOKEN kabul etmez");
+    }
+    const chain = await ethers.provider.getNetwork();
+    if (chain.chainId !== BigInt(d15Profile.chainId)) {
+      throw new Error(
+        `D15 deploy chainId ${chain.chainId}; ${d15Profile.chainId} bekleniyordu`,
+      );
+    }
+  }
   const { IdentityTree } = await import("@veriarfy/circuits");
 
   const [deployer] = await ethers.getSigners();
+  if (d15Profile && !sameAddress(deployer.address, d15Profile.deployer)) {
+    throw new Error(
+      `D15 deployer signer eslesmiyor: ${deployer.address} != ${d15Profile.deployer}`,
+    );
+  }
   console.log(`Ag: ${network.name}`);
   console.log(`Deployer: ${deployer.address}`);
 
@@ -77,8 +112,10 @@ async function main() {
   // VeriarfyProtocol — sifreli havuz + IPFS indeksi + esikli cozum.
   // Sahip olarak deployer atanir; URETIMDE bu adres cok imzali bir cuzdan olmali.
   // Esik ve k-anonimlik siniri ortam degiskenleriyle verilebilir.
-  const threshold = Number(process.env.DISCLOSURE_THRESHOLD ?? 2);
-  const minParticipants = Number(process.env.MIN_PARTICIPANTS ?? 10);
+  const threshold = d15Profile ? 2 : Number(process.env.DISCLOSURE_THRESHOLD ?? 2);
+  const minParticipants = d15Profile
+    ? d15Profile.minParticipants
+    : Number(process.env.MIN_PARTICIPANTS ?? 10);
 
   // KUTUPHANE BAGLAMA.
   //
@@ -286,7 +323,9 @@ async function main() {
   // Taban teminat raporda 32 ETH'dir; test aglarinda bu tutari edinmek mumkun
   // olmadigi icin ortam degiskeniyle kucultulebilir. Esik degeri raporun 1M USD
   // kontrol noktasindan turetilmistir (bkz. VeriarfyStaking dokumantasyonu).
-  const baseStake = BigInt(process.env.NODE_BASE_STAKE ?? ethers.parseEther("0.001"));
+  const baseStake = d15Profile
+    ? d15Profile.nodeBaseStakeWei
+    : BigInt(process.env.NODE_BASE_STAKE ?? ethers.parseEther("0.001"));
   const valueThreshold = BigInt(process.env.STAKE_VALUE_THRESHOLD ?? 250_000);
   const challengePeriod = BigInt(process.env.CHALLENGE_PERIOD_BLOCKS ?? 20);
 

@@ -15,6 +15,11 @@ import {
   type LiveCheckQueryType,
   type LiveCheckStage,
 } from "./live-check-state";
+import {
+  D15_PROFILE_ID,
+  loadD15Profile,
+  sameAddress as sameProfileAddress,
+} from "./d15-profile";
 
 /**
  * Canli ag dogrulamasi — dagitilan kontrat GERCEKTEN calisiyor mu?
@@ -413,6 +418,11 @@ async function runComplete(
 
 async function main() {
   const stage: LiveCheckStage = parseLiveCheckStage(process.env.LIVE_CHECK_STAGE);
+  const d15Profile =
+    process.env.D15_PROFILE === D15_PROFILE_ID ? loadD15Profile() : null;
+  if (process.env.D15_PROFILE && !d15Profile) {
+    throw new Error(`bilinmeyen D15_PROFILE: ${process.env.D15_PROFILE}`);
+  }
   if (network.name === "hardhat") {
     throw new Error(
       "Bu betik gercek agda anlamlidir; mock ag icin `npx hardhat test` kullanin.",
@@ -423,6 +433,16 @@ async function main() {
     readFileSync(join(__dirname, "..", "deployments", `${network.name}.json`), "utf8"),
   );
   const authorizedNodes = deploymentNodeAddresses(record);
+  if (d15Profile) {
+    if (
+      !sameProfileAddress(configuredDeployer(record), d15Profile.deployer) ||
+      authorizedNodes.length !== 2 ||
+      !sameProfileAddress(authorizedNodes[0], d15Profile.authorizedNodes[0]) ||
+      !sameProfileAddress(authorizedNodes[1], d15Profile.authorizedNodes[1])
+    ) {
+      throw new Error("deployment JSON D15 public profile ile eslesmiyor");
+    }
+  }
   const handoffRequestId =
     stage === "node-1" || stage === "node-2" || stage === "complete"
       ? parseLiveCheckId(process.env.LIVE_CHECK_REQUEST_ID, "LIVE_CHECK_REQUEST_ID")
@@ -433,6 +453,9 @@ async function main() {
       : null;
   const queryType =
     stage === "prepare" ? parseLiveCheckQueryType(process.env.LIVE_CHECK_QUERY_TYPE) : null;
+  if (d15Profile && stage === "prepare" && queryType !== d15Profile.queryType) {
+    throw new Error(`prepare query type ${d15Profile.queryType} olmali`);
+  }
 
   const address: string = record.contracts?.VeriarfyProtocol;
   if (typeof address !== "string" || !ethers.isAddress(address)) {
@@ -794,7 +817,7 @@ async function main() {
 
   // Dozaj 1 gonderildi; nadir esigi 2'dir. Sonuc "nadir" cikarsa ya kod ya da
   // esikli cozum bozuk demektir — sessizce gecilmemeli.
-  if (TEST_DOSAGE !== 2 && isCarrier) {
+  if (isCarrier) {
     throw new Error("Nadirlik biti yanlis: dozaj 2 degilken tasiyici isaretlendi");
   }
 
