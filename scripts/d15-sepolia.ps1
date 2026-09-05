@@ -7,6 +7,7 @@ param(
     "readiness",
     "preflight",
     "deploy",
+    "resume",
     "stake-node-1",
     "stake-node-2",
     "prepare",
@@ -178,6 +179,16 @@ try {
       if (-not (Confirm-StateChange "deploy" "DEPLOY SEPOLIA D15")) { return }
       Invoke-WithSigner "deployer" {
         Invoke-Npm -Arguments @("run", "chain:d15-deploy")
+      }
+    }
+    "resume" {
+      if (-not $Execute) {
+        Invoke-Npm -Arguments @("run", "chain:d15-resume")
+        return
+      }
+      if (-not (Confirm-StateChange "resume" "RESUME SEPOLIA D15")) { return }
+      Invoke-WithSigner "deployer" {
+        Invoke-Npm -Arguments @("run", "chain:d15-resume")
       }
     }
     "stake-node-1" {

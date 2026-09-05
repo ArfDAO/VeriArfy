@@ -9,6 +9,7 @@
     "verify": "hardhat test test/StudyVerification.test.ts",
     "deploy:sepolia": "hardhat run scripts/deploy.ts --network sepolia",
     "deploy:d15:sepolia": "hardhat run --no-compile scripts/deploy.ts --network sepolia",
+    "d15-resume:sepolia": "hardhat run --no-compile scripts/d15-resume.ts --network sepolia",
     "node": "hardhat node",
     "d15-readiness:sepolia": "hardhat run --no-compile scripts/d15-readiness.ts --network sepolia",
     "preflight:sepolia": "hardhat run --no-compile scripts/preflight.ts --network sepolia",

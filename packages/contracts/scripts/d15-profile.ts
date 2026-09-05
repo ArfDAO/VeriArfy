@@ -1,11 +1,20 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { getAddress, ZeroAddress } from "ethers";
+import {
+  getAddress,
+  keccak256,
+  toUtf8Bytes,
+  ZeroAddress,
+} from "ethers";
 
 import { parseAuthorizedNodeAddresses } from "./node-addresses";
 
 export const D15_PROFILE_ID = "d15-sepolia-2of2-ml";
+export const D15_PUBLIC_RPC_URL =
+  "https://ethereum-sepolia-rpc.publicnode.com/";
+const CANONICAL_D15_PROFILE_DIGEST =
+  "0xdbe068d030ee6c18b3dd949174b0f8adc655f9d8adf5823631946dbf6fe6baf9";
 export type D15NodeRole = "node-1" | "node-2";
 
 export interface D15Profile {
@@ -54,8 +63,11 @@ export function parseD15Profile(raw: unknown): D15Profile {
   } catch {
     throw new Error("D15 publicRpcUrl gecersiz");
   }
-  if (publicRpcUrl.protocol !== "https:") {
-    throw new Error("D15 publicRpcUrl HTTPS olmali");
+  if (
+    publicRpcUrl.protocol !== "https:" ||
+    publicRpcUrl.toString() !== D15_PUBLIC_RPC_URL
+  ) {
+    throw new Error("D15 publicRpcUrl onayli canonical endpoint olmali");
   }
 
   let deployer: string;
@@ -96,7 +108,12 @@ export function parseD15Profile(raw: unknown): D15Profile {
 
 export function loadD15Profile(): D15Profile {
   const path = join(__dirname, "..", "ops", "d15-sepolia.json");
-  return parseD15Profile(JSON.parse(readFileSync(path, "utf8")));
+  const raw = JSON.parse(readFileSync(path, "utf8"));
+  const digest = keccak256(toUtf8Bytes(JSON.stringify(raw))).toLowerCase();
+  if (digest !== CANONICAL_D15_PROFILE_DIGEST) {
+    throw new Error("D15 public profile canonical digest eslesmiyor");
+  }
+  return parseD15Profile(raw);
 }
 
 export function parseD15NodeRole(raw: string | undefined): D15NodeRole {

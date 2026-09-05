@@ -5,7 +5,11 @@ import "@nomicfoundation/hardhat-toolbox";
 import "@fhevm/hardhat-plugin";
 
 import type { HardhatUserConfig } from "hardhat/config";
-import { D15_PROFILE_ID, parseD15NodeRole } from "./scripts/d15-profile";
+import {
+  D15_PROFILE_ID,
+  loadD15Profile,
+  parseD15NodeRole,
+} from "./scripts/d15-profile";
 import { parseLiveCheckStage } from "./scripts/live-check-state";
 
 function invokesScript(name: string): boolean {
@@ -21,6 +25,7 @@ const isLiveCheckInvocation = invokesScript("live-check");
 const isD15ReadinessInvocation = invokesScript("d15-readiness");
 const isStakeNodeInvocation = invokesScript("stake-node");
 const isDeployInvocation = invokesScript("deploy");
+const isD15ResumeInvocation = invokesScript("d15-resume");
 const isPreflightInvocation = invokesScript("preflight");
 const requestedLiveCheckStage = process.env.LIVE_CHECK_STAGE?.trim();
 if (requestedLiveCheckStage && !isLiveCheckInvocation) {
@@ -39,13 +44,17 @@ const isAllowedD15Invocation =
   isD15ReadinessInvocation ||
   isStakeNodeInvocation ||
   isDeployInvocation ||
+  isD15ResumeInvocation ||
   isPreflightInvocation ||
   isLiveCheckInvocation;
 if (isD15Profile && !isAllowedD15Invocation) {
-  throw new Error("D15_PROFILE yalniz readiness/preflight/deploy/stake/live-check icindir");
+  throw new Error("D15_PROFILE yalniz readiness/preflight/deploy/resume/stake/live-check icindir");
 }
 if ((isD15ReadinessInvocation || isStakeNodeInvocation) && !isD15Profile) {
   throw new Error(`${isStakeNodeInvocation ? "stake-node" : "d15-readiness"}: D15_PROFILE zorunludur`);
+}
+if (isD15ResumeInvocation && !isD15Profile) {
+  throw new Error("resume: D15_PROFILE zorunludur");
 }
 
 const executionAck = process.env.D15_EXECUTION_ACK?.trim();
@@ -65,6 +74,18 @@ if (!isLiveCheckConfigured && !isD15Profile) {
 
 const SEPOLIA_RPC_URL =
   process.env.SEPOLIA_RPC_URL ?? "https://ethereum-sepolia-rpc.publicnode.com";
+if (isD15Profile) {
+  const approvedProfile = loadD15Profile();
+  let runtimeRpcUrl: string;
+  try {
+    runtimeRpcUrl = new URL(SEPOLIA_RPC_URL).toString();
+  } catch {
+    throw new Error("D15 SEPOLIA_RPC_URL gecersiz");
+  }
+  if (runtimeRpcUrl !== approvedProfile.publicRpcUrl) {
+    throw new Error("D15 SEPOLIA_RPC_URL onayli public profile ile eslesmiyor");
+  }
+}
 const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY ?? "";
 const NODE_PRIVATE_KEY = process.env.NODE_PRIVATE_KEY ?? "";
 
@@ -103,6 +124,21 @@ if (isLiveCheckConfigured) {
       );
     }
     sepoliaPrivateKey = "";
+  } else if (isD15ResumeInvocation) {
+    if (executionAck && executionAck !== "resume") {
+      throw new Error("resume: D15_EXECUTION_ACK 'resume' olmalidir");
+    }
+    if (executionAck) {
+      if (!DEPLOYER_PRIVATE_KEY || NODE_PRIVATE_KEY) {
+        throw new Error("resume: yalniz DEPLOYER_PRIVATE_KEY verilmelidir");
+      }
+      sepoliaPrivateKey = DEPLOYER_PRIVATE_KEY;
+    } else {
+      if (DEPLOYER_PRIVATE_KEY || NODE_PRIVATE_KEY) {
+        throw new Error("resume check signer kabul etmez");
+      }
+      sepoliaPrivateKey = "";
+    }
   } else if (isStakeNodeInvocation) {
     const role = parseD15NodeRole(process.env.D15_NODE_ROLE);
     const expectedAck = `stake-${role}`;

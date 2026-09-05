@@ -2,6 +2,7 @@ import { expect } from "chai";
 
 import {
   D15_PROFILE_ID,
+  loadD15Profile,
   parseD15NodeRole,
   parseD15Profile,
 } from "../scripts/d15-profile";
@@ -29,6 +30,7 @@ describe("D15 public Sepolia profile", () => {
     expect(profile.authorizedNodes).to.deep.equal(valid.authorizedNodes);
     expect(profile.queryType).to.equal(2);
     expect(profile.minParticipants).to.equal(1);
+    expect(loadD15Profile()).to.deep.equal(profile);
   });
 
   it("deployer/node cakismasini ve duplicate node'u reddeder", () => {
@@ -49,6 +51,9 @@ describe("D15 public Sepolia profile", () => {
     expect(() => parseD15Profile({ ...valid, minParticipants: 10 })).to.throw();
     expect(() => parseD15Profile({ ...valid, nodeBaseStakeWei: "0" })).to.throw();
     expect(() => parseD15Profile({ ...valid, publicRpcUrl: "http://localhost" })).to.throw();
+    expect(() =>
+      parseD15Profile({ ...valid, publicRpcUrl: "https://example.com" }),
+    ).to.throw("canonical endpoint");
   });
 
   it("yalniz node-1 ve node-2 rollerini kabul eder", () => {
