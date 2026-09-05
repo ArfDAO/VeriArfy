@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { ethers, network } from "hardhat";
 import { D15_PROFILE_ID, loadD15Profile, sameAddress } from "./d15-profile";
 import { parseAuthorizedNodeAddresses } from "./node-addresses";
+import { loadStudyConfig } from "./study-config";
 
 /**
  * Calisma kontratlarini deploy eder:
@@ -46,6 +47,16 @@ async function main() {
       );
     }
   }
+
+  // Calisma ve metrik dosyalari ilk transaction'dan once okunup dogrulanir.
+  // Boylece tasinamayan eski mutlak yol veya malformed metrik paneli zincirde
+  // kismi deployment birakmadan durur.
+  const studyEnvPath = join(__dirname, "..", "study", "deploy-env.json");
+  const studyConfig = loadStudyConfig(studyEnvPath, {
+    requireMetrics: Boolean(d15Profile),
+  });
+  const studyEnv = studyConfig.env;
+
   const { IdentityTree } = await import("@veriarfy/circuits");
 
   const [deployer] = await ethers.getSigners();
@@ -53,6 +64,19 @@ async function main() {
     throw new Error(
       `D15 deployer signer eslesmiyor: ${deployer.address} != ${d15Profile.deployer}`,
     );
+  }
+
+  // Kismi D/15 deployment nonce 15'e geldiyse tam deploy'u yeniden baslatmak,
+  // o slota yanlis bir transaction yerlestirir. Yalniz bos hesap kabul edilir.
+  if (d15Profile) {
+    const latestNonce = await ethers.provider.getTransactionCount(deployer.address, "latest");
+    const pendingNonce = await ethers.provider.getTransactionCount(deployer.address, "pending");
+    if (latestNonce !== 0 || pendingNonce !== 0) {
+      throw new Error(
+        `D15 deploy yalniz nonce 0 hesabinda baslar (latest=${latestNonce}, pending=${pendingNonce}); ` +
+          "kismi deployment icin chain:d15-resume kullanin",
+      );
+    }
   }
   console.log(`Ag: ${network.name}`);
   console.log(`Deployer: ${deployer.address}`);
@@ -217,17 +241,12 @@ async function main() {
   // `study/deploy-env.json`, `packages/web/scripts/prepare-study.ts` tarafindan
   // uretilir: panel ozetleri ORADA, panelin kendisiyle ayni yerde hesaplanir ki
   // ikisi birbirinden sapamasin. Dosya yoksa ortam degiskenlerine dusulur.
-  const studyEnvPath = join(__dirname, "..", "study", "deploy-env.json");
-  const studyEnv: Record<string, string> = existsSync(studyEnvPath)
-    ? JSON.parse(readFileSync(studyEnvPath, "utf8"))
-    : {};
-
   if (Object.keys(studyEnv).length > 0) {
     console.log(`\nCalisma tanimlari: study/deploy-env.json (${studyEnv.preparedAt})`);
   }
 
   const pick = (key: string, fallback = "") =>
-    process.env[key] ?? studyEnv[key] ?? fallback;
+    (process.env[key] ?? studyEnv[key] ?? fallback) as string;
 
   // --- SNP paneli (rapor §3.3) ---------------------------------------------
   //
@@ -289,9 +308,9 @@ async function main() {
 
   // Metrik paneli: tanimi `METRICS_FILE` ile verilir (JSON dizisi). Verilmezse
   // calisma yalnizca genomiktir ve metrik kanali bos kalir.
-  const metricsFile = pick("METRICS_FILE");
-  if (metricsFile) {
-    const specs = JSON.parse(readFileSync(metricsFile, "utf8"));
+  const metricsFile = studyConfig.metricsFile;
+  if (metricsFile && studyConfig.metrics) {
+    const specs = studyConfig.metrics;
     const metricsHash = pick("METRICS_HASH", ethers.ZeroHash);
     const metricsUri = pick("METRICS_URI");
 

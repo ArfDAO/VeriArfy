@@ -3,7 +3,8 @@
   "PANEL_URI": "ipfs://QmPAFww6Vf7fMzy6x8y4nJRhWBVDMiPwU9uzMM5dkeGA3o",
   "SNP_COUNT": 10,
   "METRICS_HASH": "0x038a4fcc9a859bf8a91a947d14a615cf4465e2ef7d95b2bbd3b020b3c46dff14",
+  "METRICS_SPEC_HASH": "0x32a754a73e1bf6aadc967f21bfcb1ab420a957f47bc3cb17a2ec6fea755c0b67",
   "METRICS_URI": "ipfs://QmYaZyA1BbWZirwHxBAXu9Jk2eA24DmxTdaFZaRoDzcgxk",
-  "METRICS_FILE": "/Users/omeraydogan/VeriArfy/packages/contracts/study/metrics-onchain.json",
+  "METRICS_FILE": "metrics-onchain.json",
   "preparedAt": "2026-08-19T19:10:40.002Z"
 }
