@@ -7,21 +7,27 @@
     "0x7c8cbfdD76Ee47425CAf33aBF663509cE7A602fe"
   ],
   "contracts": {
-    "Groth16Verifier": "0x55F9328E14E5Ef1e2E2DCA1632CF10feF83ba1b9",
-    "DataProvenanceVerifier": "0xFdd20ECb7FcC9b2334149D463114c9564563bD61",
-    "VeriarfyProtocol": "0x7F90Dafd5d9A067044a390000017104FAb01dD2E",
-    "VeriarfyPayments": "0x9090A1e7b21ee69A741901574C623d043Cc4608D",
-    "VeriarfyBiomarkers": "0xf935031D497a6315CC259d38301c75f253DF1291",
-    "VeriarfyStaking": "0xe03784E8911c46256808c881f37DEad3b90cbEF4",
+    "ContingencyStats": "0xfb8913A9E1109aDcA7ee01517bd47af01FCa6DCb",
+    "CoverageBits": "0x0B89f17DAa0cecb88bEF7d82fF708f91e4a6D3E7",
+    "StableTestToken": "0x6eE2984546034bF78C8ffFCaDB8cED1434C16758",
+    "BiomarkerStats": "0x1aAF2Ae06A6B0bb8E03377134FB75a0585583625",
     "VeriarfyStorage": "0x5DbC770ed983Be52359B47D971598F09Aa4fD058",
     "PaymentToken": "0x6eE2984546034bF78C8ffFCaDB8cED1434C16758",
-    "VeriArfyRegistry": "0x7ea7B9e874720d537d15e846874F37A4DD156Be7",
-    "AnxietyStudy": "0xB1828b7C75B0C0EC38Bd142F38F0D96aEbC59f8F"
+    "Groth16Verifier": "0x8e3Ed62072CD40e852bEebFd1aE109951f19dCDB",
+    "VeriArfyRegistry": "0xfc6b3eeA139c3FDe044a52c65CdC6D0ff71c790B",
+    "AnxietyStudy": "0xcc7a9B96b7a2f5854a1Edf69110Ba9aBA9737C76",
+    "DataProvenanceVerifier": "0x67c4Cb7E33602394827fc7186B205dAd9F0fA1a3",
+    "VeriarfyProtocol": "0xcD3B1a850Eb33AC74786030919E0203005675CFB",
+    "VeriarfyPayments": "0x46d6CE86163Cc76168AdE12CC9b07034139B9507",
+    "VeriarfyBiomarkers": "0xEe4804448fC0E246763868C90Ca8A1B4CfA8014f",
+    "VeriarfyStaking": "0xc3e1ae7fC78be045Ac9C80D7C453B03356B69f7f"
   },
   "paymentTokenIsTestToken": true,
   "liquidityShareBps": 8000,
   "initialRoot": "15019797232609675441998260052101280400536945603062888308240081994073687793470",
   "accreditedRoot": "400204218792704578759845465933970137697021750464618602026640937740276740682",
-  "deployedAt": "2026-09-05T22:35:24.000Z",
-  "deployedAtBlock": 11643258
+  "deployedAt": "2026-09-06T11:43:58.495Z",
+  "deployedAtBlock": 11647006,
+  "reusedStorageDeployedAtBlock": 11643258,
+  "redeployPlanHash": "0xd026de9debced25767b1d6d5b023aa2157318ede64204a3a27ee14da8d15a62c"
 }

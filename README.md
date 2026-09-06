@@ -142,11 +142,16 @@ Adresler `packages/web/src/config/deployment.json` dosyasına otomatik yazılır
 
 ### 4. Sepolia canli kontrolu (D/15, dort asamali)
 
-**2026-09-06 devam noktasi:** mevcut deployment'in eski zkey yedegi yok;
-guncel, sabitlenmis proof anahtarlariyla nonce **24–41 redeploy** hazirlandi.
-Bu deployment icin asagidaki genel `deploy` ornegi veya eski nonce-15 `resume`
-kullanilmaz. Once [nonce-24 redeploy operator plani](docs/D15-REDEPLOY.md)
-izlenir. Canli redeploy henuz yapilmadi.
+**2026-09-06 durum:** sabitlenmis proof anahtarlariyla nonce **24–41
+redeploy** tamamlandi. On sekiz receipt `status=1` ile 11647006–11647040
+bloklarinda kesinlesti; sinir nonce 42 ve gercek toplam fee
+`0.020462928715141095 ETH`. Yeni deployment cifti plan hash
+`0xd026de9debced25767b1d6d5b023aa2157318ede64204a3a27ee14da8d15a62c`
+ile yayimlandi. Salt-okunur proof-check yeni provenance (13 signal) ve identity
+(4 signal) verifier'larini `verified=true` ile dogruladi. Ayrintili tamamlama ve
+kurtarma kaydi [nonce-24 redeploy operator planinda](docs/D15-REDEPLOY.md).
+Yeni staking kontratinda node stake ve dort asamali live-check ayri onaylarla
+tamamlanmadan D/15 kabul siniri kapanmaz.
 
 Deploy ciktisindaki `packages/contracts/deployments/sepolia.json` icindeki
 `authorizedNodes` public topolojinin tek kaynagidir. `prepare` asamasi
