@@ -40,6 +40,7 @@
     "chain:d15-deploy": "npm run deploy:d15:sepolia --workspace packages/contracts",
     "chain:d15-resume": "npm run d15-resume:sepolia --workspace packages/contracts",
     "chain:preflight": "npm run preflight:sepolia --workspace packages/contracts",
+    "chain:proof-check": "npm run proof-check:sepolia --workspace packages/contracts",
     "chain:stake-node": "npm run stake-node:sepolia --workspace packages/contracts",
     "chain:live-check": "npm run live-check:sepolia --workspace packages/contracts",
     "storage:e2e": "node scripts/e2e-storage.mjs"

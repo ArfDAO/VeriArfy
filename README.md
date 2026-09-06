@@ -167,7 +167,18 @@ ve yine private key yuklemeyen deployer preflight'ini calistirin:
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage readiness
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage preflight
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage proof-check
 ```
+
+`proof-check`, gercek FHE CLI baslatildiktan sonra sentetik koken ve kimlik
+kanitlarini ayri Node sureclerinde, tek hesaplama is parcacigiyla uretir.
+Her iki kaniti Sepolia'daki verifier kontratlarinda `eth_call` ile dogrular;
+private key istemez, transaction gondermez ve `-Execute` kabul etmez.
+`PROOF_CHECK_OK` iki dogrulamanin da tamamlandigini belirtir. Bu kontrol,
+canli `prepare` veya sonraki asamalar icin operasyon onayi yerine gecmez.
+Kaniti ureten alt surec ana surecin Node executable'ini kullanir; sistem Node
+ve PATH ayarlarini degistirmez. Witness stdin uzerinden aktarilir, dosyaya veya
+komut satirina yazilmaz; signer environment'i alt surece aktarilmaz.
 
 Asagidaki komutlar dokumantasyon amaclidir ve Sepolia transaction'i
 gonderebilir. Yalniz ayri operasyon onayindan sonra sirasiyla kullanilir.

@@ -6,6 +6,7 @@ param(
   [ValidateSet(
     "readiness",
     "preflight",
+    "proof-check",
     "deploy",
     "resume",
     "stake-node-1",
@@ -174,6 +175,10 @@ try {
     "preflight" {
       if ($Execute) { throw "preflight salt-okunurdur; -Execute kabul etmez." }
       Invoke-Npm -Arguments @("run", "chain:preflight")
+    }
+    "proof-check" {
+      if ($Execute) { throw "proof-check salt-okunurdur; -Execute kabul etmez." }
+      Invoke-Npm -Arguments @("run", "chain:proof-check")
     }
     "deploy" {
       if (-not (Confirm-StateChange "deploy" "DEPLOY SEPOLIA D15")) { return }

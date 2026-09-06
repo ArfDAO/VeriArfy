@@ -27,6 +27,7 @@ const isStakeNodeInvocation = invokesScript("stake-node");
 const isDeployInvocation = invokesScript("deploy");
 const isD15ResumeInvocation = invokesScript("d15-resume");
 const isPreflightInvocation = invokesScript("preflight");
+const isProofCheckInvocation = invokesScript("proof-check");
 const requestedLiveCheckStage = process.env.LIVE_CHECK_STAGE?.trim();
 if (requestedLiveCheckStage && !isLiveCheckInvocation) {
   throw new Error(
@@ -46,15 +47,19 @@ const isAllowedD15Invocation =
   isDeployInvocation ||
   isD15ResumeInvocation ||
   isPreflightInvocation ||
+  isProofCheckInvocation ||
   isLiveCheckInvocation;
 if (isD15Profile && !isAllowedD15Invocation) {
-  throw new Error("D15_PROFILE yalniz readiness/preflight/deploy/resume/stake/live-check icindir");
+  throw new Error("D15_PROFILE yalniz readiness/preflight/proof-check/deploy/resume/stake/live-check icindir");
 }
 if ((isD15ReadinessInvocation || isStakeNodeInvocation) && !isD15Profile) {
   throw new Error(`${isStakeNodeInvocation ? "stake-node" : "d15-readiness"}: D15_PROFILE zorunludur`);
 }
 if (isD15ResumeInvocation && !isD15Profile) {
   throw new Error("resume: D15_PROFILE zorunludur");
+}
+if (isProofCheckInvocation && !isD15Profile) {
+  throw new Error("proof-check: D15_PROFILE zorunludur");
 }
 
 const executionAck = process.env.D15_EXECUTION_ACK?.trim();
@@ -116,10 +121,10 @@ if (isLiveCheckConfigured) {
 
   sepoliaPrivateKey = expectedKey;
 } else if (isD15Profile) {
-  if (isD15ReadinessInvocation || isPreflightInvocation) {
+  if (isD15ReadinessInvocation || isPreflightInvocation || isProofCheckInvocation) {
     if (DEPLOYER_PRIVATE_KEY || NODE_PRIVATE_KEY || executionAck) {
       throw new Error(
-        `${isPreflightInvocation ? "preflight" : "readiness"} ` +
+        `${isProofCheckInvocation ? "proof-check" : isPreflightInvocation ? "preflight" : "readiness"} ` +
           "signer/ack kabul etmez; salt-okunur calismalidir",
       );
     }
