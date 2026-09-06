@@ -1,7 +1,6 @@
 # D/15 nonce-24 redeploy — tamamlama ve kurtarma kaydi
 
-Hazirlik ve tamamlama tarihi: 2026-09-06. Bu belge kalan stake/live-check
-islemleri icin canli islem onayi degildir. Nonce 24–41 redeploy Sepolia'da
+Hazirlik ve tamamlama tarihi: 2026-09-06. Nonce 24–41 redeploy Sepolia'da
 tamamlandi; 18/18 receipt `status=1`, blok araligi 11647006–11647040 ve sinir
 nonce 42. Toplam gas 17,807,903, gercek fee `0.020462928715141095 ETH`.
 Output cifti SHA256
@@ -9,6 +8,13 @@ Output cifti SHA256
 ile byte-identical yayimlandi. Son salt-okunur proof-check provenance icin 13,
 identity icin 4 public signal uretti ve iki yeni verifier'da `verified=true`
 sonucunu aldi; hicbir ek transaction gondermedi.
+
+Iki node yeni `VeriarfyStaking` kontratina ayri signer'larla `0.001 ETH` stake
+etti ve ikisi de `canApprove=true`. Dort asamali canli kabul `QueryId=0`,
+`RequestId=0` icin tamamlandi: prepare 12/12, node approval 2/2 ve complete
+3/3 receipt `status=1`. Final state `finalized=true`, `granted=true`,
+`revoked=false`, query settled ve deployer claim tamam. D/15 canli kabul siniri
+kapandi; D/16 calismasi baslayabilir.
 
 ## Sabit plan
 
@@ -32,13 +38,12 @@ sonucunu aldi; hicbir ek transaction gondermedi.
   degil imzalanacak payload'larin gas/fee tavanidir. Node stake/gas haric.
   Her execute oncesi mevcut bakiye, nonce ve base fee yeniden kontrol edilir.
 
-## Tamamlanan akis ve kalan sira
+## Tamamlanan canli akis
 
-Komutlar repository kokunden calistirilir. Her kalan state-changing asama yeni
-operasyon onayi gerektirir; onceki redeploy onayi stake veya live-check onayi
-sayilmaz. Deployer, node-1 ve node-2 icin ayri taze terminaller kullanilir.
-Private key yalniz maskeli prompt'a yapistirilir; sohbete, komut satirina,
-dosyaya, ortak `.env` veya plana yazilmaz. Islem sonunda signer environment'i temizlenir.
+Tum state-changing D/15 asamalari tamamlandi. Asagidaki salt-okunur komutlar
+audit/recovery icin korunur; redeploy, stake veya live-check execute asamalari
+normal akista yeniden calistirilmaz. Private key sohbete, komut satirina,
+dosyaya, ortak `.env` veya plana yazilmadi.
 
 1. Redeploy normal akista yeniden execute edilmez. Gerektiginde private key
    olmadan plan, journal, final state ve output cifti salt-okunur dogrulanir:
@@ -54,25 +59,29 @@ dosyaya, ortak `.env` veya plana yazilmaz. Islem sonunda signer environment'i te
    powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage proof-check
    ```
 
-3. Node-1 ve node-2 ayri taze terminallerde once kendi salt-okunur stake planini,
-   sonra ayri onayla execute asamasini calistirir:
+3. Node stake tamamlama kaydi:
 
-   ```powershell
-   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage stake-node-1
-   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage stake-node-1 -Execute
-   # Baska terminal, yalniz node-2 key'i:
-   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage stake-node-2
-   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage stake-node-2 -Execute
-   ```
-
-   Her node yeni staking kontratina **0.001 ETH + gas** yatirir. Eski stake
-   otomatik tasinmaz. Eski kontratta `requestUnstake`, 7200 blok bekleme ve
-   withdraw ayri yetkilendirilecek istege bagli bir akistir; redeploy buna dokunmaz.
+   - Node-1: `0x30cae82b7f1cf938c8e136e7890e61af00f8e249b194e4682662098922322d40`,
+     blok 11647092, `status=1`.
+   - Node-2: `0x6f0cf12b2a7c04296f3d67ce1dc61663cbca9c640631ec13c233c577c80a00cf`,
+     blok 11647104, `status=1`.
+   - Eski stake otomatik tasinmadi. Eski kontratta `requestUnstake`, 7200 blok
+     bekleme ve withdraw ayri yetkilendirilecek istege bagli bir akistir.
 
 4. [README'deki dort asamali akis](../README.md#4-sepolia-canli-kontrolu-d15-dort-asamali)
-   izlenir: deployer `prepare`, node-1 `node-1`, node-2 `node-2`, deployer `complete`.
-   Her asama ayri onay/key prompt'u kullanir. Prepare ciktisindaki public QueryId
-   ve RequestId sonraki uc asamaya aynen aktarilir. D/15 tamamlanana kadar D/16 kapalidir.
+   tamamlandi:
+
+   - Prepare: nonce 42–53, blok 11647119–11647137, 12/12 `status=1`;
+     ilk tx `0xcc4a965a4b72f0a985df45a975a42fea1f68698226268f5cadb72eabd1aa9650`,
+     son/openQuery tx `0xb6cd37111f47556e9499c3555321b4ee3959d449a428a3fb431ec94ed45dded3`.
+   - Node-1 approval: `0xb04707f8c65034167b3cc1c08944e10efb109aa680b6cb429e60dc561b8a3603`,
+     blok 11647160, `status=1`.
+   - Node-2 approval: `0x483bd8d49e06e0fd55d03edc46aa00ebf3c5567b73dde014de053bbd0f7e9848`,
+     blok 11647173, `status=1`; challenge penceresi 11647193'te kapandi.
+   - Complete: nonce 54–56, 3/3 `status=1`; execute
+     `0x1fc2addd72768c566ead3410e10bd99cfa61892f14d29cc84f50d920ce7e3268`,
+     settle `0xc85c80a703338a9a30b1d634bfb74cac60ceb58bff7f91b4b3926cfa65e8c507`,
+     claim `0xb6ac8afd9d91d3aa27b00be02c1109dbf63014235358932e6ae9b4a81835198e`.
 
 ## Kesinti ve tekrar calistirma
 
@@ -100,7 +109,8 @@ gecmesi beklenmez; sonraki stage komutlari kullanilir.
 Compile ve frozen pin/export kontrolu gecti. Disposable Hardhat simülasyonunda
 18/18 exact payload, sekiz runtime, final topology/state ve iki verifier'in
 gercek proof kabul/degistirilmis-signal ret testleri gecti. Olculen gas 17,702,647.
-Bu prova Sepolia deployment'i veya FHE live-check'in tamamlandigi anlamina gelmez.
+Bu yerel prova tek basina canli kabul sayilmaz; Sepolia canli kabul sonucu
+yukaridaki on-chain receipt ve final-state kaydiyla ayrica dogrulandi.
 
 Pin-specific testler CI'nin rastgele development ceremony'sinden ayridir:
 

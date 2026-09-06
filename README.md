@@ -150,8 +150,10 @@ bloklarinda kesinlesti; sinir nonce 42 ve gercek toplam fee
 ile yayimlandi. Salt-okunur proof-check yeni provenance (13 signal) ve identity
 (4 signal) verifier'larini `verified=true` ile dogruladi. Ayrintili tamamlama ve
 kurtarma kaydi [nonce-24 redeploy operator planinda](docs/D15-REDEPLOY.md).
-Yeni staking kontratinda node stake ve dort asamali live-check ayri onaylarla
-tamamlanmadan D/15 kabul siniri kapanmaz.
+Yeni staking kontratinda iki node da `0.001 ETH` stake ile `canApprove=true`.
+Dort asamali live-check `QueryId=0`, `RequestId=0` icin 2/2 approval,
+disclosure grant, query settlement ve claim ile tamamlandi. D/15 canli kabul
+siniri kapandi; D/16 calismasi baslayabilir.
 
 Deploy ciktisindaki `packages/contracts/deployments/sepolia.json` icindeki
 `authorizedNodes` public topolojinin tek kaynagidir. `prepare` asamasi
