@@ -23,7 +23,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { encodeBytes32String } from "ethers";
+import { encodeBytes32String, keccak256, toUtf8Bytes } from "ethers";
 
 import { panelDigest, type StudyPanel } from "../src/lib/panel.ts";
 import { metricsDigest, type MetricPanel } from "../src/lib/metrics.ts";
@@ -110,6 +110,7 @@ async function main() {
       maxValue: m.maxValue,
     };
   });
+  const metricsSpecDigest = keccak256(toUtf8Bytes(JSON.stringify(onchainMetrics)));
 
   writeFileSync(
     join(STUDY_DIR, "metrics-onchain.json"),
@@ -121,8 +122,11 @@ async function main() {
     PANEL_URI: panelUri,
     SNP_COUNT: genomic.variants.length,
     METRICS_HASH: metricsHash,
+    METRICS_SPEC_HASH: metricsSpecDigest,
     METRICS_URI: metricsUri,
-    METRICS_FILE: join(STUDY_DIR, "metrics-onchain.json"),
+    // deploy-env baska checkout'ta da calisabilsin; deploy betigi bu yolu
+    // deploy-env.json'in bulundugu study dizinine gore cozer.
+    METRICS_FILE: "metrics-onchain.json",
     preparedAt: new Date().toISOString(),
   };
 

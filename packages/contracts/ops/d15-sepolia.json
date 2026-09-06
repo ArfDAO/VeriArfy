@@ -1,0 +1,15 @@
+{
+  "profile": "d15-sepolia-2of2-ml",
+  "network": "sepolia",
+  "chainId": 11155111,
+  "publicRpcUrl": "https://ethereum-sepolia-rpc.publicnode.com",
+  "deployer": "0x836091aB39884BB57DB4Dd94Ee120286Ad7e4fe0",
+  "authorizedNodes": [
+    "0x26E2b3a873B057E50f4caC0D3efA9489dEF93208",
+    "0x7c8cbfdD76Ee47425CAf33aBF663509cE7A602fe"
+  ],
+  "queryType": 2,
+  "minParticipants": 1,
+  "nodeBaseStakeWei": "1000000000000000",
+  "minimumDeployerBalanceWei": "20000000000000000"
+}

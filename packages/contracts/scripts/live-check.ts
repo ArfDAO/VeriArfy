@@ -2,6 +2,25 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { ethers, fhevm, network } from "hardhat";
+import { getAddress } from "ethers";
+
+import { parseAuthorizedNodeAddresses } from "./node-addresses";
+import { fullProveIsolated } from "./isolated-proof";
+import {
+  approvalStageDecision,
+  assertApprovalStageResult,
+  assertCompleteApprovalState,
+  parseLiveCheckId,
+  parseLiveCheckQueryType,
+  parseLiveCheckStage,
+  type LiveCheckQueryType,
+  type LiveCheckStage,
+} from "./live-check-state";
+import {
+  D15_PROFILE_ID,
+  loadD15Profile,
+  sameAddress as sameProfileAddress,
+} from "./d15-profile";
 
 /**
  * Canli ag dogrulamasi — dagitilan kontrat GERCEKTEN calisiyor mu?
@@ -39,6 +58,225 @@ const TEST_DOSAGE = 1;
 /** Sentetik grup: 0 = kontrol (saglikli), 1 = vaka (hasta). */
 const TEST_GROUP = 1;
 
+function sameAddress(left: string, right: string): boolean {
+  return left.toLowerCase() === right.toLowerCase();
+}
+
+function deploymentNodeAddresses(record: any): string[] {
+  if (!Array.isArray(record.authorizedNodes)) {
+    throw new Error(
+      "deployment JSON authorizedNodes icermiyor; live-check public node topolojisini env'den turetemez",
+    );
+  }
+  return parseAuthorizedNodeAddresses(record.authorizedNodes.join(","));
+}
+
+function requireSingleSigner<T extends { address: string }>(signers: readonly T[]): T {
+  if (signers.length !== 1) {
+    throw new Error(
+      `live-check signer isolation ihlali: beklenen 1 signer, bulunan ${signers.length}`,
+    );
+  }
+  return signers[0];
+}
+
+function configuredDeployer(record: any): string {
+  if (typeof record.deployer !== "string") {
+    throw new Error("deployment JSON deployer adresi eksik");
+  }
+  try {
+    return getAddress(record.deployer);
+  } catch {
+    throw new Error("deployment JSON deployer adresi gecersiz");
+  }
+}
+
+async function assertPrepareTopology(
+  protocol: any,
+  record: any,
+  authorizedNodes: string[],
+  queryType: LiveCheckQueryType,
+  signerAddress: string,
+): Promise<void> {
+  if (authorizedNodes.length < 2 || sameAddress(authorizedNodes[0], authorizedNodes[1])) {
+    throw new Error("prepare: deployment authorizedNodes en az iki distinct dugum icermeli");
+  }
+  if (await protocol.isFailoverActive()) {
+    throw new Error("prepare: failover active; main node akisi baslatilamaz");
+  }
+
+  const required = BigInt(await protocol.requiredApprovals(queryType));
+  if (required !== 2n) {
+    throw new Error(
+      `prepare: LIVE_CHECK_QUERY_TYPE=${queryType} icin requiredApprovals=${required}; 2 olmali`,
+    );
+  }
+
+  const stakingAddress = record.contracts?.VeriarfyStaking;
+  if (typeof stakingAddress !== "string" || !ethers.isAddress(stakingAddress)) {
+    throw new Error("prepare: deployment JSON VeriarfyStaking adresi eksik/gecersiz");
+  }
+  const configuredStaking = getAddress(stakingAddress);
+  const onChainStaking = getAddress(await protocol.stakingModule());
+  if (onChainStaking === ethers.ZeroAddress || onChainStaking !== configuredStaking) {
+    throw new Error("prepare: staking module deployment ile eslesmiyor veya yok");
+  }
+
+  const staking = await ethers.getContractAt("VeriarfyStaking", configuredStaking);
+  const [participantCount, minParticipants, alreadyParticipant] = await Promise.all([
+    protocol.participantCount(),
+    protocol.minParticipants(),
+    protocol.hasAggregated(signerAddress),
+  ]);
+  const projectedParticipants = BigInt(participantCount) + (alreadyParticipant ? 0n : 1n);
+  if (projectedParticipants < BigInt(minParticipants)) {
+    throw new Error(
+      `prepare: k-anonimlik esigi saglanamaz (mevcut=${participantCount}, ` +
+        `beklenen en az=${minParticipants}, bu kosum sonrasi=${projectedParticipants})`,
+    );
+  }
+
+  const requiredStake = BigInt(await staking.minStake());
+  for (const node of authorizedNodes.slice(0, 2)) {
+    if (!(await protocol.isAuthorizedNode(node))) {
+      throw new Error(`prepare: node zincirde yetkili degil: ${node}`);
+    }
+    const stake = BigInt(await staking.stakeOf(node));
+    if (stake < requiredStake) {
+      throw new Error(`prepare: node stake yetersiz: ${node}`);
+    }
+    if (!(await staking.canApprove(node))) {
+      throw new Error(`prepare: node canApprove=false: ${node}`);
+    }
+  }
+}
+
+async function runApprovalStage(
+  stage: "node-1" | "node-2",
+  requestId: bigint,
+  queryId: bigint,
+  record: any,
+  authorizedNodes: string[],
+  signer: any,
+): Promise<void> {
+  const protocolAddress = record.contracts?.VeriarfyProtocol;
+  if (typeof protocolAddress !== "string" || !ethers.isAddress(protocolAddress)) {
+    throw new Error(`${stage}: deployment JSON VeriarfyProtocol adresi eksik/gecersiz`);
+  }
+  const protocol = await ethers.getContractAt("VeriarfyProtocol", protocolAddress);
+  const paymentsAddress = record.contracts?.VeriarfyPayments;
+  if (typeof paymentsAddress !== "string" || !ethers.isAddress(paymentsAddress)) {
+    throw new Error(`${stage}: deployment JSON VeriarfyPayments adresi eksik/gecersiz`);
+  }
+  const payments = await ethers.getContractAt("VeriarfyPayments", paymentsAddress);
+  const query = await payments.query(queryId);
+  if (BigInt(query.disclosureRequestId) !== requestId) {
+    throw new Error(`${stage}: queryId/requestId handoff eslesmiyor`);
+  }
+  const expectedIndex = stage === "node-1" ? 0 : 1;
+  const expectedSigner = authorizedNodes[expectedIndex];
+
+  if (!sameAddress(signer.address, expectedSigner)) {
+    throw new Error(
+      `${stage}: signer configured authorizedNodes[${expectedIndex}] ile eslesmiyor`,
+    );
+  }
+
+  const [requester, snapshotCount, requestedAt, finalized, approvals] =
+    await protocol.disclosureRequest(requestId);
+  void snapshotCount;
+  void requestedAt;
+  if (requester === ethers.ZeroAddress) throw new Error(`${stage}: disclosure request yok`);
+  if (!sameAddress(query.researcher, requester)) {
+    throw new Error(`${stage}: query researcher disclosure requester ile eslesmiyor`);
+  }
+  const requestRequired = BigInt(await protocol.disclosureRequiredApprovals(requestId));
+  if (requestRequired !== 2n) {
+    throw new Error(`${stage}: disclosure requiredApprovals=${requestRequired}; 2 olmali`);
+  }
+
+  const node1Approved = await protocol.hasApproved(requestId, authorizedNodes[0]);
+  const node2Approved = await protocol.hasApproved(requestId, authorizedNodes[1]);
+  const ownApproved = stage === "node-1" ? node1Approved : node2Approved;
+
+  // A count without the expected configured-node approvals is a foreign
+  // approver or an invalid operator handoff; never treat it as idempotent.
+  if (BigInt(approvals) === 2n && Boolean(finalized)) {
+    if (!node1Approved || !node2Approved) {
+      throw new Error(`${stage}: finalized durumunda beklenen iki node approval yok`);
+    }
+  } else if (
+    stage === "node-1" &&
+    BigInt(approvals) === 1n &&
+    !Boolean(finalized) &&
+    !node1Approved
+  ) {
+    throw new Error("node-1: mevcut ilk approval foreign signer tarafindan verilmis");
+  } else if (
+    stage === "node-2" &&
+    BigInt(approvals) === 1n &&
+    !Boolean(finalized) &&
+    !node1Approved
+  ) {
+    throw new Error("node-2: node-1 approval foreign signer tarafindan verilmis");
+  }
+
+  const decision = approvalStageDecision(stage, BigInt(approvals), Boolean(finalized));
+  if (decision === "already-complete") {
+    console.log(
+      `${stage}: approval state zaten dogru (approvals=${approvals}, finalized=${finalized})`,
+    );
+    return;
+  }
+  if (ownApproved) {
+    throw new Error(`${stage}: signer approval var ancak zincir state beklenmedik`);
+  }
+
+  // Buradan sonrasi yeni bir transaction gonderebilir. Terminal/idempotent
+  // durumlar yukarida salt-okunur kanitla dondu; guncel yetki, stake ve
+  // failover kontrolleri yalniz yeni approval icin zorunludur.
+  if (query.refunded) throw new Error(`${stage}: query iade edilmis`);
+  if (query.settled) throw new Error(`${stage}: query zaten settled`);
+  if (await protocol.isDisclosureGranted(requestId)) {
+    throw new Error(`${stage}: disclosure zaten execute edilmis`);
+  }
+  if (await protocol.isDisclosureRevoked(requestId)) {
+    throw new Error(`${stage}: disclosure revoke edilmis`);
+  }
+  if (await protocol.isFailoverActive()) {
+    throw new Error(`${stage}: failover active; main node approval durduruldu`);
+  }
+  if (!(await protocol.isAuthorizedNode(signer.address))) {
+    throw new Error(`${stage}: signer zincirde yetkili degil`);
+  }
+
+  const stakingAddress = record.contracts?.VeriarfyStaking;
+  if (typeof stakingAddress !== "string" || !ethers.isAddress(stakingAddress)) {
+    throw new Error(`${stage}: staking module deployment adresi eksik/gecersiz`);
+  }
+  const onChainStaking = getAddress(await protocol.stakingModule());
+  const configuredStaking = getAddress(stakingAddress);
+  if (onChainStaking === ethers.ZeroAddress || onChainStaking !== configuredStaking) {
+    throw new Error(`${stage}: staking module yok veya deployment ile eslesmiyor`);
+  }
+  const staking = await ethers.getContractAt("VeriarfyStaking", configuredStaking);
+  const requiredStake = BigInt(await staking.minStake());
+  const signerStake = BigInt(await staking.stakeOf(signer.address));
+  if (signerStake < requiredStake || !(await staking.canApprove(signer.address))) {
+    throw new Error(`${stage}: signer stake/canApprove preflight basarisiz`);
+  }
+
+  // getContractAt tek configured signer'a baglidir; requireSingleSigner ve
+  // expected-address kontrolleri yukarida bu runner'i fail-closed sabitler.
+  const tx = await protocol.approveDisclosure(requestId);
+  const receipt = await tx.wait();
+  console.log(`${stage} approveDisclosure tx: ${tx.hash} (gas ${receipt?.gasUsed})`);
+
+  const [, , , afterFinalized, afterApprovals] = await protocol.disclosureRequest(requestId);
+  assertApprovalStageResult(stage, BigInt(afterApprovals), Boolean(afterFinalized));
+  console.log(`${stage}: approval state approvals=${afterApprovals}, finalized=${afterFinalized}`);
+}
+
 /**
  * Sentetik panel — koken kaniti icin. Gercek hasta verisi DEGILDIR.
  *
@@ -48,7 +286,144 @@ const TEST_GROUP = 1;
  */
 let PANEL: number[] = [];
 
+async function runComplete(
+  queryId: bigint,
+  requestId: bigint | null,
+  record: any,
+  authorizedNodes: string[],
+  signer: any,
+): Promise<void> {
+  if (!sameAddress(signer.address, configuredDeployer(record))) {
+    throw new Error("complete: signer deployment deployer adresi ile eslesmiyor");
+  }
+  if (requestId === null) throw new Error("complete: LIVE_CHECK_REQUEST_ID eksik");
+
+  const protocolAddress = record.contracts?.VeriarfyProtocol;
+  const paymentsAddress = record.contracts?.VeriarfyPayments;
+  const tokenAddress = record.contracts?.PaymentToken;
+  if (
+    typeof protocolAddress !== "string" ||
+    typeof paymentsAddress !== "string" ||
+    typeof tokenAddress !== "string" ||
+    !ethers.isAddress(protocolAddress) ||
+    !ethers.isAddress(paymentsAddress) ||
+    !ethers.isAddress(tokenAddress)
+  ) {
+    throw new Error("complete: deployment JSON payment/protocol adresleri eksik/gecersiz");
+  }
+
+  const protocol = await ethers.getContractAt("VeriarfyProtocol", protocolAddress);
+  const payments = await ethers.getContractAt("VeriarfyPayments", paymentsAddress);
+  const token = await ethers.getContractAt("StableTestToken", tokenAddress);
+  let q: any = await payments.query(queryId);
+
+  if (!sameAddress(q.researcher, signer.address)) {
+    throw new Error("complete: query researcher signer ile eslesmiyor");
+  }
+  if (BigInt(q.disclosureRequestId) !== requestId) {
+    throw new Error("complete: query/request id handoff eslesmiyor");
+  }
+  if (q.refunded) throw new Error("complete: query iade edilmis");
+
+  const [, , , finalized, approvals] = await protocol.disclosureRequest(requestId);
+  const requestRequired = BigInt(await protocol.disclosureRequiredApprovals(requestId));
+  const [node1Approved, node2Approved] = await Promise.all([
+    protocol.hasApproved(requestId, authorizedNodes[0]),
+    protocol.hasApproved(requestId, authorizedNodes[1]),
+  ]);
+  assertCompleteApprovalState(
+    requestRequired,
+    BigInt(approvals),
+    Boolean(finalized),
+    Boolean(node1Approved),
+    Boolean(node2Approved),
+  );
+  if (await protocol.isDisclosureRevoked(requestId)) {
+    throw new Error("complete: disclosure revoke edilmis");
+  }
+
+  if (!(await protocol.isDisclosureGranted(requestId))) {
+    const windowEnd = BigInt(await protocol.challengeWindowEnd(requestId));
+    const readBlock = async (): Promise<bigint> => {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          return BigInt(await ethers.provider.getBlockNumber());
+        } catch (err) {
+          if (attempt === 4) throw err;
+          await new Promise((resolve) => setTimeout(resolve, 3_000));
+        }
+      }
+      throw new Error("blok numarasi okunamadi");
+    };
+
+    let current = await readBlock();
+    while (current < windowEnd) {
+      console.log(`complete: challenge window acik (blok ${current} -> ${windowEnd})`);
+      await new Promise((resolve) => setTimeout(resolve, 6_000));
+      current = await readBlock();
+    }
+
+    const executeTx = await protocol.executeDisclosure(requestId);
+    const executeReceipt = await executeTx.wait();
+    console.log(`executeDisclosure tx: ${executeTx.hash} (gas ${executeReceipt?.gasUsed})`);
+  }
+  if (!(await protocol.isDisclosureGranted(requestId))) {
+    throw new Error("complete: disclosure execute edilmedi");
+  }
+
+  if (q.settled) {
+    console.log("complete: query zaten settled");
+  } else {
+    const settleTx = await payments.settleQuery(queryId);
+    const settleReceipt = await settleTx.wait();
+    console.log(`settleQuery tx: ${settleTx.hash} (gas ${settleReceipt?.gasUsed})`);
+  }
+  q = await payments.query(queryId);
+
+  const rawWeight = await payments.coverageWeight(queryId, signer.address);
+  const weighted = await payments.weightedCoverage(queryId, signer.address);
+  const weightedAll = await payments.weightedTotal(queryId);
+  console.log(`odeme kapsama ${rawWeight} alan; agirlik ${weighted}/${weightedAll}`);
+
+  if (await payments.hasClaimed(queryId, signer.address)) {
+    console.log("complete: pay zaten claim edilmis");
+  } else {
+    const share = await payments.claimable(queryId, signer.address);
+    if (share === 0n) throw new Error("complete: claimable pay sifir");
+    const balanceBefore = await token.balanceOf(signer.address);
+    const claimTx = await payments.claim(queryId);
+    const claimReceipt = await claimTx.wait();
+    const gained = (await token.balanceOf(signer.address)) - balanceBefore;
+    console.log(`claim tx: ${claimTx.hash} (gas ${claimReceipt?.gasUsed})`);
+    if (gained !== share) throw new Error(`complete: claim tutari farkli: ${gained} != ${share}`);
+  }
+
+  console.log("--- Gizlilik Paneli okumasi ---");
+  const [pendingTotal, pendingIds] = await payments.pendingRewards(signer.address);
+  const panelFields = {
+    cid: await protocol.userCIDs(signer.address),
+    participantIndex: await protocol.participantIndex(signer.address),
+    participantCount: await protocol.participantCount(),
+    minParticipants: await protocol.minParticipants(),
+    inPool: (await protocol.leftPoolAtBlock(signer.address)) === 0n,
+    pendingRewards: pendingTotal.toString(),
+    pendingQueries: pendingIds.length,
+    tokenBalance: (await token.balanceOf(signer.address)).toString(),
+    tokenSymbol: await token.symbol(),
+  };
+  for (const [key, value] of Object.entries(panelFields)) console.log(`  ${key}: ${value}`);
+  if (panelFields.cid === ethers.ZeroHash) throw new Error("complete: panel CID okuyamadi");
+  if (!panelFields.inPool) throw new Error("complete: katilimci havuzdan cikmis gorunuyor");
+  console.log("Canli dogrulama complete asamasi tamamlandi.");
+}
+
 async function main() {
+  const stage: LiveCheckStage = parseLiveCheckStage(process.env.LIVE_CHECK_STAGE);
+  const d15Profile =
+    process.env.D15_PROFILE === D15_PROFILE_ID ? loadD15Profile() : null;
+  if (process.env.D15_PROFILE && !d15Profile) {
+    throw new Error(`bilinmeyen D15_PROFILE: ${process.env.D15_PROFILE}`);
+  }
   if (network.name === "hardhat") {
     throw new Error(
       "Bu betik gercek agda anlamlidir; mock ag icin `npx hardhat test` kullanin.",
@@ -58,15 +433,83 @@ async function main() {
   const record = JSON.parse(
     readFileSync(join(__dirname, "..", "deployments", `${network.name}.json`), "utf8"),
   );
-  const address: string = record.contracts.VeriarfyProtocol;
+  const authorizedNodes = deploymentNodeAddresses(record);
+  if (d15Profile) {
+    if (
+      !sameProfileAddress(configuredDeployer(record), d15Profile.deployer) ||
+      authorizedNodes.length !== 2 ||
+      !sameProfileAddress(authorizedNodes[0], d15Profile.authorizedNodes[0]) ||
+      !sameProfileAddress(authorizedNodes[1], d15Profile.authorizedNodes[1])
+    ) {
+      throw new Error("deployment JSON D15 public profile ile eslesmiyor");
+    }
+  }
+  const handoffRequestId =
+    stage === "node-1" || stage === "node-2" || stage === "complete"
+      ? parseLiveCheckId(process.env.LIVE_CHECK_REQUEST_ID, "LIVE_CHECK_REQUEST_ID")
+      : null;
+  const handoffQueryId =
+    stage === "node-1" || stage === "node-2" || stage === "complete"
+      ? parseLiveCheckId(process.env.LIVE_CHECK_QUERY_ID, "LIVE_CHECK_QUERY_ID")
+      : null;
+  const queryType =
+    stage === "prepare" ? parseLiveCheckQueryType(process.env.LIVE_CHECK_QUERY_TYPE) : null;
+  if (d15Profile && stage === "prepare" && queryType !== d15Profile.queryType) {
+    throw new Error(`prepare query type ${d15Profile.queryType} olmali`);
+  }
+
+  const address: string = record.contracts?.VeriarfyProtocol;
+  if (typeof address !== "string" || !ethers.isAddress(address)) {
+    throw new Error("deployment JSON VeriarfyProtocol adresi eksik/gecersiz");
+  }
+
+  if (stage === "node-1" || stage === "node-2") {
+    const signer = requireSingleSigner(await ethers.getSigners());
+    await runApprovalStage(
+      stage,
+      handoffRequestId as bigint,
+      handoffQueryId as bigint,
+      record,
+      authorizedNodes,
+      signer,
+    );
+    return;
+  }
+
+  if (stage === "complete") {
+    const signer = requireSingleSigner(await ethers.getSigners());
+    await runComplete(
+      handoffQueryId as bigint,
+      handoffRequestId,
+      record,
+      authorizedNodes,
+      signer,
+    );
+    return;
+  }
+
+  const signer = requireSingleSigner(await ethers.getSigners());
+  if (!sameAddress(signer.address, configuredDeployer(record))) {
+    throw new Error("prepare: signer deployment deployer adresi ile eslesmiyor");
+  }
+  const protocol = await ethers.getContractAt("VeriarfyProtocol", address);
+
+  // This is deliberately before relayer initialization, proof generation, or
+  // the first transaction.  It checks the deployed topology instead of
+  // trusting a second environment variable to describe it.
+  await assertPrepareTopology(
+    protocol,
+    record,
+    authorizedNodes,
+    queryType as LiveCheckQueryType,
+    signer.address,
+  );
 
   // Gercek agda relayer/KMS istemcisi tembel kurulur; bu cagri olmadan
   // `createEncryptedInput` "plugin is not initialized" ile duser.
   await fhevm.initializeCLIApi();
 
-  const [signer] = await ethers.getSigners();
-  const protocol = await ethers.getContractAt("VeriarfyProtocol", address);
-
+  console.log(`Asama    : ${stage}`);
   console.log(`Ag       : ${network.name} (mock: ${fhevm.isMock})`);
   console.log(`Kontrat  : ${address}`);
   console.log(`Gonderen : ${signer.address}`);
@@ -90,8 +533,7 @@ async function main() {
   console.log("ZK koken kaniti uretiliyor...");
   const provenance = await import("@veriarfy/circuits/provenance");
   const circuits = await import("@veriarfy/circuits");
-  const snarkjs: any = await import("snarkjs");
-  const { institution, registry: institutionRegistry } = await provenance.developmentRegistry();
+  const { registry: institutionRegistry } = await provenance.developmentRegistry();
 
   // Panel uzunlugu devreden gelir; sabit yazilmaz.
   PANEL = Array.from(
@@ -128,13 +570,19 @@ async function main() {
   });
 
   const startedAt = Date.now();
-  const { proof } = await snarkjs.groth16.fullProve(
+  const { proof, publicSignals } = await fullProveIsolated(
     provenanceInput,
     join(circuitsDir, "build", "data_provenance_js", "data_provenance.wasm"),
     join(circuitsDir, "build", "data_provenance_final.zkey"),
   );
   const { a, b, c } = circuits.toSolidityCalldata(proof);
   console.log(`  kanit uretildi: ${Date.now() - startedAt} ms`);
+  const provenanceVerifier = await ethers.getContractAt(
+    "DataProvenanceVerifier", await protocol.provenanceVerifier(),
+  );
+  if (!(await provenanceVerifier.verifyProof.staticCall(a, b, c, publicSignals))) {
+    throw new Error("prepare: koken proving key zincirdeki verifier ile uyusmuyor veya kanit gecersiz; transaction gonderilmedi");
+  }
 
   console.log("submitRecord gonderiliyor (kanitla)...");
   const submitTx = await protocol
@@ -375,7 +823,7 @@ async function main() {
 
   // Dozaj 1 gonderildi; nadir esigi 2'dir. Sonuc "nadir" cikarsa ya kod ya da
   // esikli cozum bozuk demektir — sessizce gecilmemeli.
-  if (TEST_DOSAGE !== 2 && isCarrier) {
+  if (isCarrier) {
     throw new Error("Nadirlik biti yanlis: dozaj 2 degilken tasiyici isaretlendi");
   }
 
@@ -405,10 +853,7 @@ async function main() {
     const identityTree = new circuits.IdentityTree();
     identityTree.insert(identity.commitment);
 
-    // Kontratin tanidigi kok bu agacinki olmali; sahip olarak koku yaziyoruz.
-    await (await registryContract.updateRoot(identityTree.root)).wait();
-
-    const { proof: identityProof } = await snarkjs.groth16.fullProve(
+    const { proof: identityProof, publicSignals: identitySignals } = await fullProveIsolated(
       circuits.buildCircuitInput({
         identity,
         tree: identityTree,
@@ -419,6 +864,17 @@ async function main() {
       join(circuitsDir, "build", "researcher_identity_final.zkey"),
     );
     const idCalldata = circuits.toSolidityCalldata(identityProof);
+    const identityVerifier = await ethers.getContractAt(
+      "Groth16Verifier", await registryContract.verifier(),
+    );
+    if (!(await identityVerifier.verifyProof.staticCall(
+      idCalldata.a, idCalldata.b, idCalldata.c, identitySignals,
+    ))) {
+      throw new Error("prepare: kimlik proving key zincirdeki verifier ile uyusmuyor veya kanit gecersiz; registry root degistirilmedi");
+    }
+
+    // Kanit tamamlanmadan zincirde kok degistirilmez.
+    await (await registryContract.updateRoot(identityTree.root)).wait();
 
     const regTx = await registryContract.register(
       identityTree.root,
@@ -458,33 +914,6 @@ async function main() {
     console.log("  harcama izni verildi");
   }
 
-  // BSKK-44 dugumu — esik hesabi dugum sayisina baglidir, bu yuzden
-  // `requiredApprovals` cagrisindan ONCE atanmali (aksi halde
-  // `NoAuthorizedNodes` ile duser).
-  if (!(await protocol.isAuthorizedNode(signer.address))) {
-    await (await protocol.authorizeNode(signer.address)).wait();
-    console.log("Yetkili dugum atandi (tek cuzdanli duman testi)");
-  }
-
-  // Rapor §2.7: onay vermek EKONOMIK SORUMLULUK gerektirir. Modul bagliysa
-  // teminatsiz dugum onay veremez.
-  const stakingAddress: string | undefined = record.contracts.VeriarfyStaking;
-  const staking = stakingAddress
-    ? await ethers.getContractAt("VeriarfyStaking", stakingAddress)
-    : null;
-
-  if (staking) {
-    const need = await staking.minStake();
-    const have = await staking.stakeOf(signer.address);
-    if (have < need) {
-      const stakeTx = await staking.stake({ value: need - have });
-      await stakeTx.wait();
-      console.log(`Dugum teminati yatirildi: ${ethers.formatEther(need)} ETH (${stakeTx.hash})`);
-    } else {
-      console.log(`Dugum teminati yeterli: ${ethers.formatEther(have)} ETH`);
-    }
-  }
-
   // --- Dead Man's Switch dogrulamasi (rapor §2.6.1) ------------------------
   //
   // Gercek agda kanitlanan sey: devir esigi yururlukte, ana dugum hayattayken
@@ -512,30 +941,22 @@ async function main() {
   }
   console.log("");
 
-  // TEK CUZDANLI TEST — k-anonimlik esigi gecici olarak dusurulur.
-  //
-  // Uretimde `minParticipants` 10'dur ve DUSURULMEMELIDIR: tek katilimciyken
-  // havuzu cozmek, dogrudan o kisinin verisini okumak demektir. Burada tek
-  // cuzdanla uctan uca akisi dogrulamak icin 1'e cekiliyor.
-  const originalMinParticipants = await protocol.minParticipants();
-  if (originalMinParticipants > 1n) {
-    await (await protocol.setMinParticipants(1)).wait();
-    console.log(
-      `k-anonimlik esigi ${originalMinParticipants} -> 1 (YALNIZCA duman testi icin, sonda geri alinir)`,
+  // Query type was validated before the first mutation; this second read is
+  // included in the handoff evidence emitted below.
+  const needed = BigInt(await protocol.requiredApprovals(queryType as LiveCheckQueryType));
+  if (needed !== 2n) {
+    throw new Error(
+      `prepare: openQuery oncesi requiredApprovals=${needed}; 2 olmali`,
     );
   }
+  console.log(`BSKK-44 esigi: ${needed} onay (sorgu tipi: ${queryType})`);
 
-  // Rapor §2.6: sorgu tipi esigi belirler. Genel istatistik -> 4/10.
-  const STATISTICS = 4;
-  const needed = await protocol.requiredApprovals(STATISTICS);
-  console.log(`BSKK-44 esigi: ${needed} onay (sorgu tipi: genel istatistik, 4/10)`);
-
-  const openTx = await payments.openQuery(STATISTICS);
+  const openTx = await payments.openQuery(queryType as LiveCheckQueryType);
   const openReceipt = await openTx.wait();
   const queryId = (await payments.nextQueryId()) - 1n;
   console.log(`openQuery tx: ${openTx.hash}  (gas ${openReceipt?.gasUsed})`);
 
-  let q = await payments.query(queryId);
+  const q = await payments.query(queryId);
   console.log(`  ucret ${q.fee} EMANETTE (acilim talebi #${q.disclosureRequestId})`);
 
   // Ucret onay gelene kadar dagitilmaz — emanet gercekten calisiyor mu?
@@ -545,146 +966,10 @@ async function main() {
   }
   console.log("  emanet dogrulandi: onay gelmeden pay hesaplanmiyor");
 
-  const approveTx = await protocol.approveDisclosure(q.disclosureRequestId);
-  await approveTx.wait();
-  console.log(`approveDisclosure tx: ${approveTx.hash}`);
+  console.log(`LIVE_CHECK_QUERY_ID=${queryId}`);
+  console.log(`LIVE_CHECK_REQUEST_ID=${q.disclosureRequestId}`);
+  return;
 
-  if (!(await protocol.isDisclosureFinalized(q.disclosureRequestId))) {
-    throw new Error("esik saglanmadi — onay sayisi yetersiz olabilir");
-  }
-
-  // Rapor §2.7.1: esikten SONRA itiraz suresi baslar. Cozum yetkisi bu sure
-  // dolmadan verilmez — `FHE.allow` geri alinamadigi icin sira boyle olmak
-  // zorunda. Buradaki bekleme, mekanizmanin gercek agda da yururlukte
-  // oldugunun kanitidir.
-  const windowEnd: bigint = await protocol.challengeWindowEnd(q.disclosureRequestId);
-  if (await protocol.isDisclosureGranted(q.disclosureRequestId)) {
-    console.log("Acilim zaten yurutulmus — itiraz adimi atlaniyor.");
-  } else {
-    // Blok numarasi yoklamasi RPC kopmalarina DAYANIKLI olmali: burada
-    // dakikalarca beklenir ve tek bir ECONNRESET butun canli dogrulamayi
-    // bosa cikarirdi. Gecici hata yutulur, kalici hata sonunda yine duser.
-    const readBlock = async (): Promise<bigint> => {
-      for (let attempt = 0; attempt < 5; attempt++) {
-        try {
-          return BigInt(await ethers.provider.getBlockNumber());
-        } catch (err) {
-          if (attempt === 4) throw err;
-          await new Promise((resolve) => setTimeout(resolve, 3_000));
-        }
-      }
-      throw new Error("blok numarasi okunamadi");
-    };
-
-    let current = await readBlock();
-    if (current < windowEnd) {
-      console.log(`Itiraz suresi acik: blok ${current} -> ${windowEnd}, bekleniyor...`);
-      while (current < windowEnd) {
-        await new Promise((resolve) => setTimeout(resolve, 6_000));
-        current = await readBlock();
-      }
-      console.log(`  itiraz suresi doldu (blok ${current})`);
-    }
-
-    const execTx = await protocol.executeDisclosure(q.disclosureRequestId);
-    const execReceipt = await execTx.wait();
-    console.log(`executeDisclosure tx: ${execTx.hash}  (gas ${execReceipt?.gasUsed})`);
-  }
-
-  if (!(await protocol.isDisclosureGranted(q.disclosureRequestId))) {
-    throw new Error("itiraz suresi sonrasi cozum yetkisi verilmedi");
-  }
-
-  const settleTx = await payments.settleQuery(queryId);
-  const settleReceipt = await settleTx.wait();
-  console.log(`settleQuery tx: ${settleTx.hash}  (gas ${settleReceipt?.gasUsed})`);
-
-  q = await payments.query(queryId);
-  console.log(`  ucret ${q.fee} -> katilimcilara ${q.liquidityPot}, hazineye ${q.fee - q.liquidityPot}`);
-
-  // KITLIK AGIRLIGI — odemenin gercek payi.
-  //
-  // `coverageWeight` "kac alana veri verdin" der; agirlikli olan "o alanlar
-  // ne kadar nadirdi" der. Ucreti belirleyen formulle AYNI sayidir.
-  const rawWeight = await payments.coverageWeight(queryId, signer.address);
-  const weighted = await payments.weightedCoverage(queryId, signer.address);
-  const weightedAll = await payments.weightedTotal(queryId);
-  console.log(
-    `  kapsama ${rawWeight} alan · odeme agirligi ${weighted}/${weightedAll}` +
-      (rawWeight > 0n
-        ? `  (alan basi ortalama ${Number(weighted) / Number(rawWeight) / 10_000}x)`
-        : ""),
-  );
-
-  // Gonderen ayni zamanda katilimci oldugu icin kendi payini cekebilir.
-  const share = await payments.claimable(queryId, signer.address);
-  if (share === 0n) {
-    throw new Error(
-      "pay hesaplanamadi — izin sorgunun acildigi blokta yururlukte olmayabilir",
-    );
-  }
-
-  const balanceBefore = await token.balanceOf(signer.address);
-  const claimTx = await payments.claim(queryId);
-  const claimReceipt = await claimTx.wait();
-  const gained = (await token.balanceOf(signer.address)) - balanceBefore;
-
-  console.log(`claim tx: ${claimTx.hash}  (gas ${claimReceipt?.gasUsed})`);
-  console.log(`  cekilen: ${gained}`);
-
-  if (gained !== share) {
-    throw new Error(`cekilen tutar beklenenden farkli: ${gained} != ${share}`);
-  }
-
-  // --- 4) Gizlilik Panelinin okudugu her alan gercekten geliyor mu ---------
-  //
-  // Panel (packages/web) bu cagrilarin tamamini yapar. Burada calistirilmasi,
-  // ABI uyusmazliklarinin ya da eksik view fonksiyonlarinin arayuzde degil
-  // BURADA yakalanmasini saglar.
-  console.log("--- Gizlilik Paneli okumasi ---");
-
-  const [pendingTotal, pendingIds] = await payments.pendingRewards(signer.address);
-  const panelFields = {
-    cid: await protocol.userCIDs(signer.address),
-    taahhut: (await protocol.panelCommitment(signer.address)).toString().slice(0, 14) + "…",
-    katilimIndeksi: await protocol.participantIndex(signer.address),
-    havuzKatilimci: await protocol.participantCount(),
-    kAnonimlik: await protocol.minParticipants(),
-    havuzdaMi: (await protocol.leftPoolAtBlock(signer.address)) === 0n,
-    cikisBlogu: await protocol.leftPoolAtBlock(signer.address),
-    bekleyenOdul: pendingTotal.toString(),
-    bekleyenSorgu: pendingIds.length,
-    tokenBakiye: (await token.balanceOf(signer.address)).toString(),
-    tokenSembol: await token.symbol(),
-  };
-
-  for (const [key, value] of Object.entries(panelFields)) {
-    console.log(`  ${key.padEnd(16)}: ${value}`);
-  }
-
-  if (panelFields.cid === ethers.ZeroHash) {
-    throw new Error("panel CID okuyamadi");
-  }
-  if (!panelFields.havuzdaMi) {
-    throw new Error("katilimci havuzdan cikmis gorunuyor");
-  }
-
-  // K-ANONIMLIK GERI ALINIR — betigin en onemli temizligi.
-  //
-  // Onceden esik 1'de BIRAKILIYORDU. Betik bir kez kosunca dagitim, tek
-  // katilimciyken bile sorgu acilabilen bir durumda kaliyordu; o da havuzu
-  // cozmenin dogrudan o kisinin verisini okumak demek oldugu bir hal.
-  // "Gecici" olan bir seyin gecici kalmasi kendiliginden olmuyor.
-  if (originalMinParticipants > 1n) {
-    await (await protocol.setMinParticipants(originalMinParticipants)).wait();
-    console.log(`\nk-anonimlik esigi GERI ALINDI: ${originalMinParticipants}`);
-  }
-
-  console.log("\nCanli dogrulama tamam: veri, kanit ve odeme dongusu gercek agda kapandi.");
-  if (aggTx) {
-    console.log(`Etherscan (dozaj) : https://sepolia.etherscan.io/tx/${aggTx.hash}`);
-  }
-  console.log(`Etherscan (odeme) : https://sepolia.etherscan.io/tx/${claimTx.hash}`);
 }
 
 main()

@@ -1,23 +1,33 @@
 {
   "network": "sepolia",
   "chainId": 11155111,
-  "deployer": "0xD37Df9f97E5e1D285a5B6143e2FB970fD9B108D4",
+  "deployer": "0x836091aB39884BB57DB4Dd94Ee120286Ad7e4fe0",
+  "authorizedNodes": [
+    "0x26E2b3a873B057E50f4caC0D3efA9489dEF93208",
+    "0x7c8cbfdD76Ee47425CAf33aBF663509cE7A602fe"
+  ],
   "contracts": {
-    "Groth16Verifier": "0xAE822f636675e650D7C18cC059fd5e9a9F8Ecd17",
-    "DataProvenanceVerifier": "0x0513373dd7CB26c20c22b0ED2cD01D49408B0e7F",
-    "VeriarfyProtocol": "0x623351c69c6c5365C98A8D064721D4EF7AF0B0a4",
-    "VeriarfyPayments": "0xa30bFCb288A9B81f46FD2d16c81c22D7852d74dA",
-    "VeriarfyBiomarkers": "0x20674472d2B32398C5bF656f23373099311d27a1",
-    "VeriarfyStaking": "0x5033950d0aB4148f3F6101AE1E6cac6d5cBD2C67",
-    "VeriarfyStorage": "0xa3f793c5B231d8148d77e80d8412D78bFC7014eC",
-    "PaymentToken": "0x6E422525eEFdD0Ad56575027a36CD18eE9960984",
-    "VeriArfyRegistry": "0xAf206523D4C4fC8EE47919C198Fc35Ce5ddd6ED6",
-    "AnxietyStudy": "0xE3B93eeBBF54Ba017bF1E157dc0d6eaa325d66de"
+    "ContingencyStats": "0xfb8913A9E1109aDcA7ee01517bd47af01FCa6DCb",
+    "CoverageBits": "0x0B89f17DAa0cecb88bEF7d82fF708f91e4a6D3E7",
+    "StableTestToken": "0x6eE2984546034bF78C8ffFCaDB8cED1434C16758",
+    "BiomarkerStats": "0x1aAF2Ae06A6B0bb8E03377134FB75a0585583625",
+    "VeriarfyStorage": "0x5DbC770ed983Be52359B47D971598F09Aa4fD058",
+    "PaymentToken": "0x6eE2984546034bF78C8ffFCaDB8cED1434C16758",
+    "Groth16Verifier": "0x8e3Ed62072CD40e852bEebFd1aE109951f19dCDB",
+    "VeriArfyRegistry": "0xfc6b3eeA139c3FDe044a52c65CdC6D0ff71c790B",
+    "AnxietyStudy": "0xcc7a9B96b7a2f5854a1Edf69110Ba9aBA9737C76",
+    "DataProvenanceVerifier": "0x67c4Cb7E33602394827fc7186B205dAd9F0fA1a3",
+    "VeriarfyProtocol": "0xcD3B1a850Eb33AC74786030919E0203005675CFB",
+    "VeriarfyPayments": "0x46d6CE86163Cc76168AdE12CC9b07034139B9507",
+    "VeriarfyBiomarkers": "0xEe4804448fC0E246763868C90Ca8A1B4CfA8014f",
+    "VeriarfyStaking": "0xc3e1ae7fC78be045Ac9C80D7C453B03356B69f7f"
   },
   "paymentTokenIsTestToken": true,
   "liquidityShareBps": 8000,
   "initialRoot": "15019797232609675441998260052101280400536945603062888308240081994073687793470",
   "accreditedRoot": "400204218792704578759845465933970137697021750464618602026640937740276740682",
-  "deployedAt": "2026-08-21T15:11:49.683Z",
-  "deployedAtBlock": 11536812
+  "deployedAt": "2026-09-06T11:43:58.495Z",
+  "deployedAtBlock": 11647006,
+  "reusedStorageDeployedAtBlock": 11643258,
+  "redeployPlanHash": "0xd026de9debced25767b1d6d5b023aa2157318ede64204a3a27ee14da8d15a62c"
 }

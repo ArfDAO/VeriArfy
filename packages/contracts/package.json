@@ -8,9 +8,16 @@
     "test": "hardhat test",
     "verify": "hardhat test test/StudyVerification.test.ts",
     "deploy:sepolia": "hardhat run scripts/deploy.ts --network sepolia",
+    "deploy:d15:sepolia": "hardhat run --no-compile scripts/deploy.ts --network sepolia",
+    "d15-resume:sepolia": "hardhat run --no-compile scripts/d15-resume.ts --network sepolia",
     "node": "hardhat node",
-    "preflight:sepolia": "hardhat run scripts/preflight.ts --network sepolia",
-    "live-check:sepolia": "hardhat run scripts/live-check.ts --network sepolia"
+    "d15-readiness:sepolia": "hardhat run --no-compile scripts/d15-readiness.ts --network sepolia",
+    "preflight:sepolia": "hardhat run --no-compile scripts/preflight.ts --network sepolia",
+    "proof-check:sepolia": "hardhat run --no-compile scripts/proof-check.ts --network sepolia",
+    "d15-redeploy-plan:sepolia": "hardhat run --no-compile scripts/d15-redeploy-plan-write.ts --network sepolia",
+    "d15-redeploy:sepolia": "hardhat run --no-compile scripts/d15-redeploy.ts --network sepolia",
+    "stake-node:sepolia": "hardhat run --no-compile scripts/stake-node.ts --network sepolia",
+    "live-check:sepolia": "hardhat run --no-compile scripts/live-check.ts --network sepolia"
   },
   "devDependencies": {
     "@fhevm/hardhat-plugin": "^0.4.2",

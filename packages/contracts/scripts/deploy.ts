@@ -2,6 +2,9 @@ import { writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { ethers, network } from "hardhat";
+import { D15_PROFILE_ID, loadD15Profile, sameAddress } from "./d15-profile";
+import { parseAuthorizedNodeAddresses } from "./node-addresses";
+import { loadStudyConfig } from "./study-config";
 
 /**
  * Calisma kontratlarini deploy eder:
@@ -11,9 +14,70 @@ import { ethers, network } from "hardhat";
  * yoksa bos agac koku kullanilir ve sonra `push-root` ile guncellenir.
  */
 async function main() {
+  // Ilk zincir islemi veya signer kullanimi oncesinde fail-closed dogrulama.
+  const authorizedNodes = parseAuthorizedNodeAddresses(
+    process.env.AUTHORIZED_NODE_ADDRESSES,
+  );
+  const d15Profile =
+    process.env.D15_PROFILE === D15_PROFILE_ID ? loadD15Profile() : null;
+  if (process.env.D15_PROFILE && !d15Profile) {
+    throw new Error(`bilinmeyen D15_PROFILE: ${process.env.D15_PROFILE}`);
+  }
+  if (d15Profile) {
+    if (network.name !== d15Profile.network) {
+      throw new Error(`D15 deploy yalniz ${d15Profile.network} aginda calisir`);
+    }
+    if (process.env.D15_EXECUTION_ACK !== "deploy") {
+      throw new Error("D15 deploy icin D15_EXECUTION_ACK=deploy zorunludur");
+    }
+    if (
+      authorizedNodes.length !== 2 ||
+      !sameAddress(authorizedNodes[0], d15Profile.authorizedNodes[0]) ||
+      !sameAddress(authorizedNodes[1], d15Profile.authorizedNodes[1])
+    ) {
+      throw new Error("AUTHORIZED_NODE_ADDRESSES D15 public profile ile eslesmiyor");
+    }
+    if (process.env.PAYMENT_TOKEN) {
+      throw new Error("D15 test profile harici PAYMENT_TOKEN kabul etmez");
+    }
+    const chain = await ethers.provider.getNetwork();
+    if (chain.chainId !== BigInt(d15Profile.chainId)) {
+      throw new Error(
+        `D15 deploy chainId ${chain.chainId}; ${d15Profile.chainId} bekleniyordu`,
+      );
+    }
+  }
+
+  // Calisma ve metrik dosyalari ilk transaction'dan once okunup dogrulanir.
+  // Boylece tasinamayan eski mutlak yol veya malformed metrik paneli zincirde
+  // kismi deployment birakmadan durur.
+  const studyEnvPath = join(__dirname, "..", "study", "deploy-env.json");
+  const studyConfig = loadStudyConfig(studyEnvPath, {
+    requireMetrics: Boolean(d15Profile),
+  });
+  const studyEnv = studyConfig.env;
+
   const { IdentityTree } = await import("@veriarfy/circuits");
 
   const [deployer] = await ethers.getSigners();
+  if (d15Profile && !sameAddress(deployer.address, d15Profile.deployer)) {
+    throw new Error(
+      `D15 deployer signer eslesmiyor: ${deployer.address} != ${d15Profile.deployer}`,
+    );
+  }
+
+  // Kismi D/15 deployment nonce 15'e geldiyse tam deploy'u yeniden baslatmak,
+  // o slota yanlis bir transaction yerlestirir. Yalniz bos hesap kabul edilir.
+  if (d15Profile) {
+    const latestNonce = await ethers.provider.getTransactionCount(deployer.address, "latest");
+    const pendingNonce = await ethers.provider.getTransactionCount(deployer.address, "pending");
+    if (latestNonce !== 0 || pendingNonce !== 0) {
+      throw new Error(
+        `D15 deploy yalniz nonce 0 hesabinda baslar (latest=${latestNonce}, pending=${pendingNonce}); ` +
+          "kismi deployment icin chain:d15-resume kullanin",
+      );
+    }
+  }
   console.log(`Ag: ${network.name}`);
   console.log(`Deployer: ${deployer.address}`);
 
@@ -72,8 +136,10 @@ async function main() {
   // VeriarfyProtocol — sifreli havuz + IPFS indeksi + esikli cozum.
   // Sahip olarak deployer atanir; URETIMDE bu adres cok imzali bir cuzdan olmali.
   // Esik ve k-anonimlik siniri ortam degiskenleriyle verilebilir.
-  const threshold = Number(process.env.DISCLOSURE_THRESHOLD ?? 2);
-  const minParticipants = Number(process.env.MIN_PARTICIPANTS ?? 10);
+  const threshold = d15Profile ? 2 : Number(process.env.DISCLOSURE_THRESHOLD ?? 2);
+  const minParticipants = d15Profile
+    ? d15Profile.minParticipants
+    : Number(process.env.MIN_PARTICIPANTS ?? 10);
 
   // KUTUPHANE BAGLAMA.
   //
@@ -111,6 +177,13 @@ async function main() {
   await protocol.waitForDeployment();
   const protocolAddress = await protocol.getAddress();
   console.log(`VeriarfyProtocol: ${protocolAddress} (esik ${threshold}, min ${minParticipants} katilimci)`);
+
+  // Yetki yalnizca public adres listesinden verilir; deployer private key'i
+  // dugum anahtari olarak okunmaz ve fonlama/teminat islemi yapilmaz.
+  for (const nodeAddress of authorizedNodes) {
+    await (await protocol.authorizeNode(nodeAddress)).wait();
+    console.log(`  yetkili dugum: ${nodeAddress}`);
+  }
 
   // --- Odeme katmani -------------------------------------------------------
   //
@@ -168,17 +241,12 @@ async function main() {
   // `study/deploy-env.json`, `packages/web/scripts/prepare-study.ts` tarafindan
   // uretilir: panel ozetleri ORADA, panelin kendisiyle ayni yerde hesaplanir ki
   // ikisi birbirinden sapamasin. Dosya yoksa ortam degiskenlerine dusulur.
-  const studyEnvPath = join(__dirname, "..", "study", "deploy-env.json");
-  const studyEnv: Record<string, string> = existsSync(studyEnvPath)
-    ? JSON.parse(readFileSync(studyEnvPath, "utf8"))
-    : {};
-
   if (Object.keys(studyEnv).length > 0) {
     console.log(`\nCalisma tanimlari: study/deploy-env.json (${studyEnv.preparedAt})`);
   }
 
   const pick = (key: string, fallback = "") =>
-    process.env[key] ?? studyEnv[key] ?? fallback;
+    (process.env[key] ?? studyEnv[key] ?? fallback) as string;
 
   // --- SNP paneli (rapor §3.3) ---------------------------------------------
   //
@@ -240,9 +308,9 @@ async function main() {
 
   // Metrik paneli: tanimi `METRICS_FILE` ile verilir (JSON dizisi). Verilmezse
   // calisma yalnizca genomiktir ve metrik kanali bos kalir.
-  const metricsFile = pick("METRICS_FILE");
-  if (metricsFile) {
-    const specs = JSON.parse(readFileSync(metricsFile, "utf8"));
+  const metricsFile = studyConfig.metricsFile;
+  if (metricsFile && studyConfig.metrics) {
+    const specs = studyConfig.metrics;
     const metricsHash = pick("METRICS_HASH", ethers.ZeroHash);
     const metricsUri = pick("METRICS_URI");
 
@@ -274,7 +342,9 @@ async function main() {
   // Taban teminat raporda 32 ETH'dir; test aglarinda bu tutari edinmek mumkun
   // olmadigi icin ortam degiskeniyle kucultulebilir. Esik degeri raporun 1M USD
   // kontrol noktasindan turetilmistir (bkz. VeriarfyStaking dokumantasyonu).
-  const baseStake = BigInt(process.env.NODE_BASE_STAKE ?? ethers.parseEther("0.001"));
+  const baseStake = d15Profile
+    ? d15Profile.nodeBaseStakeWei
+    : BigInt(process.env.NODE_BASE_STAKE ?? ethers.parseEther("0.001"));
   const valueThreshold = BigInt(process.env.STAKE_VALUE_THRESHOLD ?? 250_000);
   const challengePeriod = BigInt(process.env.CHALLENGE_PERIOD_BLOCKS ?? 20);
 
@@ -350,6 +420,7 @@ async function main() {
     network: network.name,
     chainId: Number((await ethers.provider.getNetwork()).chainId),
     deployer: deployer.address,
+    authorizedNodes,
     contracts: {
       Groth16Verifier: verifierAddress,
       DataProvenanceVerifier: provenanceVerifierAddress,

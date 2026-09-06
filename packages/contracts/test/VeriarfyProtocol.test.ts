@@ -52,6 +52,8 @@ describe("VeriarfyProtocol", () => {
   let registry: any;
   let hospital: any;
   let rogueLab: any;
+  let developmentRegistry: any;
+  let developmentInstitution: any;
 
   before(async () => {
     if (!existsSync(PROVENANCE_ZKEY)) {
@@ -71,6 +73,8 @@ describe("VeriarfyProtocol", () => {
     hospital = await provenance.createInstitutionKey();
     rogueLab = await provenance.createInstitutionKey(); // akredite DEGIL
     registry.insert(hospital.leaf);
+    ({ institution: developmentInstitution, registry: developmentRegistry } =
+      await provenance.developmentRegistry());
   });
 
   beforeEach(async () => {
@@ -109,12 +113,14 @@ describe("VeriarfyProtocol", () => {
     options: {
       institution?: any;
       signWith?: any;
+      registry?: any;
       panel?: number[];
       /** false ise KENDI YUKLEDIGI katmani: imza yok, kok sifir. */
       attested?: boolean;
     } = {},
   ) {
     const institution = options.institution ?? hospital;
+    const proofRegistry = options.registry ?? registry;
     const panel = options.panel ?? PANEL;
     const attested = options.attested ?? true;
 
@@ -133,7 +139,7 @@ describe("VeriarfyProtocol", () => {
           salt,
           institution,
           signature,
-          registry,
+          registry: proofRegistry,
           externalNullifier: 2n,
           cidDigest,
           signerAddress: await signer.getAddress(),
@@ -154,7 +160,7 @@ describe("VeriarfyProtocol", () => {
       commitment,
       nullifierHash: provenance.computeProvenanceNullifier(2n, commitment),
       // Imzasiz katmanda devre koku ZORLA sifirlar; sozlesme de sifir bekler.
-      root: attested ? registry.root : 0n,
+      root: attested ? proofRegistry.root : 0n,
       // KAPSAMA — devrenin acik ciktisi. Kanit gecerliyse bu bitler kurumun
       // imzaladigi dozajlardan turetilmistir; uydurulamaz.
       coverage: provenance.coverageWords(panel),
@@ -248,6 +254,54 @@ describe("VeriarfyProtocol", () => {
     it("kurum imzali katman ayirt edilebiliyor", async () => {
       await submit(bob, digest);
       expect(await protocol.recordAttested(await bob.getAddress())).to.equal(true);
+    });
+
+    it("acik gelistirme koku imzali kaydi fail-closed reddeder", async () => {
+      await protocol.connect(owner).updateAccreditedRoot(developmentRegistry.root);
+      expect(developmentRegistry.root).to.equal(
+        400204218792704578759845465933970137697021750464618602026640937740276740682n,
+      );
+
+      const p = await buildProof(alice, digest, {
+        institution: developmentInstitution,
+        registry: developmentRegistry,
+      });
+      await expect(
+        protocol
+          .connect(alice)
+          .submitRecord(digest, true, p.root, p.nullifierHash, p.commitment,
+            p.coverage, p.a, p.b, p.c),
+      )
+        .to.be.revertedWithCustomError(protocol, "DevelopmentRootForbidden")
+        .withArgs(p.root);
+    });
+
+    it("gecmis gelistirme koku historical kabul edilse bile imzali kaydi reddeder", async () => {
+      await protocol.connect(owner).updateAccreditedRoot(developmentRegistry.root);
+      await protocol.connect(owner).updateAccreditedRoot(registry.root);
+
+      const p = await buildProof(alice, digest, {
+        institution: developmentInstitution,
+        registry: developmentRegistry,
+      });
+      expect(await protocol.accreditedRoot()).to.equal(registry.root);
+      expect(await protocol.accreditedRootTimestamp(p.root)).to.not.equal(0n);
+
+      await expect(
+        protocol
+          .connect(alice)
+          .submitRecord(digest, true, p.root, p.nullifierHash, p.commitment,
+            p.coverage, p.a, p.b, p.c),
+      )
+        .to.be.revertedWithCustomError(protocol, "DevelopmentRootForbidden")
+        .withArgs(p.root);
+    });
+
+    it("gelistirme koku yapilandirilmisken imzasiz kayit gecmeye devam eder", async () => {
+      await protocol.connect(owner).updateAccreditedRoot(developmentRegistry.root);
+      await expect(submit(alice, digest, { attested: false }))
+        .to.emit(protocol, "RecordSubmitted")
+        .withArgs(await alice.getAddress(), digest, false, false);
     });
 
     it("imzasiz katmanda da kapsama KANITLI yazilir", async () => {

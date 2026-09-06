@@ -198,6 +198,20 @@ const DEVELOPMENT_SEED = "veriarfy-gelistirme-kurumu-tohumu-0001";
 katman bu tohumdan etkilenmez — hicbir imza dogrulamiyor, guvencesi
 tamamen taahhut-kapsama tutarliligindan geliyor.
 
+Faz D/14 ile acik tohumdan uretilen, yalnizca gelistirme kurumunu iceren
+`developmentRegistry()` koku `submitRecord(attested = true, ...)` yolunda
+sozlesme tarafindan fail-closed reddedilir. Kontrol hem guncel kokten hem de
+rotasyon sonrasi gecici olarak kabul edilen eski koklerden once calisir;
+`attested = false, root = 0` yolu etkilenmez.
+
+Bu korumanin siniri **tam olarak bilinen tek-yaprak gelistirme kokudur**.
+Ayni acik gelistirme anahtari baska kurumlarla yeni bir Merkle agacina
+eklenirse kok degisir. Kurum yapragi ZK kanitinda acik sinyal olmadigi icin
+sozlesme yalniz koku gorerek bu durumu ayirt edemez. Dolayisiyla koruma,
+uretim akreditasyonunun yerine gecmez: gercek registry olusturulurken
+gelistirme yapragi dislanmali, acik tohum kaldirilmali ve kurum anahtarlari
+HSM'de tutulmalidir.
+
 Kurumsal entegrasyon geldiginde tohum gidecek, anahtar HSM'de duracak ve
 `recordAttested` sayesinde agirlik farki **gecmise donuk** uygulanabilecek —
 ayrimi sonradan turetmek imkansiz olurdu, o yuzden bugunden saklaniyor.

@@ -1,0 +1,4 @@
+# Preserve the source bytes used to build the pinned D15 Sepolia deployments.
+packages/contracts/contracts/VeriarfyStaking.sol text eol=crlf
+packages/contracts/contracts/VeriarfyStorage.sol text eol=crlf
+packages/contracts/contracts/libraries/RarityMath.sol text eol=crlf

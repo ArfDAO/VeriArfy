@@ -1,45 +1,50 @@
 import { ethers, network } from "hardhat";
 
-/**
- * Deploy oncesi ucus kontrolu.
- *
- * Zincire yazmak geri alinamaz ve para harcar. Bu betik hicbir sey
- * gondermeden once su dort seyi dogrular:
- *
- *   1. Ag gercekten hedeflenen ag mi (chainId ile),
- *   2. Bir imzalayan yuklenmis mi (.env okunabilmis mi),
- *   3. Bakiye deploy icin yetiyor mu,
- *   4. Zincir gercekten yanit veriyor mu (blok numarasi).
- *
- * Gizli anahtar hicbir kosulda yazdirilmaz; yalnizca ondan turetilen ADRES
- * gosterilir — adres zaten zincirde herkese aciktir.
- *
- * Calistirma:
- *   npx hardhat run scripts/preflight.ts --network sepolia
- */
+import { D15_PROFILE_ID, loadD15Profile } from "./d15-profile";
 
-/** Dort kontratin deploy'u icin kabaca gereken alt sinir. */
+/** Deploy oncesi salt-okunur ucus kontrolu. */
 const MINIMUM_BALANCE = ethers.parseEther("0.02");
 
 async function main() {
+  const d15Profile =
+    process.env.D15_PROFILE === D15_PROFILE_ID ? loadD15Profile() : null;
+  if (process.env.D15_PROFILE && !d15Profile) {
+    throw new Error(`bilinmeyen D15_PROFILE: ${process.env.D15_PROFILE}`);
+  }
+
   const chain = await ethers.provider.getNetwork();
   const blockNumber = await ethers.provider.getBlockNumber();
-
   console.log(`Ag       : ${network.name} (chainId ${chain.chainId})`);
   console.log(`Blok     : ${blockNumber}`);
 
-  const signers = await ethers.getSigners();
-  if (signers.length === 0) {
-    throw new Error(
-      "Imzalayan yok. DEPLOYER_PRIVATE_KEY okunamadi — .env kokte mi ve " +
-        "hardhat.config.ts onu yukluyor mu?",
-    );
+  let deployerAddress: string;
+  if (d15Profile) {
+    if (
+      network.name !== d15Profile.network ||
+      chain.chainId !== BigInt(d15Profile.chainId)
+    ) {
+      throw new Error("D15 preflight profile agiyla eslesmiyor");
+    }
+    if ((await ethers.getSigners()).length !== 0) {
+      throw new Error("D15 preflight private key yuklememelidir");
+    }
+    deployerAddress = d15Profile.deployer;
+  } else {
+    const signers = await ethers.getSigners();
+    if (signers.length === 0) {
+      throw new Error(
+        "Imzalayan yok. DEPLOYER_PRIVATE_KEY okunamadi; .env ve " +
+          "hardhat.config.ts kontrol edilmeli",
+      );
+    }
+    if (signers.length !== 1) {
+      throw new Error(`Preflight tam bir signer bekler; bulunan: ${signers.length}`);
+    }
+    deployerAddress = signers[0].address;
   }
 
-  const [deployer] = signers;
-  const balance = await ethers.provider.getBalance(deployer.address);
-
-  console.log(`Deployer : ${deployer.address}`);
+  const balance = await ethers.provider.getBalance(deployerAddress);
+  console.log(`Deployer : ${deployerAddress}`);
   console.log(`Bakiye   : ${ethers.formatEther(balance)} ETH`);
 
   const feeData = await ethers.provider.getFeeData();
@@ -47,20 +52,25 @@ async function main() {
     console.log(`Gas      : ${ethers.formatUnits(feeData.gasPrice, "gwei")} gwei`);
   }
 
-  if (balance < MINIMUM_BALANCE) {
+  const minimumBalance = d15Profile?.minimumDeployerBalanceWei ?? MINIMUM_BALANCE;
+  if (balance < minimumBalance) {
     throw new Error(
       `Bakiye yetersiz: ${ethers.formatEther(balance)} ETH var, ` +
-        `en az ${ethers.formatEther(MINIMUM_BALANCE)} ETH gerekiyor. ` +
-        "Sepolia musluklarindan (faucet) test ETH alin.",
+        `en az ${ethers.formatEther(minimumBalance)} ETH gerekiyor. ` +
+        "Sepolia faucet'inden test ETH alin.",
     );
   }
 
-  console.log("\nUcus kontrolu tamam — deploy edilebilir.");
+  console.log(
+    d15Profile
+      ? "\nUcus kontrolu tamam - private key yuklenmedi, transaction gonderilmedi."
+      : "\nUcus kontrolu tamam - deploy edilebilir.",
+  );
 }
 
 main()
   .then(() => process.exit(0))
-  .catch((err) => {
-    console.error(`\nUcus kontrolu BASARISIZ: ${err.message}`);
+  .catch((error) => {
+    console.error(`\nUcus kontrolu BASARISIZ: ${error.message ?? error}`);
     process.exit(1);
   });

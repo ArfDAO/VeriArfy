@@ -98,6 +98,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     error PoolEmpty();
     error InvalidProvenanceProof();
     error ProvenanceNullifierSpent(uint256 nullifierHash);
+    error DevelopmentRootForbidden(uint256 root);
     error UnknownAccreditedRoot(uint256 root);
     error AccreditedRootExpired(uint256 root);
     error ValueOutOfField();
@@ -245,6 +246,10 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     /// @dev BN254 skaler alan mertebesi; disaridan gelen alan elemanlari icin sinir.
     uint256 internal constant SNARK_FIELD =
         21888242871839275222246405745257275088548364400416034343698204186575808495617;
+
+    /// @dev Acik gelistirme tohumu ile uretilen kok, imzali kayitlarda kullanilamaz.
+    uint256 private constant DEVELOPMENT_ROOT =
+        400204218792704578759845465933970137697021750464618602026640937740276740682;
 
     /**
      * @notice Eski kokun gecerli kalma suresi.
@@ -993,6 +998,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     }
 
     function _validateAccreditedRoot(uint256 root) private view {
+        if (root == DEVELOPMENT_ROOT) revert DevelopmentRootForbidden(root);
         if (root == accreditedRoot && root != 0) return;
 
         uint256 timestamp = accreditedRootTimestamp[root];
@@ -2031,6 +2037,14 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     /// @notice Esik saglandi mi (itiraz suresi henuz surebilir)?
     function isDisclosureFinalized(uint256 requestId) external view returns (bool) {
         return _requests[requestId].finalized;
+    }
+
+    /// @notice Talep aninda sabitlenen onay sayisi.
+    /// @dev Bilinmeyen talepler diger disclosure view'leri gibi fail-closed reddedilir.
+    function disclosureRequiredApprovals(uint256 requestId) external view returns (uint32) {
+        DisclosureRequest storage request = _requests[requestId];
+        if (request.requester == address(0)) revert UnknownRequest(requestId);
+        return request.requiredApprovals;
     }
 
     /// @notice Itiraz suresinin bittigi blok (0 = esige henuz ulasilmadi).

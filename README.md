@@ -140,14 +140,95 @@ npm run contracts:deploy:sepolia
 
 Adresler `packages/web/src/config/deployment.json` dosyasına otomatik yazılır.
 
-### 4. Kurator servisi
+### 4. Sepolia canli kontrolu (D/15, dort asamali)
+
+**2026-09-06 durum:** sabitlenmis proof anahtarlariyla nonce **24–41
+redeploy** tamamlandi. On sekiz receipt `status=1` ile 11647006–11647040
+bloklarinda kesinlesti; sinir nonce 42 ve gercek toplam fee
+`0.020462928715141095 ETH`. Yeni deployment cifti plan hash
+`0xd026de9debced25767b1d6d5b023aa2157318ede64204a3a27ee14da8d15a62c`
+ile yayimlandi. Salt-okunur proof-check yeni provenance (13 signal) ve identity
+(4 signal) verifier'larini `verified=true` ile dogruladi. Ayrintili tamamlama ve
+kurtarma kaydi [nonce-24 redeploy operator planinda](docs/D15-REDEPLOY.md).
+Yeni staking kontratinda iki node da `0.001 ETH` stake ile `canApprove=true`.
+Dort asamali live-check `QueryId=0`, `RequestId=0` icin 2/2 approval,
+disclosure grant, query settlement ve claim ile tamamlandi. D/15 canli kabul
+siniri kapandi; D/16 calismasi baslayabilir.
+
+Deploy ciktisindaki `packages/contracts/deployments/sepolia.json` icindeki
+`authorizedNodes` public topolojinin tek kaynagidir. `prepare` asamasi
+`LIVE_CHECK_QUERY_TYPE` icin yalnizca `1` (GWAS), `2` (ML) veya `4`
+(STATISTICS) kabul eder; zincirde `requiredApprovals(type) === 2` degilse
+ilk mutation/proof oncesi fail-closed durur. Gercek Sepolia islemleri gas ve
+onceden yatirilmis node stake'i gerektirir; deploy veya live-check otomatik
+fonlama/stake yapmaz.
+
+Onayli D/15 test profili `packages/contracts/ops/d15-sepolia.json` icinde
+yalniz public adresleri tutar: deployer, node-1 ve node-2 farklidir; sorgu ML
+(`2`), esik 2/2 ve `MIN_PARTICIPANTS=1` yalniz bu test deployment'i icindir.
+Bu profil k-anonimlik kaniti degil, M-of-N authorization kanitidir.
+
+Tum operator komutlari `scripts/d15-sepolia.ps1` uzerinden calistirilir.
+Private key dosyaya veya komut satirina yazilmaz: PowerShell maskeli prompt ile
+alir, yalniz ilgili child process'e aktarir ve `finally` icinde environment'tan
+siler. Shared `.env` yuklenmez. State-changing asamalar hem `-Execute` hem de
+elle yazilan asama-ozel onay cumlesi olmadan calismaz.
+
+Once private key kullanmayan public readiness'i, sonra transaction gondermeyen
+ve yine private key yuklemeyen deployer preflight'ini calistirin:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage readiness
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage preflight
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage proof-check
+```
+
+`proof-check`, gercek FHE CLI baslatildiktan sonra sentetik koken ve kimlik
+kanitlarini ayri Node sureclerinde, tek hesaplama is parcacigiyla uretir.
+Her iki kaniti Sepolia'daki verifier kontratlarinda `eth_call` ile dogrular;
+private key istemez, transaction gondermez ve `-Execute` kabul etmez.
+`PROOF_CHECK_OK` iki dogrulamanin da tamamlandigini belirtir. Bu kontrol,
+canli `prepare` veya sonraki asamalar icin operasyon onayi yerine gecmez.
+Kaniti ureten alt surec ana surecin Node executable'ini kullanir; sistem Node
+ve PATH ayarlarini degistirmez. Witness stdin uzerinden aktarilir, dosyaya veya
+komut satirina yazilmaz; signer environment'i alt surece aktarilmaz.
+
+Asagidaki komutlar dokumantasyon amaclidir ve Sepolia transaction'i
+gonderebilir. Yalniz ayri operasyon onayindan sonra sirasiyla kullanilir.
+Deployment komutu bilerek `--no-compile` kullanir; once ayri cihaz-yuku onayi
+ile compile ve hedef testler yeniden gecmis olmalidir:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage deploy -Execute
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage stake-node-1          # salt-okunur stake plani
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage stake-node-1 -Execute
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage stake-node-2
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage stake-node-2 -Execute
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage prepare -Execute
+
+# Prepare ciktisindaki public id'leri iki operator de aynen kullanir.
+$queryId = Read-Host "LIVE_CHECK_QUERY_ID"
+$requestId = Read-Host "LIVE_CHECK_REQUEST_ID"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage node-1 -QueryId $queryId -RequestId $requestId -Execute
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage node-2 -QueryId $queryId -RequestId $requestId -Execute
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage complete -QueryId $queryId -RequestId $requestId -Execute
+```
+
+Node operatorleri kendi ayri shell/custody ortamlarinda yalniz kendi test-only
+private key'lerini girer. Seed phrase, private key ve wallet parolasi hicbir
+zaman repository'ye, sohbete veya ortak `.env` dosyasina konmaz.
+
+Bu kanit yalniz M-of-N authorization ve iki ayri signer handoff'unu gosterir;
+HSM, DKG veya gercek threshold decryption uygulandigi iddia edilmez.
+
+### 5. Kurator servisi
 
 ```bash
 npm run curator              # http://localhost:8787
 npm run curator:push-root    # ağacın kökünü zincire yazar
 ```
 
-### 5. Arayüz
+### 6. Arayüz
 
 ```bash
 npm run web:dev
