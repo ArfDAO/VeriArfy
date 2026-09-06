@@ -48,7 +48,14 @@ packages/circuits/bin/
 # packages/web/public/fhe/
 
 # kurator calisma durumu (katilimci agaci)
-packages/curator/data/
+# Kurator verisi: KLASOR degil icerik yoksayilir.
+#
+# `tree.json` IZLENIR. Barindirma ortamlarinda (Render, Railway free) disk
+# EFEMERDIR: servis yeniden baslayinca calisma aninda yazilan agac kaybolur
+# ve zincirdeki kok artik hicbir seye karsilik gelmez. Depodaki dosya, her
+# aciliste geri yuklenen TABAN durumdur.
+packages/curator/data/*
+!packages/curator/data/tree.json
 
 # derleme ciktilari
 dist/
