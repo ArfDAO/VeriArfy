@@ -142,6 +142,12 @@ Adresler `packages/web/src/config/deployment.json` dosyasına otomatik yazılır
 
 ### 4. Sepolia canli kontrolu (D/15, dort asamali)
 
+**2026-09-06 devam noktasi:** mevcut deployment'in eski zkey yedegi yok;
+guncel, sabitlenmis proof anahtarlariyla nonce **24–41 redeploy** hazirlandi.
+Bu deployment icin asagidaki genel `deploy` ornegi veya eski nonce-15 `resume`
+kullanilmaz. Once [nonce-24 redeploy operator plani](docs/D15-REDEPLOY.md)
+izlenir. Canli redeploy henuz yapilmadi.
+
 Deploy ciktisindaki `packages/contracts/deployments/sepolia.json` icindeki
 `authorizedNodes` public topolojinin tek kaynagidir. `prepare` asamasi
 `LIVE_CHECK_QUERY_TYPE` icin yalnizca `1` (GWAS), `2` (ML) veya `4`

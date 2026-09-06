@@ -28,6 +28,8 @@ const isDeployInvocation = invokesScript("deploy");
 const isD15ResumeInvocation = invokesScript("d15-resume");
 const isPreflightInvocation = invokesScript("preflight");
 const isProofCheckInvocation = invokesScript("proof-check");
+const isRedeployInvocation = invokesScript("d15-redeploy");
+const isRedeployPlanInvocation = invokesScript("d15-redeploy-plan-write");
 const requestedLiveCheckStage = process.env.LIVE_CHECK_STAGE?.trim();
 if (requestedLiveCheckStage && !isLiveCheckInvocation) {
   throw new Error(
@@ -48,9 +50,11 @@ const isAllowedD15Invocation =
   isD15ResumeInvocation ||
   isPreflightInvocation ||
   isProofCheckInvocation ||
+  isRedeployInvocation ||
+  isRedeployPlanInvocation ||
   isLiveCheckInvocation;
 if (isD15Profile && !isAllowedD15Invocation) {
-  throw new Error("D15_PROFILE yalniz readiness/preflight/proof-check/deploy/resume/stake/live-check icindir");
+  throw new Error("D15_PROFILE yalniz readiness/preflight/proof-check/deploy/resume/redeploy/stake/live-check icindir");
 }
 if ((isD15ReadinessInvocation || isStakeNodeInvocation) && !isD15Profile) {
   throw new Error(`${isStakeNodeInvocation ? "stake-node" : "d15-readiness"}: D15_PROFILE zorunludur`);
@@ -60,6 +64,9 @@ if (isD15ResumeInvocation && !isD15Profile) {
 }
 if (isProofCheckInvocation && !isD15Profile) {
   throw new Error("proof-check: D15_PROFILE zorunludur");
+}
+if ((isRedeployInvocation || isRedeployPlanInvocation) && !isD15Profile) {
+  throw new Error("redeploy: D15_PROFILE zorunludur");
 }
 
 const executionAck = process.env.D15_EXECUTION_ACK?.trim();
@@ -121,14 +128,23 @@ if (isLiveCheckConfigured) {
 
   sepoliaPrivateKey = expectedKey;
 } else if (isD15Profile) {
-  if (isD15ReadinessInvocation || isPreflightInvocation || isProofCheckInvocation) {
+  if (isD15ReadinessInvocation || isPreflightInvocation || isProofCheckInvocation || isRedeployPlanInvocation) {
     if (DEPLOYER_PRIVATE_KEY || NODE_PRIVATE_KEY || executionAck) {
       throw new Error(
-        `${isProofCheckInvocation ? "proof-check" : isPreflightInvocation ? "preflight" : "readiness"} ` +
+        `${isRedeployPlanInvocation ? "redeploy-plan" : isProofCheckInvocation ? "proof-check" : isPreflightInvocation ? "preflight" : "readiness"} ` +
           "signer/ack kabul etmez; salt-okunur calismalidir",
       );
     }
     sepoliaPrivateKey = "";
+  } else if (isRedeployInvocation) {
+    if (executionAck && executionAck !== "redeploy") throw new Error("redeploy: D15_EXECUTION_ACK 'redeploy' olmalidir");
+    if (executionAck) {
+      if (!DEPLOYER_PRIVATE_KEY || NODE_PRIVATE_KEY) throw new Error("redeploy: yalniz DEPLOYER_PRIVATE_KEY verilmelidir");
+      sepoliaPrivateKey = DEPLOYER_PRIVATE_KEY;
+    } else {
+      if (DEPLOYER_PRIVATE_KEY || NODE_PRIVATE_KEY) throw new Error("redeploy check signer kabul etmez");
+      sepoliaPrivateKey = "";
+    }
   } else if (isD15ResumeInvocation) {
     if (executionAck && executionAck !== "resume") {
       throw new Error("resume: D15_EXECUTION_ACK 'resume' olmalidir");
