@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { SEPOLIA_CHAIN_ID } from "../config";
+import { useT } from "../lib/i18n";
+import { LanguageSwitch } from "../components/LanguageSwitch";
 import { useSession, type SessionRole } from "../lib/session";
 import { shortAddress } from "../lib/wallet";
 
@@ -26,6 +28,7 @@ const roles: Array<{
 ];
 
 export function Giris() {
+  const t = useT();
   const navigate = useNavigate();
   const [pickerOpen, setPickerOpen] = useState(false);
   const {
@@ -51,47 +54,52 @@ export function Giris() {
   return (
     <main className="login-page" id="main-content">
       <section className="login-page__intro">
-        <Link className="login-page__brand" to="/">veriarfy</Link>
-        <span className="eyebrow">ERISIM SECIMI</span>
-        <h1>Hangi taraftan devam edeceksiniz?</h1>
-        <p>Cuzdan yalnizca oturum kimligidir. Arastirmaci yetkisi her zaman zincirdeki defterden yeniden dogrulanir.</p>
+        {/* Dil secici burada da olmali: kullanici /giris adresine dogrudan
+            gelebilir ve ana sayfaya donmeden dili degistirebilmeli. */}
+        <div className="login-page__top">
+          <Link className="login-page__brand" to="/">veriarfy</Link>
+          <LanguageSwitch />
+        </div>
+        <span className="eyebrow">{t("ERISIM SECIMI")}</span>
+        <h1>{t("Hangi taraftan devam edeceksiniz?")}</h1>
+        <p>{t("Cuzdan yalnizca oturum kimligidir. Arastirmaci yetkisi her zaman zincirdeki defterden yeniden dogrulanir.")}</p>
       </section>
 
       <section className="login-page__flow" aria-live="polite">
         {address && (
           <div className="login-page__session">
             <span>
-              {activeWallet?.name ?? "Cuzdan"} · <span className="mono">{shortAddress(address)}</span>
+              {activeWallet?.name ?? t("Cuzdan")} · <span className="mono">{shortAddress(address)}</span>
             </span>
             <div className="login-page__session-actions">
-              <button onClick={() => { disconnect(); setPickerOpen(true); }} type="button">Cuzdani degistir</button>
-              <button onClick={disconnect} type="button">Cuzdandan cik</button>
+              <button onClick={() => { disconnect(); setPickerOpen(true); }} type="button">{t("Cuzdani degistir")}</button>
+              <button onClick={disconnect} type="button">{t("Cuzdandan cik")}</button>
             </div>
           </div>
         )}
         {!walletAvailable ? (
-          <div className="notice notice--warn">Ethereum cuzdani bulunamadi. MetaMask gibi bir cuzdani etkinlestirip sayfayi yenileyin.</div>
+          <div className="notice notice--warn">{t("Ethereum cuzdani bulunamadi. MetaMask gibi bir cuzdani etkinlestirip sayfayi yenileyin.")}</div>
         ) : !address ? (
           <div className="login-page__connect">
-            <p>{restoring ? "Mevcut cuzdan oturumu kontrol ediliyor..." : "Devam etmek icin bir cuzdan secin."}</p>
+            <p>{t(restoring ? "Mevcut cuzdan oturumu kontrol ediliyor..." : "Devam etmek icin bir cuzdan secin.")}</p>
             <button className="pill pill--primary" disabled={restoring} onClick={() => setPickerOpen(true)}>
-              Cuzdani bagla
+              {t("Cuzdani bagla")}
             </button>
           </div>
         ) : wrongNetwork ? (
           <div className="login-page__connect">
-            <p>Bu uygulama Sepolia aginda calisir. Rol secmeden once agi degistirin.</p>
-            <button className="pill pill--primary" onClick={() => void switchToSepolia()}>Sepolia'ya gec</button>
+            <p>{t("Bu uygulama Sepolia aginda calisir. Rol secmeden once agi degistirin.")}</p>
+            <button className="pill pill--primary" onClick={() => void switchToSepolia()}>{t("Sepolia'ya gec")}</button>
           </div>
         ) : (
           <div className="login-page__roles">
             {roles.map((item) => (
               <article className="login-page__role" key={item.role}>
-                <span className="eyebrow">{item.title}</span>
-                <h2>{item.title} olarak devam edin</h2>
-                <p>{item.description}</p>
+                <span className="eyebrow">{t(item.title)}</span>
+                <h2>{t("{role} olarak devam edin", { role: t(item.title) })}</h2>
+                <p>{t(item.description)}</p>
                 <button className="pill pill--primary" onClick={() => chooseRole(item.role, item.destination)}>
-                  Paneli ac
+                  {t("Paneli ac")}
                 </button>
               </article>
             ))}
@@ -111,12 +119,12 @@ export function Giris() {
           >
             <div className="wallet-dialog__head">
               <div>
-                <span className="eyebrow">CUZDAN BAGLANTISI</span>
-                <h2 id="wallet-dialog-title">Cuzdaninizi secin</h2>
+                <span className="eyebrow">{t("CUZDAN BAGLANTISI")}</span>
+                <h2 id="wallet-dialog-title">{t("Cuzdaninizi secin")}</h2>
               </div>
-              <button aria-label="Cuzdan secicisini kapat" onClick={() => setPickerOpen(false)} type="button">Kapat</button>
+              <button aria-label={t("Cuzdan secicisini kapat")} onClick={() => setPickerOpen(false)} type="button">{t("Kapat")}</button>
             </div>
-            <div className="wallet-picker" aria-label="Cuzdan secimi">
+            <div className="wallet-picker" aria-label={t("Cuzdan secimi")}>
               {wallets.map((wallet) => (
                 <button
                   className="wallet-picker__option"

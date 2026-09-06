@@ -22,7 +22,9 @@
  * kopyalanir ve SDK'ya ACIK yol verilir (`initSDK({ tfheParams, kmsParams })`)
  * — hem gelistirmede hem uretim derlemesinde ayni sekilde calisir.
  *
- * Dosyalar uretilebilir oldugu icin depoda tutulmaz.
+ * Ciktilar `public/fhe/` altinda ISLENIR: Vercel gibi bir ortamda derleme
+ * sirasinda uretilebilseler de, islenmis olmalari dagitimi kaynaktan
+ * bagimsiz kilar.
  */
 import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { createRequire } from "node:module";

@@ -8,6 +8,7 @@ import { contributeDosages, submitProvenanceRecord } from "../lib/protocol";
 import { useVcfParser } from "../lib/useVcfParser";
 import type { TraceApi } from "../lib/useTrace";
 import { noteEvidence, txEvidence, valueEvidence } from "../lib/trace";
+import { useT } from "../lib/i18n";
 
 /**
  * Veri kategorisi 1 — genomik dosya.
@@ -59,6 +60,7 @@ export function GenomicStep({
   disabled: boolean;
   onDone: () => void;
 }) {
+  const t = useT();
   const vcf = useVcfParser();
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -79,7 +81,7 @@ export function GenomicStep({
           ? "vcf"
           : "consumer";
 
-      trace.begin("parse", "Dosya ayrıştırıldı (tarayıcıda)");
+      trace.begin("parse", t("Dosya ayrıştırıldı (tarayıcıda)"));
       try {
         let calls: GenotypeCall[] = [];
         /** VCF yolunda dozaj ayristiricidan hazir gelir: rsID -> dozaj. */
@@ -91,7 +93,7 @@ export function GenomicStep({
           // Panel filtresi Rust tarafinda uygulanir: tum genom VCF'i
           // milyonlarca satirdir, hepsini JS'e tasimak bellegi sisirirdi.
           const result = await vcf.parseAsync(file, undefined, WANTED_IDS);
-          sourceLabel = `VCF · örnek ${result.sampleName}`;
+          sourceLabel = t("VCF · örnek {name}", { name: result.sampleName });
           scanned = result.variantCount + result.filteredOutCount;
 
           // VCF'te dozaj REF/ALT'a gore hesaplanir ve ayristirici bunu zaten
@@ -113,19 +115,19 @@ export function GenomicStep({
           scanned = parsed.lines;
           sourceLabel =
             format === "23andme"
-              ? `23andMe · ${parsed.lines.toLocaleString("tr")} satır`
-              : `AncestryDNA · ${parsed.lines.toLocaleString("tr")} satır`;
+              ? t("23andMe · {lines} satır", { lines: parsed.lines.toLocaleString() })
+              : t("AncestryDNA · {lines} satır", { lines: parsed.lines.toLocaleString() });
         }
 
-        trace.succeed("parse", `${sourceLabel} · ${scanned.toLocaleString("tr")} varyant tarandı`, [
+        trace.succeed("parse", t("{source} · {n} varyant tarandı", { source: sourceLabel, n: scanned.toLocaleString() }), [
           noteEvidence("kaynak", sourceLabel),
-          valueEvidence("taranan varyant", scanned.toLocaleString("tr")),
+          valueEvidence(t("taranan varyant"), scanned.toLocaleString("tr")),
           noteEvidence("dosya", `${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`),
-          noteEvidence("nerede işlendi", "tarayıcı — dosya cihazdan çıkmadı"),
+          noteEvidence(t("nerede işlendi"), t("tarayıcı — dosya cihazdan çıkmadı")),
         ]);
 
         // --- Panele hizalama ------------------------------------------------
-        trace.begin("align", "Panele hizalandı");
+        trace.begin("align", t("Panele hizalandı"));
 
         let result: Aligned;
         if (vcfDosageByRsid) {
@@ -141,7 +143,7 @@ export function GenomicStep({
             missing: dosages.length - covered,
             ignored: 0,
             sourceLabel,
-            detail: `${covered}/${dosages.length} varyant kapsandı`,
+            detail: t("{covered}/{total} varyant kapsandı", { covered, total: dosages.length }),
           };
         } else {
           const a = alignToPanel(GENOMIC_PANEL, calls);
@@ -151,26 +153,22 @@ export function GenomicStep({
             missing: a.missing,
             ignored: a.ignored,
             sourceLabel,
-            detail: `${a.covered}/${a.dosages.length} varyant kapsandı`,
+            detail: t("{covered}/{total} varyant kapsandı", { covered: a.covered, total: a.dosages.length }),
           };
         }
 
         setAligned(result);
 
         trace.succeed("align", result.detail, [
-          valueEvidence("panel boyutu", GENOMIC_PANEL.variants.length),
-          valueEvidence("kapsanan", result.covered),
-          valueEvidence("eksik (3 olarak işaretlendi)", result.missing),
+          valueEvidence(t("panel boyutu"), GENOMIC_PANEL.variants.length),
+          valueEvidence(t("kapsanan"), result.covered),
+          valueEvidence(t("eksik (3 olarak işaretlendi)"), result.missing),
           ...(result.ignored > 0
-            ? [valueEvidence("dosyada olup panelde olmayan", result.ignored.toLocaleString("tr"))]
+            ? [valueEvidence(t("dosyada olup panelde olmayan"), result.ignored.toLocaleString("tr"))]
             : []),
-          noteEvidence(
-            "eksik neden 0 değil",
-            "0 «homozigot referans» demektir; bilinmeyene 0 yazmak alel frekansını aşağı çeker",
+          noteEvidence(t("eksik neden 0 değil"), t("0 «homozigot referans» demektir; bilinmeyene 0 yazmak alel frekansını aşağı çeker"),
           ),
-          noteEvidence(
-            "kapsama nasıl belirlendi",
-            "size sorulmadı — dosyanız ayrıştırıldı. Hangi alanlarda gerçek veriniz olduğu ödemeyi belirler: araştırmacı o alanları isterse pay alırsınız",
+          noteEvidence(t("kapsama nasıl belirlendi"), t("size sorulmadı — dosyanız ayrıştırıldı. Hangi alanlarda gerçek veriniz olduğu ödemeyi belirler: araştırmacı o alanları isterse pay alırsınız"),
           ),
         ]);
       } catch (err) {
@@ -186,7 +184,7 @@ export function GenomicStep({
     setBusy(true);
     setError(null);
 
-    trace.begin("dosages", "Dozajlar şifrelenip gönderildi");
+    trace.begin("dosages", t("Dozajlar şifrelenip gönderildi"));
     try {
       let batches = 0;
       await contributeDosages(signer, aligned.dosages, {
@@ -199,7 +197,7 @@ export function GenomicStep({
         // üretilir. Sıra tersine dönseydi sözleşme beyan edilen kapsamayı
         // kanıtsız yazardı ve ödeme yine uydurulabilir olurdu.
         onEncrypted: async (handles) => {
-          trace.begin("provenance", "ZK köken kanıtı üretildi ve gönderildi");
+          trace.begin("provenance", t("ZK köken kanıtı üretildi ve gönderildi"));
           try {
             const record = await submitProvenanceRecord(
               signer,
@@ -212,16 +210,14 @@ export function GenomicStep({
                     proving: "tarayıcıda Groth16 kanıtı üretiliyor…",
                     sending: "kanıt zincire gönderiliyor…",
                   }[stage];
-                  trace.progress("provenance", label);
+                  trace.progress("provenance", t(label));
                 },
               },
             );
 
             if (!record) {
-              trace.succeed("provenance", "Köken kaydı zaten var — atlandı", [
-                noteEvidence(
-                  "neden atlandı",
-                  "nullifier bir kez harcanır; mevcut kayıt zaten kapsamayı kanıtla yazmış durumda",
+              trace.succeed("provenance", t("Köken kaydı zaten var — atlandı"), [
+                noteEvidence(t("neden atlandı"), t("nullifier bir kez harcanır; mevcut kayıt zaten kapsamayı kanıtla yazmış durumda"),
                 ),
               ]);
               return;
@@ -229,23 +225,17 @@ export function GenomicStep({
 
             trace.succeed(
               "provenance",
-              `${record.coveredFields} alan KANITLA yazıldı (${Math.round(record.provingMs)} ms)`,
+              t("{n} alan KANITLA yazıldı ({ms} ms)", { n: record.coveredFields, ms: Math.round(record.provingMs) }),
               [
-                txEvidence("submitRecord", record.outcome.hash),
-                valueEvidence("  blok", record.outcome.blockNumber.toLocaleString("tr"), true),
-                valueEvidence("  gaz", Number(record.outcome.gasUsed).toLocaleString("tr"), true),
+                txEvidence(t("submitRecord"), record.outcome.hash),
+                valueEvidence(t("  blok"), record.outcome.blockNumber.toLocaleString("tr"), true),
+                valueEvidence(t("  gaz"), Number(record.outcome.gasUsed).toLocaleString("tr"), true),
                 noteEvidence("  kanıtın bağlandığı özet", record.digest),
-                noteEvidence(
-                  "kanıt ne söylüyor",
-                  "kapsama bitleri TAM OLARAK taahhüde giren dozajlardan türedi — «bende bu alan var» deyip boş göndermek imkânsız",
+                noteEvidence(t("kanıt ne söylüyor"), t("kapsama bitleri TAM OLARAK taahhüde giren dozajlardan türedi — «bende bu alan var» deyip boş göndermek imkânsız"),
                 ),
-                noteEvidence(
-                  "kanıt ne söylemiyor",
-                  "verinin gerçek bir ölçümden geldiğini söylemez; onu ancak imzalayan akredite bir kurum söyleyebilir, ZK söyleyemez",
+                noteEvidence(t("kanıt ne söylemiyor"), t("verinin gerçek bir ölçümden geldiğini söylemez; onu ancak imzalayan akredite bir kurum söyleyebilir, ZK söyleyemez"),
                 ),
-                noteEvidence(
-                  "paneliniz zincire girdi mi",
-                  "hayır — yalnızca taahhüt (Poseidon özeti) yazıldı; dozajlar kanıtın içinde gizli kalır",
+                noteEvidence(t("paneliniz zincire girdi mi"), t("hayır — yalnızca taahhüt (Poseidon özeti) yazıldı; dozajlar kanıtın içinde gizli kalır"),
                 ),
               ],
             );
@@ -262,19 +252,17 @@ export function GenomicStep({
             txEvidence(`parti ${batches} · SNP ${from}–${to - 1}`, outcome.hash),
             valueEvidence(`  blok`, outcome.blockNumber.toLocaleString("tr"), true),
             valueEvidence(`  gaz`, Number(outcome.gasUsed).toLocaleString("tr"), true),
-            noteEvidence(`  ciphertext handle (ilk)`, outcome.handles[0]),
+            noteEvidence(t("  ciphertext handle (ilk)"), outcome.handles[0]),
           );
-          trace.progress("dosages", `${to}/${aligned.dosages.length} SNP gönderildi…`);
+          trace.progress("dosages", t("{done}/{total} SNP gönderildi…", { done: to, total: aligned.dosages.length }));
         },
       });
 
       trace.succeed(
         "dosages",
-        `${aligned.dosages.length} SNP, ${batches} partide gönderildi`,
+        t("{n} SNP, {batches} partide gönderildi", { n: aligned.dosages.length, batches }),
         [
-          noteEvidence(
-            "parti sınırı neden 10",
-            "fhEVM işlem başına 20M HCU; ölçülen tavan 12 SNP (BiomarkerHcu/MultiSnpGas testleri)",
+          noteEvidence(t("parti sınırı neden 10"), t("fhEVM işlem başına 20M HCU; ölçülen tavan 12 SNP (BiomarkerHcu/MultiSnpGas testleri)"),
           ),
         ],
       );
@@ -292,7 +280,7 @@ export function GenomicStep({
   return (
     <div className="card">
       <div className="card__head">
-        <h3>2 · Genomik veri</h3>
+        <h3>{t("2 · Genomik veri")}</h3>
         <span className={complete ? "badge badge--ok" : "eyebrow"}>
           {complete ? `TAMAM · ${submitted}/${snpCount}` : `${submitted}/${snpCount} SNP`}
         </span>
@@ -304,10 +292,10 @@ export function GenomicStep({
         şifreli dozajlar gider.
       </p>
       <p className="card__body">
-        <strong>Dosyanızın içinde ne olduğunu bilmenize gerek yok.</strong>{" "}
+        <strong>{t("Dosyanızın içinde ne olduğunu bilmenize gerek yok.")}</strong>{" "}
         Türünü seçmeniz yeter — hangi varyantların bulunduğunu sistem
         ayrıştırıp çıkarır. Bu, ödemeyi de belirler: bir araştırmacı sizde
-        <em>olan</em> alanları isterse pay alırsınız.
+        <em>{t("olan")}</em> {t("alanları isterse pay alırsınız.")}
       </p>
 
       {submitted > 0 && !complete && (
@@ -339,7 +327,7 @@ export function GenomicStep({
 
         {aligned && !complete && (
           <button className="pill pill--primary" onClick={() => void submit()} disabled={busy || disabled}>
-            {busy ? "gönderiliyor…" : `Şifrele ve gönder (${aligned.dosages.length} SNP)`}
+            {busy ? t("gönderiliyor…") : t("Şifrele ve gönder ({n} SNP)", { n: aligned.dosages.length })}
           </button>
         )}
       </div>
@@ -353,22 +341,22 @@ export function GenomicStep({
       {aligned && (
         <div className="kv" style={{ marginTop: 16 }}>
           <div className="kv__row">
-            <span className="eyebrow">KAYNAK</span>
+            <span className="eyebrow">{t("KAYNAK")}</span>
             <span className="mono">{aligned.sourceLabel}</span>
           </div>
           <div className="kv__row">
-            <span className="eyebrow">KAPSAMA</span>
+            <span className="eyebrow">{t("KAPSAMA")}</span>
             <span className="mono">
               {aligned.covered}/{aligned.dosages.length}
               {aligned.missing > 0 && ` · ${aligned.missing} eksik`}
             </span>
           </div>
           <div className="kv__row">
-            <span className="eyebrow">ÖDEMEYE ESAS ALAN</span>
+            <span className="eyebrow">{t("ÖDEMEYE ESAS ALAN")}</span>
             <span className="mono">{aligned.covered} alan</span>
           </div>
           <div className="kv__row">
-            <span className="eyebrow">PANEL SIRASINDA DOZAJLAR</span>
+            <span className="eyebrow">{t("PANEL SIRASINDA DOZAJLAR")}</span>
             <span className="mono">
               {aligned.dosages
                 .map((d) => (d === DOSAGE_MISSING ? "—" : d))

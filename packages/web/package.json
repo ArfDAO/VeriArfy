@@ -11,8 +11,8 @@
     "prepare-circuits": "node scripts/prepare-circuits.js",
     "test": "vitest run",
     "prepare-fhe-wasm": "node scripts/prepare-fhe-wasm.js",
-    "predev": "node scripts/prepare-fhe-wasm.js",
-    "prebuild": "node scripts/prepare-fhe-wasm.js"
+    "predev": "node scripts/prepare-fhe-wasm.js && node scripts/prepare-circuits.js",
+    "prebuild": "node scripts/prepare-fhe-wasm.js && node scripts/prepare-circuits.js"
   },
   "dependencies": {
     "@veriarfy/client-fhe-rust": "^0.1.0",

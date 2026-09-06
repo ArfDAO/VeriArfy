@@ -1,5 +1,6 @@
 import type { Evidence, TraceStep } from "../lib/trace";
 import { shorten, stepDuration } from "../lib/trace";
+import { useT } from "../lib/i18n";
 
 /**
  * Dogrulama konsolu.
@@ -22,6 +23,7 @@ const STATUS_LABEL: Record<TraceStep["status"], string> = {
 };
 
 function EvidenceRow({ item }: { item: Evidence }) {
+  const t = useT();
   const isLong = item.kind !== "value" && item.kind !== "note";
   const shown = isLong ? shorten(item.value) : item.value;
 
@@ -45,7 +47,7 @@ function EvidenceRow({ item }: { item: Evidence }) {
           </span>
         )}
         {item.verified && (
-          <span className="trace__verified" title="Zincirden geri okunarak dogrulandi">
+          <span className="trace__verified" title={t("Zincirden geri okunarak dogrulandi")}>
             ✓
           </span>
         )}
@@ -61,6 +63,7 @@ export function TraceConsole({
   steps: TraceStep[];
   title?: string;
 }) {
+  const t = useT();
   const verifiedCount = steps.reduce(
     (n, s) => n + s.evidence.filter((e) => e.verified).length,
     0,

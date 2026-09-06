@@ -15,10 +15,29 @@ export interface MerklePath {
 }
 
 async function call(path: string, init?: RequestInit) {
-  const res = await fetch(`${CURATOR_URL}${path}`, {
-    headers: { "content-type": "application/json" },
-    ...init,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${CURATOR_URL}${path}`, {
+      headers: { "content-type": "application/json" },
+      ...init,
+    });
+  } catch (reason) {
+    // AYRI BIR HATA OLMAK ZORUNDA.
+    //
+    // Ulasilamayan kurator, tarayicida "Failed to fetch" verir. O metin
+    // `userError` icindeki ag kalibina takiliyor ve kullaniciya "Sepolia
+    // agini ve RPC baglantinizi kontrol edin" deniyordu — oysa Sepolia
+    // gayet calisiyor, eksik olan YEREL kurator servisi. Yanlis tarafa
+    // arattiran bir hata mesaji, hata mesaji olmamasindan daha kotudur.
+    // `{ cause }` kullanilmiyor: tsconfig ES2021 hedefliyor ve `Error.cause`
+    // ES2022. Sebep metne katiliyor — zaten kullanicinin kopyalayip
+    // gonderdigi sey gorunen mesaj oluyor.
+    const detail = reason instanceof Error ? reason.message : String(reason);
+    throw new Error(
+      `Kurator servisine ulasilamadi (${CURATOR_URL}). ` +
+        `Servisi baslatin: npm run curator [${detail}]`,
+    );
+  }
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(`Kurator hatasi (${res.status}): ${body || res.statusText}`);
