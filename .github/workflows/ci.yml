@@ -90,16 +90,10 @@ jobs:
       #
       # Paketler BURADA uretilir (arac zinciri ve onbellek zaten burada) ve
       # `js` isine artefakt olarak devredilir.
-      # Resmi kurulum betigi: ucuncu taraf bir action eklemek yerine
-      # rustwasm'in kendi dagitimindan onceden derlenmis ikili indirilir.
-      - name: wasm-pack kur
-        run: curl -sSf https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
-
-      - name: VCF ayristirici — wasm paketi
-        run: npm run wasm:build
-
-      - name: FHE sifreleyici — wasm paketi
-        run: npm run fhe:build
+      # Vercel build script'i burada da calistirilir; boylece clean deployment
+      # ortami ile CI ayni Rust/wasm-pack akisini kullanir.
+      - name: Vercel Wasm derleme akisini calistir
+        run: node scripts/vercel-build.mjs --wasm-only
 
       - name: Paketleri devret
         uses: actions/upload-artifact@v4
@@ -332,6 +326,12 @@ jobs:
 
       - name: Istatistik motoru — oz test
         run: npm run study:test
+
+      - name: Arayuz testleri
+        run: npm run test --workspace packages/web
+
+      - name: Sabit devre artifact guard testleri
+        run: node --test packages/web/scripts/prepare-circuits-check.mjs
 
       # `web:build` zaten `tsc -b` calistirir; tip hatasi burada yakalanir.
       - name: Arayuz — tip denetimi ve derleme
