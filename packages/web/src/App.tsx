@@ -9,6 +9,7 @@ import { SectionHead, FeatureRow, Footer, StatRow } from "./components/Marketing
 import { submitSurvey, getResults, getStats, type AnalysisResults } from "./lib/api";
 import { PanelShell } from "./components/PanelShell";
 import { useSession, type SessionRole } from "./lib/session";
+import { useT } from "./lib/i18n";
 
 const Giris = lazy(async () => ({ default: (await import("./routes/Giris")).Giris }));
 const Ozet = lazy(async () => ({ default: (await import("./routes/panel/Ozet")).Ozet }));
@@ -23,6 +24,7 @@ const Sonuclar = lazy(async () => ({ default: (await import("./routes/arastirma/
 const Dugum = lazy(async () => ({ default: (await import("./routes/arastirma/Dugum")).Dugum }));
 
 function AnaSayfa() {
+  const t = useT();
   const [participantCount, setParticipantCount] = useState<number | null>(null);
   const [results, setResults] = useState<AnalysisResults | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -54,7 +56,7 @@ function AnaSayfa() {
       const newResults = await getResults();
       setResults(newResults);
     } catch (err: any) {
-      setError(userError(err, "Gönderim başarısız. Bağlantıyı kontrol edip yeniden deneyin."));
+      setError(userError(err, t("Gönderim başarısız. Bağlantıyı kontrol edip yeniden deneyin.")));
     } finally {
       setSubmitting(false);
     }
@@ -62,7 +64,7 @@ function AnaSayfa() {
 
   return (
     <div className="app">
-      <a className="skip-link" href="#main-content">Ana içeriğe geç</a>
+      <a className="skip-link" href="#main-content">{t("Ana içeriğe geç")}</a>
       <Nav />
 
       {error && (
@@ -79,46 +81,46 @@ function AnaSayfa() {
       <div className="band" id="anket">
         <div className="section">
           <SectionHead
-            eyebrow="KATILIM"
-            title="Anketi doldurun"
-            sub="6 basit soru cevaplayın. Cevaplarınız hem normal hem de FHE ile şifreli olarak işlenecek."
+            eyebrow={t("KATILIM")}
+            title={t("Anketi doldurun")}
+            sub={t("6 basit soru cevaplayın. Cevaplarınız hem normal hem de FHE ile şifreli olarak işlenecek.")}
           />
           <div className="survey-shell">
             {submitted ? (
               <section className="survey-completion" aria-live="polite">
-                <span className="eyebrow">KAYIT TAMAMLANDI</span>
-                <h3>Anket kaydı alındı.</h3>
+                <span className="eyebrow">{t("KAYIT TAMAMLANDI")}</span>
+                <h3>{t("Anket kaydı alındı.")}</h3>
                 {lastPrediction && (
                   <div className="survey-completion__outcomes">
                     <div className="card__row">
-                      <span className="eyebrow">GERÇEK CEVABINIZ</span>
-                      <span className="mono">{lastPrediction.true_label === 1 ? "Yüksek Kaygı" : "Sakin"}</span>
+                      <span className="eyebrow">{t("GERÇEK CEVABINIZ")}</span>
+                      <span className="mono">{t(lastPrediction.true_label === 1 ? "Yüksek Kaygı" : "Sakin")}</span>
                     </div>
                     <div className="card__row">
-                      <span className="eyebrow">ŞİFRESİZ MODEL TAHMİNİ</span>
+                      <span className="eyebrow">{t("ŞİFRESİZ MODEL TAHMİNİ")}</span>
                       <span className={`mono survey-completion__prediction ${lastPrediction.plain_correct ? "is-verified" : "is-mismatch"}`}>
-                        {lastPrediction.plain_pred === 1 ? "Yüksek Kaygı" : "Sakin"} {lastPrediction.plain_correct ? "doğrulandı" : "uyuşmadı"}
+                        {t(lastPrediction.plain_pred === 1 ? "Yüksek Kaygı" : "Sakin")} {t(lastPrediction.plain_correct ? "doğrulandı" : "uyuşmadı")}
                       </span>
                     </div>
                     <div className="card__row">
-                      <span className="eyebrow">ŞİFRELİ (FHE) MODEL TAHMİNİ</span>
+                      <span className="eyebrow">{t("ŞİFRELİ (FHE) MODEL TAHMİNİ")}</span>
                       <span className={`mono survey-completion__prediction ${lastPrediction.fhe_correct ? "is-verified" : "is-mismatch"}`}>
-                        {lastPrediction.fhe_pred === 1 ? "Yüksek Kaygı" : "Sakin"} {lastPrediction.fhe_correct ? "doğrulandı" : "uyuşmadı"}
+                        {t(lastPrediction.fhe_pred === 1 ? "Yüksek Kaygı" : "Sakin")} {t(lastPrediction.fhe_correct ? "doğrulandı" : "uyuşmadı")}
                       </span>
                     </div>
 
                     {lastPrediction.crypto_proof && (
                       <article className="survey-proof">
-                        <span className="eyebrow">FHE ŞİFRELEME KANITI</span>
+                        <span className="eyebrow">{t("FHE ŞİFRELEME KANITI")}</span>
                         <p>
-                          Verileriniz Zama Concrete ML kullanılarak şifrelendi ve tahmin işlemi bu şifreli devre (ciphertext) üzerinde yapıldı.
+                          {t("Verileriniz Zama Concrete ML kullanılarak şifrelendi ve tahmin işlemi bu şifreli devre (ciphertext) üzerinde yapıldı.")}
                         </p>
                         <div className="survey-proof__facts">
                           <div className="card__row">
-                            <span>Şifreli veri boyutu</span><strong className="mono">{lastPrediction.crypto_proof.ciphertext_size_bytes} Byte</strong>
+                            <span>{t("Şifreli veri boyutu")}</span><strong className="mono">{lastPrediction.crypto_proof.ciphertext_size_bytes} Byte</strong>
                           </div>
                           <div className="survey-proof__hash">
-                            <span>Ciphertext hex özeti</span>
+                            <span>{t("Ciphertext hex özeti")}</span>
                             <div className="mono">
                               {lastPrediction.crypto_proof.ciphertext_hex}
                             </div>
@@ -146,7 +148,7 @@ function AnaSayfa() {
                                 URL.revokeObjectURL(url);
                               }}
                             >
-                              Şifreli veriyi indir (.bin)
+                              {t("Şifreli veriyi indir (.bin)")}
                             </button>
                           </div>
                         </div>
@@ -158,7 +160,7 @@ function AnaSayfa() {
                   className="pill pill--primary"
                   onClick={() => setSubmitted(false)}
                 >
-                  Tekrar Doldur
+                  {t("Tekrar Doldur")}
                 </button>
               </section>
             ) : (
@@ -171,9 +173,9 @@ function AnaSayfa() {
       {/* Results Section */}
       <div className="section results-section" id="sonuclar">
         <SectionHead
-          eyebrow="CANLI SONUÇLAR"
-          title="Şifreli vs Şifresiz Model"
-          sub="Gerçek kullanıcı verileri üzerinde iki modelin doğruluk karşılaştırması."
+          eyebrow={t("CANLI SONUÇLAR")}
+          title={t("Şifreli vs Şifresiz Model")}
+          sub={t("Gerçek kullanıcı verileri üzerinde iki modelin doğruluk karşılaştırması.")}
         />
         <FheResults results={results} loading={submitting} />
       </div>
@@ -182,9 +184,9 @@ function AnaSayfa() {
       <div className="band">
         <div className="section">
           <SectionHead
-            eyebrow="NASIL ÇALIŞIYOR?"
-            title="Güven ama doğrula"
-            sub="Aynı veri iki bağımsız hattan geçirilir ve sonuçlar kıyaslanır."
+            eyebrow={t("NASIL ÇALIŞIYOR?")}
+            title={t("Güven ama doğrula")}
+            sub={t("Aynı veri iki bağımsız hattan geçirilir ve sonuçlar kıyaslanır.")}
           />
           <FeatureRow />
         </div>
@@ -197,13 +199,14 @@ function AnaSayfa() {
 }
 
 function RoleGate({ role }: { role: Exclude<SessionRole, null> }) {
+  const t = useT();
   const { address, role: selectedRole, restoring } = useSession();
 
   if (restoring) {
     return (
       <main className="route-loading" aria-live="polite">
-        <span className="eyebrow">OTURUM GERI YUKLENIYOR</span>
-        <p>Cuzdan baglantisi dogrulaniyor.</p>
+        <span className="eyebrow">{t("OTURUM GERI YUKLENIYOR")}</span>
+        <p>{t("Cuzdan baglantisi dogrulaniyor.")}</p>
       </main>
     );
   }
@@ -216,9 +219,14 @@ function RoleGate({ role }: { role: Exclude<SessionRole, null> }) {
   return <PanelShell role={role} />;
 }
 
+function PanelFallback() {
+  const t = useT();
+  return <main className="route-loading">{t("Panel yukleniyor...")}</main>;
+}
+
 export default function App() {
   return (
-    <Suspense fallback={<main className="route-loading">Panel yukleniyor...</main>}>
+    <Suspense fallback={<PanelFallback />}>
       <Routes>
         <Route path="/" element={<AnaSayfa />} />
         <Route path="/giris" element={<Giris />} />

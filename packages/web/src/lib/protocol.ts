@@ -1,4 +1,11 @@
-import { Contract, formatUnits, type BrowserProvider, type Signer } from "ethers";
+import {
+  Contract,
+  JsonRpcProvider,
+  formatUnits,
+  type BrowserProvider,
+  type Provider,
+  type Signer,
+} from "ethers";
 
 import { CONTRACTS, ZERO_ADDRESS } from "../config";
 import {
@@ -22,7 +29,41 @@ import type { MetricPanel, MetricSpec } from "./metrics";
  * fonksiyonlar hata firlatir — panel bunu kullaniciya acikca gosterir.
  */
 
-export function getProtocol(runner: BrowserProvider | Signer) {
+/**
+ * SALT-OKUNUR cagrilar icin cuzdandan bagimsiz Sepolia RPC.
+ *
+ * Enjekte cuzdan saglayicilari (MetaMask vb.) yogun `eth_call` dizilerinde
+ * `missing revert data` / bos yanit donebiliyor. `fhe.ts` ayni sorunu daha
+ * once yasadi ve SDK'ye dogrudan RPC vererek cozdu (bkz. commit
+ * "bypass wallet RPC for FHE reads"); sorgu ve acilim okumalari ayni
+ * tuzaktaydi: satin alim zincirde basarili oluyor ama Sorgular ekrani
+ * "Sorgu durumu zincirden okunamadi" diyordu.
+ *
+ * Yalnizca OKUMA buraya gider. Imzalama ve durum degistiren her islem
+ * kullanicinin secili cuzdaninda kalir — aksi halde islem gonderen taraf
+ * degisirdi.
+ */
+const READ_RPC = "https://ethereum-sepolia-rpc.publicnode.com";
+
+let readProvider: JsonRpcProvider | null = null;
+
+/**
+ * Verilen runner'i salt-okunur cagrilar icin dayanikli bir saglayiciyla
+ * degistirir.
+ *
+ * @remarks Signer gelirse DOKUNULMAZ: cagiran taraf imza atacak demektir.
+ */
+export function readRunner(runner: BrowserProvider): JsonRpcProvider;
+export function readRunner(runner: Signer): Signer;
+export function readRunner(runner: BrowserProvider | Signer): Signer | JsonRpcProvider;
+export function readRunner(runner: BrowserProvider | Signer): BrowserProvider | Signer | JsonRpcProvider {
+  // Signer ise (islem gonderilecekse) oldugu gibi kalir.
+  if (typeof (runner as Signer).signMessage === "function") return runner;
+  readProvider ??= new JsonRpcProvider(READ_RPC);
+  return readProvider;
+}
+
+export function getProtocol(runner: BrowserProvider | Signer | Provider) {
   return new Contract(CONTRACTS.VeriarfyProtocol, PROTOCOL_ABI, runner);
 }
 
@@ -39,7 +80,7 @@ export function getBiomarkers(runner: BrowserProvider | Signer) {
   return new Contract(address, BIOMARKERS_ABI, runner);
 }
 
-export function getPayments(runner: BrowserProvider | Signer) {
+export function getPayments(runner: BrowserProvider | Signer | Provider) {
   return new Contract(CONTRACTS.VeriarfyPayments, PAYMENTS_ABI, runner);
 }
 
@@ -961,9 +1002,18 @@ export async function readDisclosure(
   requestId: number,
   queryType: number,
 ): Promise<DisclosureState> {
-  const protocol = getProtocol(runner);
-  const provider = "provider" in runner ? (runner as any).provider : runner;
-
+  // `readRunner` intentionally preserves signers for write flows. For this
+  // read, use the signer's own provider so a connected wallet stays on its
+  // selected network; a disconnected signer cannot perform the block read.
+  const isSignerRunner = (value: BrowserProvider | Signer): value is Signer =>
+    typeof (value as Signer).signMessage === "function";
+  const provider = isSignerRunner(runner) ? runner.provider : readRunner(runner);
+  if (!provider) {
+    throw new Error("Cüzdan sağlayıcısı bağlı değil; önce cüzdanı bağlayın.");
+  }
+  const protocol = getProtocol(provider);
+  // Blok numarasi da dayanikli RPC'den: cuzdan saglayicisi burada da bos
+  // donebiliyor ve tek bir bos yanit tum Promise.all'i dusuruyor.
   const [info, finalized, revoked, granted, required, snpIds, metricIds, currentBlock] =
     await Promise.all([
       protocol.disclosureRequest(requestId),
@@ -1340,7 +1390,7 @@ export async function findOpenQuery(
   runner: BrowserProvider | Signer,
   researcher: string,
 ): Promise<{ queryId: number; requestId: number; fee: bigint } | null> {
-  const payments = getPayments(runner);
+  const payments = getPayments(readRunner(runner));
   const total = Number(await payments.nextQueryId());
 
   // En yeniden geriye; ilk uyan doner. Sinirli tarama: panelin acilisini

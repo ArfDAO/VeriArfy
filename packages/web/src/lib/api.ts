@@ -1,4 +1,11 @@
-const API_BASE = "http://localhost:8000";
+/**
+ * Anket/ML servisinin adresi.
+ *
+ * Uretimde (Vercel) boyle bir servis YOK: `localhost:8000` sabit yazilinca
+ * dagitik sitede her istek baglanti hatasiyla dusuyordu. Adres artik
+ * `VITE_API_BASE` ile verilir; verilmezse yerel gelistirme adresine duser.
+ */
+const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 
 export interface SubmitData {
   social_media_hours: number;

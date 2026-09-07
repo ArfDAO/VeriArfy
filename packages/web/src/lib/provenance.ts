@@ -27,6 +27,7 @@
  */
 import { poseidon2 } from "poseidon-lite/poseidon2";
 import { poseidon9 } from "poseidon-lite/poseidon9";
+import { PROVENANCE_CIRCUIT_WASM, PROVENANCE_CIRCUIT_ZKEY } from "../config/circuits";
 
 /** Devrenin derlendigi panel boyutu — `DataProvenance(1000, 20)`. */
 export const PANEL_SIZE = 1000;
@@ -257,15 +258,24 @@ export async function proveSelfProvenance(params: {
     attested: "0",
   };
 
-  // Degisken specifier: TS statik cozmez, opsiyonel bagimlilik olarak kalir.
-  const mod = "snarkjs";
-  const snarkjs: any = await import(/* @vite-ignore */ mod);
+  // DOGRUDAN import — degisken specifier + `@vite-ignore` DEGIL.
+  //
+  // Onceki hali `const mod = "snarkjs"; await import(mod)` idi. `@vite-ignore`
+  // Vite'a "bu import'u cozumleme" der; tarayici da ciplak `snarkjs`
+  // belirtecini cozemez ve tam olarak su hatayi verir:
+  //
+  //     Failed to resolve module specifier 'snarkjs'
+  //
+  // Statik yazildiginda Vite paketin `browser` kosulunu (build/browser.esm.js)
+  // secer ve dinamik import ayri bir parca olarak kalir — snarkjs buyuk
+  // oldugu icin tembel yukleme korunur.
+  const snarkjs = await import("snarkjs");
 
   const startedAt = performance.now();
   const { proof } = await snarkjs.groth16.fullProve(
     input,
-    params.wasmUrl ?? "/circuits/data_provenance.wasm",
-    params.zkeyUrl ?? "/circuits/data_provenance_final.zkey",
+    params.wasmUrl ?? PROVENANCE_CIRCUIT_WASM,
+    params.zkeyUrl ?? PROVENANCE_CIRCUIT_ZKEY,
   );
   const provingMs = performance.now() - startedAt;
 

@@ -5,8 +5,10 @@ import { formatEther } from "ethers";
 import { SEPOLIA_CHAIN_ID } from "../../config";
 import { getProtocol, readNodeStake, stakeNode, type NodeStakeState } from "../../lib/protocol";
 import { useSession } from "../../lib/session";
+import { useT } from "../../lib/i18n";
 
 export function Dugum() {
+  const t = useT();
   const { address, chainId, provider, signer } = useSession();
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [stake, setStake] = useState<NodeStakeState | null>(null);
@@ -57,38 +59,38 @@ export function Dugum() {
     <section className="node-panel" aria-labelledby="node-panel-title">
       <div className="node-panel__heading">
         <div>
-          <span className="eyebrow">ARASTIRMACI / DUGUM</span>
-          <h1 id="node-panel-title">Onay dugumunuzun ekonomik yeterliligi</h1>
-          <p>Yetkili olmak tek basina yeterli degil: `minStake()` sorgu degeriyle buyur ve onay uygunlugu zincirden yeniden okunur.</p>
+          <span className="eyebrow">{t("ARASTIRMACI / DUGUM")}</span>
+          <h1 id="node-panel-title">{t("Onay dugumunuzun ekonomik yeterliligi")}</h1>
+          <p>{t("Yetkili olmak tek basina yeterli degil: `minStake()` sorgu degeriyle buyur ve onay uygunlugu zincirden yeniden okunur.")}</p>
         </div>
-        <button className="pill pill--ghost" disabled={loading || wrongNetwork} onClick={() => void refresh()}>{loading ? "Okunuyor..." : "Yenile"}</button>
+        <button className="pill pill--ghost" disabled={loading || wrongNetwork} onClick={() => void refresh()}>{loading ? t("Okunuyor...") : t("Yenile")}</button>
       </div>
 
-      {wrongNetwork && <div className="notice notice--warn">Dugum ve stake durumu yalnizca Sepolia aginda okunabilir.</div>}
+      {wrongNetwork && <div className="notice notice--warn">{t("Dugum ve stake durumu yalnizca Sepolia aginda okunabilir.")}</div>}
       {notice && <div className={`notice notice--${notice.kind}`} role="status">{notice.text}</div>}
 
       <div className="node-panel__grid">
         <article className="node-panel__state card">
-          <span className="eyebrow">YETKI DURUMU</span>
-          <strong className="node-panel__status">{authorized === null ? "-" : authorized ? "Yetkili dugum" : "Yetkili degil"}</strong>
-          <p>{authorized ? "Bu cuzdana onay yetkisi verilmis." : "Bu cuzdana protokol tarafindan onay yetkisi verilmemis."}</p>
+          <span className="eyebrow">{t("YETKI DURUMU")}</span>
+          <strong className="node-panel__status">{authorized === null ? "-" : authorized ? t("Yetkili dugum") : t("Yetkili degil")}</strong>
+          <p>{authorized ? t("Bu cuzdana onay yetkisi verilmis.") : t("Bu cuzdana protokol tarafindan onay yetkisi verilmemis.")}</p>
         </article>
         <article className="node-panel__state card">
-          <span className="eyebrow">GUNCEL minStake()</span>
+          <span className="eyebrow">{t("GUNCEL minStake()")}</span>
           <strong className="node-panel__status mono">{stake ? `${formatEther(stake.required)} ETH` : "-"}</strong>
-          <p>Gerekli teminat; gecmis toplam ucret buyudukce artabilir.</p>
+          <p>{t("Gerekli teminat; gecmis toplam ucret buyudukce artabilir.")}</p>
         </article>
         <article className="node-panel__state card">
-          <span className="eyebrow">ONAY VEREBILIR MI</span>
-          <strong className="node-panel__status">{stake ? stake.banned ? "Yasakli" : stake.canApprove ? "Evet" : "Hayir" : "-"}</strong>
-          <p>{stake?.banned ? "Yasakli dugum stake yatiramaz." : stake?.canApprove ? "Yetki ve teminat esigi saglaniyor." : "Teminat esigi saglanmadan onay islemi revert olur."}</p>
+          <span className="eyebrow">{t("ONAY VEREBILIR MI")}</span>
+          <strong className="node-panel__status">{stake ? stake.banned ? "Yasakli" : stake.canApprove ? t("Evet") : t("Hayir") : "-"}</strong>
+          <p>{stake?.banned ? "Yasakli dugum stake yatiramaz." : stake?.canApprove ? t("Yetki ve teminat esigi saglaniyor.") : t("Teminat esigi saglanmadan onay islemi revert olur.")}</p>
         </article>
       </div>
 
       {authorized && stake && (
         <aside className="node-panel__stake card card--bone">
           <div>
-            <span className="eyebrow">TEMINAT</span>
+            <span className="eyebrow">{t("TEMINAT")}</span>
             <h2>{formatEther(stake.staked)} ETH yatirilmis</h2>
             <p>{stake.shortfall === 0n ? "Guncel minStake esigi saglaniyor." : `${formatEther(stake.shortfall)} ETH eksik. Buton, esik yeniden artarsa hemen yetersiz kalmamak icin eksigin %120sini yatirir.`}</p>
           </div>

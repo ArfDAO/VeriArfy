@@ -4,10 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import { SEPOLIA_CHAIN_ID } from "../../config";
 import { leavePool, readDashboard, readPersistence, type DashboardState, type PersistenceState } from "../../lib/protocol";
 import { useSession } from "../../lib/session";
+import { useT } from "../../lib/i18n";
 
 const short = (value: string) => value && value !== `0x${"0".repeat(64)}` ? `${value.slice(0, 10)}...${value.slice(-6)}` : "Kayit yok";
 
 export function Gizlilik() {
+  const t = useT();
   const { address, chainId, provider, signer } = useSession();
   const [state, setState] = useState<DashboardState | null>(null);
   const [persistence, setPersistence] = useState<PersistenceState | null>(null);
@@ -42,14 +44,14 @@ export function Gizlilik() {
 
   const active = state?.membership.active === true;
   return <section className="privacy" aria-labelledby="privacy-title">
-    <div className="owner-overview__heading"><div><span className="eyebrow">VERI SAHIBI / GIZLILIK</span><h1 id="privacy-title">Havuz ve veri kasasi</h1><p>Bu ekran yalnizca zincirdeki uyelik ve taahhut bilgilerini gosterir; ham veri veya sifreleme anahtari gostermez.</p></div><button className="pill pill--ghost" onClick={() => void refresh()} disabled={busy}>Yenile</button></div>
+    <div className="owner-overview__heading"><div><span className="eyebrow">{t("VERI SAHIBI / GIZLILIK")}</span><h1 id="privacy-title">{t("Havuz ve veri kasasi")}</h1><p>{t("Bu ekran yalnizca zincirdeki uyelik ve taahhut bilgilerini gosterir; ham veri veya sifreleme anahtari gostermez.")}</p></div><button className="pill pill--ghost" onClick={() => void refresh()} disabled={busy}>{t("Yenile")}</button></div>
     {error && <div className="notice notice--warn">{error}</div>}
     <div className="owner-overview__metrics">
-      <article className="owner-overview__metric card"><span className="eyebrow">HAVUZ DURUMU</span><strong className="mono">{active ? "Aktif" : state?.membership.leftAtBlock ? "Ayrildi" : "Uye degil"}</strong><p>{state?.membership.leftAtBlock ? `Cikis blogu: ${state.membership.leftAtBlock}` : ""}</p></article>
-      <article className="owner-overview__metric card"><span className="eyebrow">CID OZETI</span><strong className="mono">{short(state?.vault.cidDigest ?? "")}</strong><p>Kayitli veri kasasinin zincirdeki ozetidir.</p></article>
-      <article className="owner-overview__metric card"><span className="eyebrow">PANEL TAAHHUDU</span><strong className="mono">{state?.vault.commitment && state.vault.commitment !== "0" ? `${state.vault.commitment.slice(0, 12)}...` : "Kayit yok"}</strong><p>Panel geri cikarilamaz bir taahhut olarak tutulur.</p></article>
-      <article className="owner-overview__metric card"><span className="eyebrow">KALICILIK</span><strong className="mono">{persistence?.tracked ? `${persistence.replicas} saglayici` : "Takip yok"}</strong><p>{persistence?.dueForRenewal ? "Yenileme gerekli." : ""}</p></article>
+      <article className="owner-overview__metric card"><span className="eyebrow">{t("HAVUZ DURUMU")}</span><strong className="mono">{t(active ? "Aktif" : state?.membership.leftAtBlock ? t("Ayrildi") : t("Uye degil"))}</strong><p>{state?.membership.leftAtBlock ? t("Cikis blogu: {block}", { block: state.membership.leftAtBlock }) : ""}</p></article>
+      <article className="owner-overview__metric card"><span className="eyebrow">{t("CID OZETI")}</span><strong className="mono">{short(state?.vault.cidDigest ?? "")}</strong><p>{t("Kayitli veri kasasinin zincirdeki ozetidir.")}</p></article>
+      <article className="owner-overview__metric card"><span className="eyebrow">{t("PANEL TAAHHUDU")}</span><strong className="mono">{state?.vault.commitment && state.vault.commitment !== "0" ? `${state.vault.commitment.slice(0, 12)}...` : t("Kayit yok")}</strong><p>{t("Panel geri cikarilamaz bir taahhut olarak tutulur.")}</p></article>
+      <article className="owner-overview__metric card"><span className="eyebrow">{t("KALICILIK")}</span><strong className="mono">{persistence?.tracked ? t("{n} saglayici", { n: persistence.replicas }) : t("Takip yok")}</strong><p>{persistence?.dueForRenewal ? t("Yenileme gerekli.") : ""}</p></article>
     </div>
-    {active && <div className="card"><span className="eyebrow">HAVUZDAN AYRILMA</span><h2 style={{ marginTop: 8 }}>Gelecek sorgu paylarini durdur</h2><p className="card__body"><strong>Ayrilmak gecmisi silmez.</strong> Zaten homomorfik toplama karismis veriniz geri cekilemez; daha once hak ettiginiz oduller korunur. Ayrilma, bundan sonra acilacak sorgularda yeni pay olusmasini durdurur.</p><button className="pill pill--primary" style={{ marginTop: 16 }} disabled={busy} onClick={() => void leave()}>{busy ? "Islem gonderiliyor..." : "Havuzdan ayril"}</button></div>}
+    {active && <div className="card"><span className="eyebrow">{t("HAVUZDAN AYRILMA")}</span><h2 style={{ marginTop: 8 }}>{t("Gelecek sorgu paylarini durdur")}</h2><p className="card__body"><strong>{t("Ayrilmak gecmisi silmez.")}</strong> {t("Zaten homomorfik toplama karismis veriniz geri cekilemez; daha once hak ettiginiz oduller korunur. Ayrilma, bundan sonra acilacak sorgularda yeni pay olusmasini durdurur.")}</p><button className="pill pill--primary" style={{ marginTop: 16 }} disabled={busy} onClick={() => void leave()}>{t(busy ? t("Islem gonderiliyor...") : t("Havuzdan ayril"))}</button></div>}
   </section>;
 }

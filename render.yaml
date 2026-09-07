@@ -1,0 +1,36 @@
+# VeriArfy — arayuz disindaki iki servis.
+#
+# Arayuz Vercel'de duruyor (statik). Burada yalnizca durum tutan ya da agir
+# bagimliliga sahip olanlar var:
+#
+#   kurator : Merkle agacini tutar; arastirmaci ZK kaydi bunsuz yapilamaz.
+#   ml      : sifreli/sifresiz model karsilastirmasi (ana sayfa anketi).
+#
+# Ikisi de Sepolia'ya yalnizca OKUMA yapar; hicbiri ozel anahtar tutmaz.
+# Kok guncellemesi (`curator:push-root`) bilincli olarak elle calistirilir —
+# zincire yazan bir islemi barindirilan servise vermek, anahtari oraya
+# koymak demekti.
+services:
+  - type: web
+    name: veriarfy-curator
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node packages/curator/src/server.js
+    envVars:
+      - key: CURATOR_PORT
+        value: 10000
+      # IPFS yuklemesi icin; verilmezse /ipfs/upload ucu calismaz,
+      # kayit akisi etkilenmez.
+      - key: PINATA_JWT
+        sync: false
+
+  - type: web
+    name: veriarfy-ml
+    runtime: docker
+    plan: free
+    dockerfilePath: ./packages/ml/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: PORT
+        value: 10000

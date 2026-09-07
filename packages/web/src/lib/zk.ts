@@ -80,16 +80,11 @@ export async function generateProof(params: {
   root: bigint;
   nullifierHash: bigint;
 }> {
-  let snarkjs: any;
-  try {
-    // Degisken specifier: TS statik cozmez, opsiyonel bagimlilik olarak kalir.
-    const mod = "snarkjs";
-    snarkjs = await import(/* @vite-ignore */ mod);
-  } catch {
-    throw new Error(
-      "snarkjs kurulu degil. Tarayicida kanit uretmek icin `npm i snarkjs` calistirin.",
-    );
-  }
+  // snarkjs GERCEK bir bagimlilik (package.json), opsiyonel degil. Daha once
+  // degisken specifier + `@vite-ignore` ile cagriliyordu; o kalip Vite'in
+  // cozumlemesini kapatiyor ve tarayici ciplak belirtec uzerinde
+  // "Failed to resolve module specifier 'snarkjs'" ile dusuyordu.
+  const snarkjs = await import("snarkjs");
 
   const input = {
     identityTrapdoor: params.identity.trapdoor.toString(),

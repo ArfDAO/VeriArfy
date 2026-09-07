@@ -319,3 +319,53 @@
   .trace__ev { grid-template-columns: 1fr; gap: .15rem; }
   .footer__content { flex-direction: column; }
 }
+
+/* --- Dil secici --- */
+/*
+ * Iki secenek yan yana; acilir liste degil. Az secenekte liste bir tiklama
+ * fazladan maliyet demek ve mevcut dil gorunmez olurdu.
+ *
+ * Tokenlar tasarim sisteminin GUNCEL adlari (--text-primary vb.); eski
+ * --color-ink / --radius-pill artik tanimli degil ve sessizce sifir
+ * degerine duserdi.
+ */
+.lang-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+.lang-switch__option {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: var(--tracking-mono);
+  padding: 0.28rem 0.55rem;
+  border: 0;
+  border-radius: calc(var(--radius-control) - 1px);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+.lang-switch__option:hover {
+  color: var(--text-primary);
+}
+.lang-switch__option.is-active {
+  background: var(--text-primary);
+  color: var(--surface-raised);
+}
+/* Klavye odagi gorunur kalir; `outline: none` verilmiyor. */
+.lang-switch__option:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
+
+.login-page__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-16);
+}
