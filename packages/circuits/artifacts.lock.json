@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "purpose": "Frozen D/15 circuit artifacts; do not update during ordinary CI builds.",
+  "circuits": {
+    "identity": {
+      "sha256": {
+        "wasm": "85effdc122cc18ed8db65e6b99f670b72d9fd5ef45903b55f6f67f57ad6f0cf5",
+        "zkey": "ba037ff8901e65e42278494022399511e296018d2c574118baf6f358fc883765",
+        "vkey": "70bb8362bd8410adecd4b62c81f2e226a95e52b74c57164beaa22a6681228783",
+        "verifier": "1ddde74ca7f1222f12f192ec1b94091d5e375d2cce3803e10118b5806844d46c"
+      }
+    },
+    "provenance": {
+      "sha256": {
+        "wasm": "9d31c9398d8290e5f0e9a42a408ed75e764332f9eda7764c50aa9068e2264289",
+        "zkey": "834d4ab24cdcf433b6e5df67b1d948dc1285890e2fa7ce9e778ce64b075692f3",
+        "vkey": "290034e980cf3855956883981c8ddb4b0e010a7ea60ae661886f0dab44dfcff5",
+        "verifier": "2f32b57def8eb984396ad28f34ac84f4b71a2f4409fba8c7883413108f0216c6"
+      }
+    }
+  }
+}

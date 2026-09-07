@@ -5,6 +5,7 @@ import { ethers, fhevm, network } from "hardhat";
 import { getAddress } from "ethers";
 
 import { parseAuthorizedNodeAddresses } from "./node-addresses";
+import { fullProveIsolated } from "./isolated-proof";
 import {
   approvalStageDecision,
   assertApprovalStageResult,
@@ -532,8 +533,7 @@ async function main() {
   console.log("ZK koken kaniti uretiliyor...");
   const provenance = await import("@veriarfy/circuits/provenance");
   const circuits = await import("@veriarfy/circuits");
-  const snarkjs: any = await import("snarkjs");
-  const { institution, registry: institutionRegistry } = await provenance.developmentRegistry();
+  const { registry: institutionRegistry } = await provenance.developmentRegistry();
 
   // Panel uzunlugu devreden gelir; sabit yazilmaz.
   PANEL = Array.from(
@@ -570,13 +570,19 @@ async function main() {
   });
 
   const startedAt = Date.now();
-  const { proof } = await snarkjs.groth16.fullProve(
+  const { proof, publicSignals } = await fullProveIsolated(
     provenanceInput,
     join(circuitsDir, "build", "data_provenance_js", "data_provenance.wasm"),
     join(circuitsDir, "build", "data_provenance_final.zkey"),
   );
   const { a, b, c } = circuits.toSolidityCalldata(proof);
   console.log(`  kanit uretildi: ${Date.now() - startedAt} ms`);
+  const provenanceVerifier = await ethers.getContractAt(
+    "DataProvenanceVerifier", await protocol.provenanceVerifier(),
+  );
+  if (!(await provenanceVerifier.verifyProof.staticCall(a, b, c, publicSignals))) {
+    throw new Error("prepare: koken proving key zincirdeki verifier ile uyusmuyor veya kanit gecersiz; transaction gonderilmedi");
+  }
 
   console.log("submitRecord gonderiliyor (kanitla)...");
   const submitTx = await protocol
@@ -847,10 +853,7 @@ async function main() {
     const identityTree = new circuits.IdentityTree();
     identityTree.insert(identity.commitment);
 
-    // Kontratin tanidigi kok bu agacinki olmali; sahip olarak koku yaziyoruz.
-    await (await registryContract.updateRoot(identityTree.root)).wait();
-
-    const { proof: identityProof } = await snarkjs.groth16.fullProve(
+    const { proof: identityProof, publicSignals: identitySignals } = await fullProveIsolated(
       circuits.buildCircuitInput({
         identity,
         tree: identityTree,
@@ -861,6 +864,17 @@ async function main() {
       join(circuitsDir, "build", "researcher_identity_final.zkey"),
     );
     const idCalldata = circuits.toSolidityCalldata(identityProof);
+    const identityVerifier = await ethers.getContractAt(
+      "Groth16Verifier", await registryContract.verifier(),
+    );
+    if (!(await identityVerifier.verifyProof.staticCall(
+      idCalldata.a, idCalldata.b, idCalldata.c, identitySignals,
+    ))) {
+      throw new Error("prepare: kimlik proving key zincirdeki verifier ile uyusmuyor veya kanit gecersiz; registry root degistirilmedi");
+    }
+
+    // Kanit tamamlanmadan zincirde kok degistirilmez.
+    await (await registryContract.updateRoot(identityTree.root)).wait();
 
     const regTx = await registryContract.register(
       identityTree.root,

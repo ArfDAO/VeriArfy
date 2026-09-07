@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run web:build",
+  "buildCommand": "node scripts/vercel-build.mjs",
   "outputDirectory": "packages/web/dist",
-  "installCommand": "npm install",
+  "installCommand": "npm ci",
   "framework": null,
   "rewrites": [
     { "source": "/((?!assets/|circuits/|fhe/|.*\\.[a-zA-Z0-9]+$).*)", "destination": "/index.html" }
@@ -10,11 +10,11 @@
   "headers": [
     {
       "source": "/circuits/(.*)",
-      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
     },
     {
       "source": "/fhe/(.*)",
-      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
     }
   ]
 }

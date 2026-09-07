@@ -1,0 +1,217 @@
+{
+  "planHash": "0xd026de9debced25767b1d6d5b023aa2157318ede64204a3a27ee14da8d15a62c",
+  "version": 1,
+  "chainId": 11155111,
+  "deployer": "0x836091aB39884BB57DB4Dd94Ee120286Ad7e4fe0",
+  "startNonce": 24,
+  "endNonce": 42,
+  "maxFeePerGas": "2000000000",
+  "maxPriorityFeePerGas": "100000000",
+  "maxCostWei": "54400000000000000",
+  "previousHash": "0xc4f54adf5821a37ec86456ae18f43bdb8cf8f980eafbecce30f2c9913ba2344d",
+  "keyLockHash": "0xdc9efccdd3a680ed64b57a941d36abac6b8264386161e972af430ffd243561a1",
+  "contracts": {
+    "PaymentToken": "0x6eE2984546034bF78C8ffFCaDB8cED1434C16758",
+    "VeriarfyStorage": "0x5DbC770ed983Be52359B47D971598F09Aa4fD058",
+    "Groth16Verifier": "0x8e3Ed62072CD40e852bEebFd1aE109951f19dCDB",
+    "VeriArfyRegistry": "0xfc6b3eeA139c3FDe044a52c65CdC6D0ff71c790B",
+    "AnxietyStudy": "0xcc7a9B96b7a2f5854a1Edf69110Ba9aBA9737C76",
+    "DataProvenanceVerifier": "0x67c4Cb7E33602394827fc7186B205dAd9F0fA1a3",
+    "VeriarfyProtocol": "0xcD3B1a850Eb33AC74786030919E0203005675CFB",
+    "VeriarfyPayments": "0x46d6CE86163Cc76168AdE12CC9b07034139B9507",
+    "VeriarfyBiomarkers": "0xEe4804448fC0E246763868C90Ca8A1B4CfA8014f",
+    "VeriarfyStaking": "0xc3e1ae7fC78be045Ac9C80D7C453B03356B69f7f"
+  },
+  "reused": {
+    "ContingencyStats": {
+      "address": "0xfb8913A9E1109aDcA7ee01517bd47af01FCa6DCb",
+      "runtimeHash": "0x43be299e7c6f21e3681f31453a15492ed3e4067eef43b07eada1e19e88c58599"
+    },
+    "CoverageBits": {
+      "address": "0x0B89f17DAa0cecb88bEF7d82fF708f91e4a6D3E7",
+      "runtimeHash": "0x31e32c1b71309a66b111cd0e31c324353ff7453f1b2eda242d8c5484ca06bc4c"
+    },
+    "StableTestToken": {
+      "address": "0x6eE2984546034bF78C8ffFCaDB8cED1434C16758",
+      "runtimeHash": "0x45894728362ed51432425fc9fdff2d87ab477e06b3fbccc760f9b66ca2fcc9b3"
+    },
+    "BiomarkerStats": {
+      "address": "0x1aAF2Ae06A6B0bb8E03377134FB75a0585583625",
+      "runtimeHash": "0xd9feb221971fcf6f977cff10c23686c96654d0f0747195e54d057dc61e6a9de1"
+    },
+    "VeriarfyStorage": {
+      "address": "0x5DbC770ed983Be52359B47D971598F09Aa4fD058",
+      "runtimeHash": "0x29a1c25e9ab0559fea8623d10cbae3d7b8a35af62cf9f0bf091d09bb032eadd5"
+    }
+  },
+  "steps": [
+    {
+      "nonce": 24,
+      "label": "deploy Groth16Verifier",
+      "to": null,
+      "value": "0",
+      "gasLimit": "1200000",
+      "contractName": "Groth16Verifier",
+      "address": "0x8e3Ed62072CD40e852bEebFd1aE109951f19dCDB",
+      "runtimeHash": "0x15a66eae3afdc84b97da5e21804bfce87078e4aa791929313f918a922deddcb0",
+      "dataHash": "0x0a440bdb3e272b5f67c79a00029453f77a0c9db28ec2ca8d1ec59921b859bc80"
+    },
+    {
+      "nonce": 25,
+      "label": "deploy VeriArfyRegistry",
+      "to": null,
+      "value": "0",
+      "gasLimit": "1200000",
+      "contractName": "VeriArfyRegistry",
+      "address": "0xfc6b3eeA139c3FDe044a52c65CdC6D0ff71c790B",
+      "runtimeHash": "0x03602e5cb1d14191fd3c9777fec2b2305dae659895a91bfa799e2a9546fa043a",
+      "dataHash": "0x6dba44a417d3ab86dd50104b2c080e9d6b4f887a3b5a293cb7be62e2d68ca695"
+    },
+    {
+      "nonce": 26,
+      "label": "deploy AnxietyStudy",
+      "to": null,
+      "value": "0",
+      "gasLimit": "2500000",
+      "contractName": "AnxietyStudy",
+      "address": "0xcc7a9B96b7a2f5854a1Edf69110Ba9aBA9737C76",
+      "runtimeHash": "0x20d1f48c1cda885b3979b63140f01e777279afd3c895a4b69da6eb33cfe64cee",
+      "dataHash": "0x030f8bcf2797dc411156e2384ffb3f3d5dc7e3aad4ea1de4a983bbd180bcf3ff"
+    },
+    {
+      "nonce": 27,
+      "label": "deploy DataProvenanceVerifier",
+      "to": null,
+      "value": "0",
+      "gasLimit": "1800000",
+      "contractName": "DataProvenanceVerifier",
+      "address": "0x67c4Cb7E33602394827fc7186B205dAd9F0fA1a3",
+      "runtimeHash": "0x861fdf2255f05d006ac3407bad9cf40d5458a866db2dba15bf4cfb371b984e2b",
+      "dataHash": "0xecba7bbbe3070325afd90219b1ceb2ebec229b68895134d9a8c3865063836a14"
+    },
+    {
+      "nonce": 28,
+      "label": "deploy VeriarfyProtocol",
+      "to": null,
+      "value": "0",
+      "gasLimit": "6000000",
+      "contractName": "VeriarfyProtocol",
+      "address": "0xcD3B1a850Eb33AC74786030919E0203005675CFB",
+      "runtimeHash": "0x2e283e8630a0538056b3f85a78484cc73e5eef113f400b8817bc2bb2c6638d97",
+      "dataHash": "0x276dbad9d391d918ddc46982232284f0f435fa22c99ae8f53ca7f61d841e9fd5"
+    },
+    {
+      "nonce": 29,
+      "label": "VeriarfyProtocol.authorizeNode",
+      "to": "0xcD3B1a850Eb33AC74786030919E0203005675CFB",
+      "value": "0",
+      "gasLimit": "150000",
+      "dataHash": "0x1f8978f45e9c5e9995eb33e2fb24b08247c7189fe62226952b66e20a2d1d3174"
+    },
+    {
+      "nonce": 30,
+      "label": "VeriarfyProtocol.authorizeNode",
+      "to": "0xcD3B1a850Eb33AC74786030919E0203005675CFB",
+      "value": "0",
+      "gasLimit": "150000",
+      "dataHash": "0xd115b874b7a03b5ca850136346f81df9b5fd619502a118b900d7540265b923bf"
+    },
+    {
+      "nonce": 31,
+      "label": "deploy VeriarfyPayments",
+      "to": null,
+      "value": "0",
+      "gasLimit": "4500000",
+      "contractName": "VeriarfyPayments",
+      "address": "0x46d6CE86163Cc76168AdE12CC9b07034139B9507",
+      "runtimeHash": "0x1db6152056a2b140f4a4d8eb68209d1b417c0821819721459d63218f3e50c351",
+      "dataHash": "0xe6adc5908233bb2c567fe6d894b89e99d848819bc52f0fba935905b04426a8c7"
+    },
+    {
+      "nonce": 32,
+      "label": "deploy VeriarfyBiomarkers",
+      "to": null,
+      "value": "0",
+      "gasLimit": "5000000",
+      "contractName": "VeriarfyBiomarkers",
+      "address": "0xEe4804448fC0E246763868C90Ca8A1B4CfA8014f",
+      "runtimeHash": "0x461e0e30cb8f663aebaf963d50cff64527a0da211c11b4ae3fd421ee6f968da5",
+      "dataHash": "0x5adc39c95d30687e00478f81376f3329ca9af6bb148350bdc9bbff52b895ee85"
+    },
+    {
+      "nonce": 33,
+      "label": "VeriarfyProtocol.setBiomarkerModule",
+      "to": "0xcD3B1a850Eb33AC74786030919E0203005675CFB",
+      "value": "0",
+      "gasLimit": "150000",
+      "dataHash": "0x87f33d7e44f27d1803e21ef1fd3a68db8eff9dcfe8b8f1be9ab9a7b3d07a9979"
+    },
+    {
+      "nonce": 34,
+      "label": "VeriarfyProtocol.configurePanel",
+      "to": "0xcD3B1a850Eb33AC74786030919E0203005675CFB",
+      "value": "0",
+      "gasLimit": "500000",
+      "dataHash": "0x475b8da1d1aa75fab808618159d2635973e727595e621d9875774227ef1a7ab3"
+    },
+    {
+      "nonce": 35,
+      "label": "VeriarfyBiomarkers.configureMetrics",
+      "to": "0xEe4804448fC0E246763868C90Ca8A1B4CfA8014f",
+      "value": "0",
+      "gasLimit": "800000",
+      "dataHash": "0x481ec05ac2b3fa7a6faa1ec3b0585bb0866be57dcc6b2bfc223a70dba4ab0677"
+    },
+    {
+      "nonce": 36,
+      "label": "VeriarfyProtocol.setQueryGateway",
+      "to": "0xcD3B1a850Eb33AC74786030919E0203005675CFB",
+      "value": "0",
+      "gasLimit": "150000",
+      "dataHash": "0xbc64a0a15b779fce057dec0285a3a9a5a506adc8101e808f6444b3693098b3ca"
+    },
+    {
+      "nonce": 37,
+      "label": "deploy VeriarfyStaking",
+      "to": null,
+      "value": "0",
+      "gasLimit": "2500000",
+      "contractName": "VeriarfyStaking",
+      "address": "0xc3e1ae7fC78be045Ac9C80D7C453B03356B69f7f",
+      "runtimeHash": "0xc9a3b54e18caf7cac482dabb74591ef4a46c870675e3b04505e6af890c834e8c",
+      "dataHash": "0x6fc7807a923a81b643c4eb65e26ca9b197a754548dfab9e55027309d048dc127"
+    },
+    {
+      "nonce": 38,
+      "label": "VeriarfyStaking.setPayments",
+      "to": "0xc3e1ae7fC78be045Ac9C80D7C453B03356B69f7f",
+      "value": "0",
+      "gasLimit": "150000",
+      "dataHash": "0x8066f9e26b26e9a8ae2ed56de30c05940826c4c21696198b438a9d3fd6c8f6af"
+    },
+    {
+      "nonce": 39,
+      "label": "VeriarfyProtocol.setStakingModule",
+      "to": "0xcD3B1a850Eb33AC74786030919E0203005675CFB",
+      "value": "0",
+      "gasLimit": "150000",
+      "dataHash": "0x3ee3f329d377acfced8285ee90823484e02683721a9d4eee252d177548a9e99d"
+    },
+    {
+      "nonce": 40,
+      "label": "VeriarfyProtocol.setChallengePeriod",
+      "to": "0xcD3B1a850Eb33AC74786030919E0203005675CFB",
+      "value": "0",
+      "gasLimit": "150000",
+      "dataHash": "0x6a4ec45cdb2a9cbd7ce438dfc2a151364c3b6f94e5b6628efa3f5c4f0c45e533"
+    },
+    {
+      "nonce": 41,
+      "label": "VeriarfyProtocol.setLivenessTimeout",
+      "to": "0xcD3B1a850Eb33AC74786030919E0203005675CFB",
+      "value": "0",
+      "gasLimit": "150000",
+      "dataHash": "0x3e830c580fb5161e16c1464cab0793e6251409dcf8bb875ac60fff8d7641ae7e"
+    }
+  ]
+}

@@ -1,4 +1,12 @@
 import deployment from "./deployment.json";
+import { IDENTITY_CIRCUIT_WASM, IDENTITY_CIRCUIT_ZKEY } from "./circuits";
+
+export {
+  IDENTITY_CIRCUIT_WASM,
+  IDENTITY_CIRCUIT_ZKEY,
+  PROVENANCE_CIRCUIT_WASM,
+  PROVENANCE_CIRCUIT_ZKEY,
+} from "./circuits";
 
 export const SEPOLIA_CHAIN_ID = 11155111;
 export const SEPOLIA_HEX = "0xaa36a7";
@@ -46,7 +54,7 @@ export function explorerAddress(address: string): string {
 export const CURATOR_URL = import.meta.env.VITE_CURATOR_URL ?? "http://localhost:8787";
 
 /** Devre ciktilarinin sunuldugu yol. */
-export const CIRCUIT_WASM = "/circuits/researcher_identity.wasm";
-export const CIRCUIT_ZKEY = "/circuits/researcher_identity_final.zkey";
+export const CIRCUIT_WASM = IDENTITY_CIRCUIT_WASM;
+export const CIRCUIT_ZKEY = IDENTITY_CIRCUIT_ZKEY;
 
 export { deployment };

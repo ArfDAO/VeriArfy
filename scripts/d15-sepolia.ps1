@@ -6,6 +6,9 @@ param(
   [ValidateSet(
     "readiness",
     "preflight",
+    "proof-check",
+    "redeploy-plan",
+    "redeploy",
     "deploy",
     "resume",
     "stake-node-1",
@@ -174,6 +177,24 @@ try {
     "preflight" {
       if ($Execute) { throw "preflight salt-okunurdur; -Execute kabul etmez." }
       Invoke-Npm -Arguments @("run", "chain:preflight")
+    }
+    "proof-check" {
+      if ($Execute) { throw "proof-check salt-okunurdur; -Execute kabul etmez." }
+      Invoke-Npm -Arguments @("run", "chain:proof-check")
+    }
+    "redeploy-plan" {
+      if ($Execute) { throw "redeploy-plan yalniz yerel plan dosyasini hazirlar; -Execute kabul etmez." }
+      Invoke-Npm -Arguments @("run", "chain:d15-redeploy-plan")
+    }
+    "redeploy" {
+      if (-not $Execute) {
+        Invoke-Npm -Arguments @("run", "chain:d15-redeploy")
+        return
+      }
+      if (-not (Confirm-StateChange "redeploy" "REDEPLOY SEPOLIA D15 NONCE24")) { return }
+      Invoke-WithSigner "deployer" {
+        Invoke-Npm -Arguments @("run", "chain:d15-redeploy")
+      }
     }
     "deploy" {
       if (-not (Confirm-StateChange "deploy" "DEPLOY SEPOLIA D15")) { return }
