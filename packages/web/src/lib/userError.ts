@@ -9,6 +9,12 @@ export function userError(error: unknown, fallback: string): string {
   if (message.includes("insufficient funds") || message.includes("insufficient balance")) {
     return "Bu işlem için cüzdan bakiyesi yeterli değil. Bakiye ve ağ ücretini kontrol edin.";
   }
+  // Kurator kalibi ag kalibindan ONCE gelmeli: "ulasilamadi" metni asagidaki
+  // genel ag kalibina da uyuyor ve kullaniciyi Sepolia'yi kontrol etmeye
+  // gonderiyordu. Oysa Sepolia calisiyor; eksik olan yerel servis.
+  if (message.includes("kurator")) {
+    return "Kurator servisine ulasilamadi. Yerel servisi baslatin (npm run curator) ve yeniden deneyin.";
+  }
   if (message.includes("network") || message.includes("rpc") || message.includes("missing revert data") || message.includes("failed to fetch")) {
     return "Ağ bağlantısı doğrulanamadı. Sepolia ağını ve RPC bağlantınızı kontrol edip yeniden deneyin.";
   }

@@ -23,6 +23,7 @@ import {
 import { GenomicStep } from "./GenomicStep";
 import { BiomarkerStep } from "./BiomarkerStep";
 import { TraceConsole } from "./TraceConsole";
+import { useT } from "../lib/i18n";
 
 /**
  * Katki akisi — uc adim, her adimda kanit.
@@ -47,6 +48,7 @@ import { TraceConsole } from "./TraceConsole";
  */
 
 export function Contribute() {
+  const t = useT();
   const trace = useTrace();
   const traceRef = useRef(trace);
   traceRef.current = trace;
@@ -79,11 +81,9 @@ export function Contribute() {
             [
               hashEvidence("genomik panel özeti", genomic.onchain, true),
               hashEvidence("metrik paneli özeti", metrics.onchain, true),
-              valueEvidence("panel boyutu", `${next.snpCount} varyant`, true),
-              valueEvidence("metrik sayısı", next.metricCount, true),
-              noteEvidence(
-                "bu neden önemli",
-                "özet tutmazsa iki kullanıcının «3 numaralı SNP»si farklı varyant olur ve tablo alakasız şeyleri toplar",
+              valueEvidence(t("panel boyutu"), `${next.snpCount} varyant`, true),
+              valueEvidence(t("metrik sayısı"), next.metricCount, true),
+              noteEvidence(t("bu neden önemli"), t("özet tutmazsa iki kullanıcının «3 numaralı SNP»si farklı varyant olur ve tablo alakasız şeyleri toplar"),
               ),
             ],
           );
@@ -92,8 +92,7 @@ export function Contribute() {
             "panel",
             new Error(
               genomic.unset || metrics.unset
-                ? "Zincirde panel özeti ilan edilmemiş — dağıtım PANEL_HASH verilmeden yapılmış."
-                : "Tarayıcıdaki panel ile zincirdeki özet farklı. Katkı akışı kapatıldı.",
+                ? t("Zincirde panel özeti ilan edilmemiş — dağıtım PANEL_HASH verilmeden yapılmış.") : t("Tarayıcıdaki panel ile zincirdeki özet farklı. Katkı akışı kapatıldı."),
             ),
           );
         }
@@ -109,32 +108,30 @@ export function Contribute() {
     setBusy(true);
     setError(null);
 
-    trace.begin("enroll", "Şifreli grup etiketi yazıldı");
+    trace.begin("enroll", t("Şifreli grup etiketi yazıldı"));
     try {
       const outcome = await enroll(signer, group);
 
       trace.succeed(
         "enroll",
-        `${group === GROUP.CASE ? "Vaka" : "Kontrol"} grubu — şifreli olarak`,
+        t("{group} grubu — şifreli olarak", { group: group === GROUP.CASE ? t("Vaka") : t("Kontrol") }),
         [
-          txEvidence("işlem", outcome.hash),
-          valueEvidence("blok", outcome.blockNumber.toLocaleString("tr"), true),
-          valueEvidence("gaz", Number(outcome.gasUsed).toLocaleString("tr"), true),
-          noteEvidence("ciphertext handle", outcome.handles[0]),
-          noteEvidence(
-            "zincir grubu görüyor mu",
-            "hayır — yalnızca şifreli handle saklanır, karşılaştırmalar homomorfik yapılır",
+          txEvidence(t("işlem"), outcome.hash),
+          valueEvidence(t("blok"), outcome.blockNumber.toLocaleString("tr"), true),
+          valueEvidence(t("gaz"), Number(outcome.gasUsed).toLocaleString("tr"), true),
+          noteEvidence(t("ciphertext handle"), outcome.handles[0]),
+          noteEvidence(t("zincir grubu görüyor mu"), t("hayır — yalnızca şifreli handle saklanır, karşılaştırmalar homomorfik yapılır"),
           ),
         ],
       );
 
       // Zincirden GERI OKU: "gonderdim" ile "zincir oyle diyor" ayni sey degil.
-      trace.begin("enroll-verify", "Kayıt zincirden geri okundu");
+      trace.begin("enroll-verify", t("Kayıt zincirden geri okundu"));
       const next = await refresh(provider, address, true);
       if (next.isEnrolled) {
-        trace.succeed("enroll-verify", "Sözleşme kaydı doğruluyor", [
-          valueEvidence("isEnrolled", "true", true),
-          valueEvidence("biyobelirteç modülü", next.biomarkerModule, true),
+        trace.succeed("enroll-verify", t("Sözleşme kaydı doğruluyor"), [
+          valueEvidence(t("isEnrolled"), "true", true),
+          valueEvidence(t("biyobelirteç modülü"), next.biomarkerModule, true),
         ]);
       } else {
         trace.fail("enroll-verify", new Error("Zincir hâlâ kayıtsız görünüyor."));
@@ -189,34 +186,34 @@ export function Contribute() {
         {/* --- Adim 0: cuzdan --- */}
         <div className="card">
           <div className="card__head">
-            <h3>0 · Cüzdan</h3>
+            <h3>{t("0 · Cüzdan")}</h3>
             {address && <span className="badge badge--ok">{shortAddress(address)}</span>}
           </div>
 
           {!address ? (
             <>
               <p className="card__body">
-                Katkı akışını başlatmak için giriş ekranından cüzdanı bağlayın ve veri sahibi rolünü seçin.
+                {t("Katkı akışını başlatmak için giriş ekranından cüzdanı bağlayın ve veri sahibi rolünü seçin.")}
               </p>
               <Link className="pill pill--primary" style={{ marginTop: 16 }} to="/giris">
-                Giriş ekranına git
+                {t("Giriş ekranına git")}
               </Link>
             </>
           ) : (
             <div className="kv">
               <div className="kv__row">
-                <span className="eyebrow">AĞ</span>
+                <span className="eyebrow">{t("AĞ")}</span>
                 <span className="mono">
-                  {wrongChain ? `YANLIŞ AĞ (${chainId})` : "Sepolia"}
+                  {wrongChain ? t("YANLIŞ AĞ ({id})", { id: chainId ?? "?" }) : "Sepolia"}
                 </span>
               </div>
               <div className="kv__row">
-                <span className="eyebrow">KATILIMCI SAYISI</span>
+                <span className="eyebrow">{t("KATILIMCI SAYISI")}</span>
                 <span className="mono">{state?.participantCount ?? "—"}</span>
               </div>
               {wrongChain && (
                 <button className="pill pill--ghost" onClick={() => void switchToSepolia()}>
-                  Sepolia'ya geç
+                  {t("Sepolia'ya geç")}
                 </button>
               )}
             </div>
@@ -235,9 +232,9 @@ export function Contribute() {
         {address && state && (
           <div className="card">
             <div className="card__head">
-              <h3>1 · Gruba kayıt</h3>
+              <h3>{t("1 · Gruba kayıt")}</h3>
               <span className={state.isEnrolled ? "badge badge--ok" : "eyebrow"}>
-                {state.isEnrolled ? "KAYITLI" : "GEREKLİ"}
+                {state.isEnrolled ? t("KAYITLI") : t("GEREKLİ")}
               </span>
             </div>
 
@@ -260,15 +257,15 @@ export function Contribute() {
                     onChange={(e) => setGroup(Number(e.target.value))}
                     disabled={busy || blocked}
                   >
-                    <option value={GROUP.CONTROL}>Kontrol (sağlıklı)</option>
-                    <option value={GROUP.CASE}>Vaka (hasta)</option>
+                    <option value={GROUP.CONTROL}>{t("Kontrol (sağlıklı)")}</option>
+                    <option value={GROUP.CASE}>{t("Vaka (hasta)")}</option>
                   </select>
                   <button
                     className="pill pill--primary"
                     onClick={() => void doEnroll()}
                     disabled={busy || blocked || wrongChain}
                   >
-                    {busy ? "yazılıyor…" : "Şifrele ve kaydol"}
+                    {busy ? t("yazılıyor…") : "Şifrele ve kaydol"}
                   </button>
                 </div>
               </>

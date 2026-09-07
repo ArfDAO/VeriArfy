@@ -13,6 +13,7 @@ import {
   serializeIdentity,
   type Identity,
 } from "../../lib/zk";
+import { useT } from "../../lib/i18n";
 
 const IDENTITY_KEY = "veriarfy.researcher.identity";
 
@@ -58,6 +59,7 @@ function ChecklistItem({ label, detail, complete }: ChecklistItemProps) {
 }
 
 export function Kayit() {
+  const t = useT();
   const { address, chainId, provider, signer, refresh: refreshSession } = useSession();
   const [readiness, setReadiness] = useState<ResearcherReadiness | null>(null);
   const [identity, setIdentity] = useState<Identity | null>(storedIdentity);
@@ -182,40 +184,40 @@ export function Kayit() {
     <section className="researcher-setup" aria-labelledby="researcher-setup-title">
       <div className="researcher-setup__heading">
         <div>
-          <span className="eyebrow">ARASTIRMACI / KAYIT VE HAZIRLIK</span>
-          <h1 id="researcher-setup-title">Ilk sorgudan once uc kontrol</h1>
-          <p>ZK kimlik, token bakiyesi ve harcama izni zincirden yeniden okunur; tarayicida basarili varsayilmaz.</p>
+          <span className="eyebrow">{t("ARASTIRMACI / KAYIT VE HAZIRLIK")}</span>
+          <h1 id="researcher-setup-title">{t("Ilk sorgudan once uc kontrol")}</h1>
+          <p>{t("ZK kimlik, token bakiyesi ve harcama izni zincirden yeniden okunur; tarayicida basarili varsayilmaz.")}</p>
         </div>
         <button className="pill pill--ghost" disabled={loading || wrongNetwork} onClick={() => void refresh()}>
-          {loading ? "Okunuyor..." : "Yenile"}
+          {loading ? t("Okunuyor...") : t("Yenile")}
         </button>
       </div>
 
       {wrongNetwork && (
         <div className="notice notice--warn" role="status">
-          Kayit ve hazirlik denetimi yalnizca Sepolia aginda kullanilabilir.
+          {t("Kayit ve hazirlik denetimi yalnizca Sepolia aginda kullanilabilir.")}
         </div>
       )}
       {notice && <div className={`notice notice--${notice.kind}`} role="status">{notice.text}</div>}
 
       <div className="researcher-setup__grid">
         <article className="researcher-setup__card card">
-          <span className="eyebrow">KONTROL LISTESI</span>
+          <span className="eyebrow">{t("KONTROL LISTESI")}</span>
           <ol className="researcher-setup__list" aria-live="polite">
             <ChecklistItem
-              label="ZK kimlik kaydi"
-              detail={readiness?.registered ? "Arastirmaci defterinde kayitli." : "Kanitla arastirmaci defterine kaydolun."}
+              label={t("ZK kimlik kaydi")}
+              detail={readiness?.registered ? t("Arastirmaci defterinde kayitli.") : t("Kanitla arastirmaci defterine kaydolun.")}
               complete={readiness?.registered === true}
             />
             <ChecklistItem
-              label="Sorgu token bakiyesi"
+              label={t("Sorgu token bakiyesi")}
               detail={readiness
                 ? `${formatToken(readiness.balance, readiness.decimals, readiness.symbol)} / gerekli ${formatToken(readiness.fee, readiness.decimals, readiness.symbol)}`
                 : "Zincirden okunuyor."}
               complete={balanceReady}
             />
             <ChecklistItem
-              label="Harcama izni"
+              label={t("Harcama izni")}
               detail={readiness
                 ? `${formatToken(readiness.allowance, readiness.decimals, readiness.symbol)} izin / gerekli ${formatToken(readiness.fee, readiness.decimals, readiness.symbol)}`
                 : "Zincirden okunuyor."}
@@ -225,42 +227,42 @@ export function Kayit() {
         </article>
 
         <aside className="researcher-setup__action card card--bone">
-          <span className="eyebrow">SONRAKI ADIM</span>
+          <span className="eyebrow">{t("SONRAKI ADIM")}</span>
           {!readiness?.registered ? (
             <>
               <div className="researcher-setup__action-body">
-                <h2>Kimliginizi ZK ile kaydedin</h2>
-                <p>Gizli kimlik tarayicida uretilir. Kurator yalnizca taahhudu gorur; zincir ise kimliginizin akredite agacta oldugunu kanitlar.</p>
+                <h2>{t("Kimliginizi ZK ile kaydedin")}</h2>
+                <p>{t("Gizli kimlik tarayicida uretilir. Kurator yalnizca taahhudu gorur; zincir ise kimliginizin akredite agacta oldugunu kanitlar.")}</p>
               </div>
               <div className="researcher-setup__action-footer">
                 <button className="pill pill--primary" disabled={action !== null || loading || wrongNetwork || !provider || !signer || !readiness} onClick={() => void register()}>
-                  {action === "register" ? "Isleniyor..." : "ZK kimlik kaydini baslat"}
+                  {action === "register" ? t("Isleniyor...") : t("ZK kimlik kaydini baslat")}
                 </button>
-                <p className="researcher-setup__action-note">Kanit cihazinizda uretilir; cüzdanda yalniz zincir kaydi imzalanir.</p>
+                <p className="researcher-setup__action-note">{t("Kanit cihazinizda uretilir; cüzdanda yalniz zincir kaydi imzalanir.")}</p>
               </div>
             </>
           ) : !balanceReady ? (
             <div className="researcher-setup__action-body">
-              <h2>Token bakiyesi gerekli</h2>
+              <h2>{t("Token bakiyesi gerekli")}</h2>
               <p>Varsayilan sorgu fiyati kadar {readiness?.symbol ?? "token"} olmadan sorgu acilamaz. Bakiye geldikten sonra bu ekran otomatik olarak gercek durumu gosterecek.</p>
             </div>
           ) : !allowanceReady ? (
             <>
               <div className="researcher-setup__action-body">
-                <h2>Harcama iznini verin</h2>
-                <p>Yalnizca guncel varsayilan sorgu ucreti kadar izin verilir; sinirsiz token izni istenmez.</p>
+                <h2>{t("Harcama iznini verin")}</h2>
+                <p>{t("Yalnizca guncel varsayilan sorgu ucreti kadar izin verilir; sinirsiz token izni istenmez.")}</p>
               </div>
               <div className="researcher-setup__action-footer">
                 <button className="pill pill--primary" disabled={action !== null || wrongNetwork || !signer} onClick={() => void approve()}>
-                  {action === "approve" ? "Onaylaniyor..." : "Ucret kadar izin ver"}
+                  {action === "approve" ? t("Onaylaniyor...") : t("Ucret kadar izin ver")}
                 </button>
-                <p className="researcher-setup__action-note">Izin tutari, zincirdeki guncel sorgu ucretini asmaz.</p>
+                <p className="researcher-setup__action-note">{t("Izin tutari, zincirdeki guncel sorgu ucretini asmaz.")}</p>
               </div>
             </>
           ) : (
             <div className="researcher-setup__action-body">
-              <h2>Arastirma cuzdani hazir</h2>
-              <p>Kimlik, bakiye ve harcama izni mevcut. Veri alimi ekraninda alanlari secip anlik fiyatla sorgu acabilirsiniz.</p>
+              <h2>{t("Arastirma cuzdani hazir")}</h2>
+              <p>{t("Kimlik, bakiye ve harcama izni mevcut. Veri alimi ekraninda alanlari secip anlik fiyatla sorgu acabilirsiniz.")}</p>
             </div>
           )}
         </aside>
@@ -268,7 +270,7 @@ export function Kayit() {
 
       {readiness && readiness.participants === 0 && (
         <div className="notice notice--info">
-          Hazirlik kontrolleri tamamlansa bile havuzda henuz katilimci yok; bu nedenle sorgu acilamaz. Bu, kimlik veya token hatasi degildir.
+          {t("Hazirlik kontrolleri tamamlansa bile havuzda henuz katilimci yok; bu nedenle sorgu acilamaz. Bu, kimlik veya token hatasi degildir.")}
         </div>
       )}
     </section>

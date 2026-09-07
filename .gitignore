@@ -26,17 +26,36 @@ packages/circuits/build/
 packages/circuits/ptau/
 packages/circuits/bin/
 *.zkey
+# ...ama tarayiciya SERVIS EDILEN zkey'ler izlenir: onlar olmadan site kanit
+# uretemez ve zincirdeki dogrulayiciyla eslesen surum bunlardir.
+!packages/web/public/circuits/*.zkey
 *.r1cs
 *.sym
 *.wtns
 
 # web — devre ciktilari build sirasinda kopyalanir (npm run web:prepare)
-packages/web/public/circuits/
+# Tarayiciya servis edilen devre ve FHE ciktileri IZLENIR.
+#
+# Kaynaklari (`packages/circuits/build/`, Zama SDK) gitignore'da ve Vercel
+# gibi bir derleme ortaminda YOKTUR. Izlenmezlerse `prebuild` kaynak
+# bulamayip dusuyor — yani site hic derlenmiyor.
+#
+# Ikinci ve daha onemli sebep: zkey, ZINCIRDEKI dogrulayiciyla eslesmek
+# zorunda. Toren her kosuda farkli zkey urettigi icin "derleme aninda uret"
+# yaklasimi dogrulayiciyi sessizce gecersiz kilardi. Isleyerek sabitliyoruz.
+# packages/web/public/circuits/
 # Zama SDK wasm — npm run prepare-fhe-wasm ile uretilir
-packages/web/public/fhe/
+# packages/web/public/fhe/
 
 # kurator calisma durumu (katilimci agaci)
-packages/curator/data/
+# Kurator verisi: KLASOR degil icerik yoksayilir.
+#
+# `tree.json` IZLENIR. Barindirma ortamlarinda (Render, Railway free) disk
+# EFEMERDIR: servis yeniden baslayinca calisma aninda yazilan agac kaybolur
+# ve zincirdeki kok artik hicbir seye karsilik gelmez. Depodaki dosya, her
+# aciliste geri yuklenen TABAN durumdur.
+packages/curator/data/*
+!packages/curator/data/tree.json
 
 # derleme ciktilari
 dist/
@@ -67,3 +86,4 @@ packages/ml/.venv/
 packages/ml/data/*
 !packages/ml/data/tfhers_params*.json
 packages/ml/rust_expander/
+.vercel

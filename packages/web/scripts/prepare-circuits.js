@@ -22,7 +22,23 @@ const FILES = [
 ];
 
 const missing = FILES.filter(([src]) => !existsSync(src));
+
+// KAYNAK YOKSA AMA HEDEF VARSA: sessizce gec.
+//
+// `packages/circuits/build/` gitignore'da; Vercel gibi temiz bir derleme
+// ortaminda hic bulunmaz. Onceden burasi kosulsuz `exit(1)` yapiyordu ve
+// site DERLENMIYORDU.
+//
+// `public/circuits/` artik islendigi icin dosyalar zaten depoda. Uretim
+// derlemesinde kopyalanacak bir sey yok, kopyalanmasi da GEREKMIYOR:
+// islenmis zkey zincirdeki dogrulayiciyla eslesen surumdur.
+const alreadyServed = FILES.every(([, name]) => existsSync(join(OUT, name)));
+
 if (missing.length) {
+  if (alreadyServed) {
+    console.log("Devre ciktilari zaten public/circuits altinda — kopyalama atlandi.");
+    process.exit(0);
+  }
   console.error(
     "Devre ciktilari yok. Once calistirin:\n  npm run circuits:build\n",
   );

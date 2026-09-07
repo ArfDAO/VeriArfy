@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useT } from "../lib/i18n";
 
 export interface SurveyResult {
   social_media_hours: number;
@@ -45,6 +46,7 @@ export const STUDY_SCORE_MAX = { anxiety: 15, panic: 6 } as const;
  *   girmez, aksi halde iki olcek yapay olarak korele olurdu.
  */
 export function toStudyScores(r: SurveyResult): StudyScores {
+  const t = useT();
   const group = r.social_media_hours <= 1 ? 0 : r.social_media_hours === 2 ? 1 : 2;
 
   // Genel kaygi / islevsellik yuku.
@@ -73,6 +75,7 @@ interface SurveyProps {
 }
 
 export function Survey({ onComplete, disabled }: SurveyProps) {
+  const t = useT();
   const [answers, setAnswers] = useState<Partial<SurveyResult>>({});
 
   const isComplete = 
@@ -104,7 +107,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
       <div className="survey-question">
         <div className="survey-question__header">
           <span className="survey-question__num">01</span>
-          <span className="survey-question__text">Günde ortalama kaç saat sosyal medya kullanıyorsunuz?</span>
+          <span className="survey-question__text">{t("Günde ortalama kaç saat sosyal medya kullanıyorsunuz?")}</span>
         </div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           {[
@@ -119,7 +122,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
               onClick={() => setAnswer("social_media_hours", opt.value)}
               disabled={disabled}
             >
-              {opt.label}
+              {t(opt.label)}
             </button>
           ))}
         </div>
@@ -128,7 +131,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
       <div className="survey-question">
         <div className="survey-question__header">
           <span className="survey-question__num">02</span>
-          <span className="survey-question__text">Sosyal medyada başkalarının hayatlarını kendinizle kıyaslar mısınız?</span>
+          <span className="survey-question__text">{t("Sosyal medyada başkalarının hayatlarını kendinizle kıyaslar mısınız?")}</span>
         </div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           {[
@@ -143,7 +146,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
               onClick={() => setAnswer("comparison", opt.value)}
               disabled={disabled}
             >
-              {opt.label}
+              {t(opt.label)}
             </button>
           ))}
         </div>
@@ -152,7 +155,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
       <div className="survey-question">
         <div className="survey-question__header">
           <span className="survey-question__num">03</span>
-          <span className="survey-question__text">Uyumadan hemen önce yatakta sosyal medyaya bakar mısınız?</span>
+          <span className="survey-question__text">{t("Uyumadan hemen önce yatakta sosyal medyaya bakar mısınız?")}</span>
         </div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           {[
@@ -165,7 +168,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
               onClick={() => setAnswer("phone_before_bed", opt.value)}
               disabled={disabled}
             >
-              {opt.label}
+              {t(opt.label)}
             </button>
           ))}
         </div>
@@ -174,7 +177,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
       <div className="survey-question">
         <div className="survey-question__header">
           <span className="survey-question__num">04</span>
-          <span className="survey-question__text">Sosyal medyaya bakmadığınızda bir şeyleri kaçırıyor (FOMO) hissine kapılır mısınız?</span>
+          <span className="survey-question__text">{t("Sosyal medyaya bakmadığınızda bir şeyleri kaçırıyor (FOMO) hissine kapılır mısınız?")}</span>
         </div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           {[
@@ -188,7 +191,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
               onClick={() => setAnswer("fomo", opt.value)}
               disabled={disabled}
             >
-              {opt.label}
+              {t(opt.label)}
             </button>
           ))}
         </div>
@@ -197,7 +200,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
       <div className="survey-question">
         <div className="survey-question__header">
           <span className="survey-question__num">05</span>
-          <span className="survey-question__text">Bildirim sesleri veya sürekli çevrimiçi olma zorunluluğu sizde stres yaratıyor mu?</span>
+          <span className="survey-question__text">{t("Bildirim sesleri veya sürekli çevrimiçi olma zorunluluğu sizde stres yaratıyor mu?")}</span>
         </div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           {[
@@ -211,7 +214,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
               onClick={() => setAnswer("notification_stress", opt.value)}
               disabled={disabled}
             >
-              {opt.label}
+              {t(opt.label)}
             </button>
           ))}
         </div>
@@ -220,7 +223,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
       <div className="survey-question">
         <div className="survey-question__header">
           <span className="survey-question__num">06</span>
-          <span className="survey-question__text">Telefonunuz yanınızda olmadığında veya şarjı bittiğinde panik/huzursuzluk (Nomofobi) hisseder misiniz?</span>
+          <span className="survey-question__text">{t("Telefonunuz yanınızda olmadığında veya şarjı bittiğinde panik/huzursuzluk (Nomofobi) hisseder misiniz?")}</span>
         </div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           {[
@@ -234,7 +237,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
               onClick={() => setAnswer("nomophobia", opt.value)}
               disabled={disabled}
             >
-              {opt.label}
+              {t(opt.label)}
             </button>
           ))}
         </div>
@@ -243,7 +246,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
       <div className="survey-question">
         <div className="survey-question__header">
           <span className="survey-question__num">07</span>
-          <span className="survey-question__text">Sosyal medyada paylaştığınız bir içerik yeterince beğeni/etkileşim almadığında moraliniz bozulur mu?</span>
+          <span className="survey-question__text">{t("Sosyal medyada paylaştığınız bir içerik yeterince beğeni/etkileşim almadığında moraliniz bozulur mu?")}</span>
         </div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           {[
@@ -257,7 +260,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
               onClick={() => setAnswer("validation_seeking", opt.value)}
               disabled={disabled}
             >
-              {opt.label}
+              {t(opt.label)}
             </button>
           ))}
         </div>
@@ -266,7 +269,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
       <div className="survey-question">
         <div className="survey-question__header">
           <span className="survey-question__num">08</span>
-          <span className="survey-question__text">Karşınızdaki insanlarla yüz yüze sohbet ederken bile sürekli telefonunuzu kontrol etme ihtiyacı duyar mısınız?</span>
+          <span className="survey-question__text">{t("Karşınızdaki insanlarla yüz yüze sohbet ederken bile sürekli telefonunuzu kontrol etme ihtiyacı duyar mısınız?")}</span>
         </div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           {[
@@ -280,7 +283,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
               onClick={() => setAnswer("phubbing", opt.value)}
               disabled={disabled}
             >
-              {opt.label}
+              {t(opt.label)}
             </button>
           ))}
         </div>
@@ -289,7 +292,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
       <div className="survey-question">
         <div className="survey-question__header">
           <span className="survey-question__num">09</span>
-          <span className="survey-question__text">Olumsuz veya üzücü haberleri arka arkaya kaydırmaktan (doomscrolling) kendinizi alamadığınız olur mu?</span>
+          <span className="survey-question__text">{t("Olumsuz veya üzücü haberleri arka arkaya kaydırmaktan (doomscrolling) kendinizi alamadığınız olur mu?")}</span>
         </div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           {[
@@ -303,7 +306,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
               onClick={() => setAnswer("doomscrolling", opt.value)}
               disabled={disabled}
             >
-              {opt.label}
+              {t(opt.label)}
             </button>
           ))}
         </div>
@@ -312,7 +315,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
       <div className="survey-question">
         <div className="survey-question__header">
           <span className="survey-question__num">10</span>
-          <span className="survey-question__text">Sosyal medyadaki gönderiler (filtreli fotoğraflar, lüks hayatlar vb.) kendinize olan güveninizi düşürüyor mu?</span>
+          <span className="survey-question__text">{t("Sosyal medyadaki gönderiler (filtreli fotoğraflar, lüks hayatlar vb.) kendinize olan güveninizi düşürüyor mu?")}</span>
         </div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           {[
@@ -326,7 +329,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
               onClick={() => setAnswer("self_esteem_impact", opt.value)}
               disabled={disabled}
             >
-              {opt.label}
+              {t(opt.label)}
             </button>
           ))}
         </div>
@@ -335,7 +338,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
       <div className="survey-question">
         <div className="survey-question__header">
           <span className="survey-question__num">11</span>
-          <span className="survey-question__text">Sosyal medya kullanımı nedeniyle işinize, okulunuza veya günlük sorumluluklarınıza odaklanmakta zorluk çekiyor musunuz?</span>
+          <span className="survey-question__text">{t("Sosyal medya kullanımı nedeniyle işinize, okulunuza veya günlük sorumluluklarınıza odaklanmakta zorluk çekiyor musunuz?")}</span>
         </div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           {[
@@ -349,7 +352,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
               onClick={() => setAnswer("distraction", opt.value)}
               disabled={disabled}
             >
-              {opt.label}
+              {t(opt.label)}
             </button>
           ))}
         </div>
@@ -357,14 +360,14 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
 
       <div className="survey-divider">
         <span className="survey-divider__label">
-          HEDEF DEĞİŞKEN
+          {t("HEDEF DEĞİŞKEN")}
         </span>
       </div>
 
       <div className="survey-question">
         <div className="survey-question__header">
           <span className="survey-question__num">12</span>
-          <span className="survey-question__text">Genel olarak gün içinde kendinizi ne kadar kaygılı (anksiyeteli) hissediyorsunuz?</span>
+          <span className="survey-question__text">{t("Genel olarak gün içinde kendinizi ne kadar kaygılı (anksiyeteli) hissediyorsunuz?")}</span>
         </div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           {[
@@ -377,7 +380,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
               onClick={() => setAnswer("anxiety_level", opt.value)}
               disabled={disabled}
             >
-              {opt.label}
+              {t(opt.label)}
             </button>
           ))}
         </div>
@@ -389,7 +392,7 @@ export function Survey({ onComplete, disabled }: SurveyProps) {
           onClick={handleSubmit}
           disabled={!isComplete || disabled}
         >
-          {disabled ? "Gönderiliyor..." : "Anketi Gönder"}
+          {disabled ? t("Gönderiliyor...") : t("Anketi Gönder")}
         </button>
       </div>
     </div>

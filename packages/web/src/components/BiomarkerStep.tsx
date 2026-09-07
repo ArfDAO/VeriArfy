@@ -6,6 +6,7 @@ import { BIOMARKER_MISSING, encodeValue, type MetricSpec } from "../lib/metrics"
 import { contributeBiomarkers } from "../lib/protocol";
 import type { TraceApi } from "../lib/useTrace";
 import { noteEvidence, txEvidence, valueEvidence } from "../lib/trace";
+import { useT } from "../lib/i18n";
 
 /**
  * Veri kategorisi 2 — surekli biyobelirtec ve fizyolojik telemetri.
@@ -60,6 +61,7 @@ export function BiomarkerStep({
   disabled: boolean;
   onDone: () => void;
 }) {
+  const t = useT();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -121,7 +123,7 @@ export function BiomarkerStep({
     setBusy(true);
     setError(null);
 
-    trace.begin("biomarkers", "Ölçümler şifrelenip gönderildi");
+    trace.begin("biomarkers", t("Ölçümler şifrelenip gönderildi"));
     try {
       const values = encoded.map((e) => e.value);
       let batches = 0;
@@ -133,30 +135,24 @@ export function BiomarkerStep({
           trace.push(
             "biomarkers",
             txEvidence(`parti ${batches} · metrik ${from}–${to - 1}`, outcome.hash),
-            valueEvidence("  blok", outcome.blockNumber.toLocaleString("tr"), true),
-            valueEvidence("  gaz", Number(outcome.gasUsed).toLocaleString("tr"), true),
-            noteEvidence("  ciphertext handle (ilk)", outcome.handles[0]),
+            valueEvidence(t("  blok"), outcome.blockNumber.toLocaleString("tr"), true),
+            valueEvidence(t("  gaz"), Number(outcome.gasUsed).toLocaleString("tr"), true),
+            noteEvidence(t("  ciphertext handle (ilk)"), outcome.handles[0]),
           );
-          trace.progress("biomarkers", `${to}/${values.length} metrik gönderildi…`);
+          trace.progress("biomarkers", t("{done}/{total} metrik gönderildi…", { done: to, total: values.length }));
         },
       });
 
       trace.succeed(
         "biomarkers",
-        `${values.length} metrik, ${batches} partide gönderildi (${filled} ölçüm, ${values.length - filled} eksik)`,
+        t("{n} metrik, {batches} partide gönderildi ({filled} ölçüm, {missing} eksik)", { n: values.length, batches, filled, missing: values.length - filled }),
         [
-          noteEvidence(
-            "parti sınırı neden 6",
-            "kareler toplamı için mul(euint64,euint64) = 596.000 HCU; ölçülen tavan 8 metrik",
+          noteEvidence(t("parti sınırı neden 6"), t("kareler toplamı için mul(euint64,euint64) = 596.000 HCU; ölçülen tavan 8 metrik"),
           ),
-          noteEvidence(
-            "eksik ölçüm ne oluyor",
-            "0 aralık dışı olduğu için o metriğin n sayımına hiç girmiyor — ortalamayı bozmuyor",
+          noteEvidence(t("eksik ölçüm ne oluyor"), t("0 aralık dışı olduğu için o metriğin n sayımına hiç girmiyor — ortalamayı bozmuyor"),
           ),
-          valueEvidence("ödemeye esas alan", filled, true),
-          noteEvidence(
-            "kapsama nasıl belirlendi",
-            "doldurduğunuz alanlardan türetildi; boş bıraktığınız metrik ödemeye de girmez",
+          valueEvidence(t("ödemeye esas alan"), filled, true),
+          noteEvidence(t("kapsama nasıl belirlendi"), t("doldurduğunuz alanlardan türetildi; boş bıraktığınız metrik ödemeye de girmez"),
           ),
         ],
       );
@@ -172,9 +168,9 @@ export function BiomarkerStep({
   return (
     <div className="card">
       <div className="card__head">
-        <h3>3 · Biyobelirteç ve telemetri</h3>
+        <h3>{t("3 · Biyobelirteç ve telemetri")}</h3>
         <span className={complete ? "badge badge--ok" : "eyebrow"}>
-          {complete ? `TAMAM · ${submitted}/${metricCount}` : `${submitted}/${metricCount} METRİK`}
+          {complete ? t("TAMAM · {done}/{total}", { done: submitted, total: metricCount }) : t("{done}/{total} METRİK", { done: submitted, total: metricCount })}
         </span>
       </div>
 
@@ -184,14 +180,14 @@ export function BiomarkerStep({
         girmez, ortalamayı aşağı çekmez.
       </p>
       <p className="card__body">
-        Değeri <strong>kendi biriminde</strong> yazın (örneğin VO2 max için{" "}
+        Değeri <strong>{t("kendi biriminde")}</strong> yazın (örneğin VO2 max için{" "}
         <span className="mono">52,3</span>). Sağdaki sayı, ölçekle çarpılıp
-        sıfır noktası eklendikten sonra <strong>zincire giden tamsayıdır</strong> —
+        sıfır noktası eklendikten sonra <strong>{t("zincire giden tamsayıdır")}</strong> —
         şifrelenen budur. Sözleşme yalnızca tamsayıyla çalışır çünkü homomorfik
         aritmetikte ondalık yoktur.
       </p>
 
-      {!rows && !error && <p className="card__body">Metrik paneli okunuyor…</p>}
+      {!rows && !error && <p className="card__body">{t("Metrik paneli okunuyor…")}</p>}
 
       {rows && (
         <div className="metrics">
@@ -209,7 +205,7 @@ export function BiomarkerStep({
                 <div className="metric__input">
                   <input
                     inputMode="decimal"
-                    placeholder="ölçülmedi"
+                    placeholder={t("ölçülmedi")}
                     value={row.input}
                     disabled={disabled || busy || complete}
                     className={state === "aralikDisi" ? "input--bad" : undefined}
@@ -233,7 +229,7 @@ export function BiomarkerStep({
                     {state === "gecerli"
                       ? `zincire → ${encoded?.[i].value.toLocaleString("tr")}`
                       : state === "aralikDisi"
-                        ? "aralık dışı → elenir"
+                        ? t("aralık dışı → elenir")
                         : "eksik"}
                   </span>
                 </div>
@@ -258,10 +254,10 @@ export function BiomarkerStep({
             onClick={() => void submit()}
             disabled={disabled || busy || filled === 0}
           >
-            {busy ? "gönderiliyor…" : `Şifrele ve gönder (${filled} ölçüm)`}
+            {busy ? t("gönderiliyor…") : t("Şifrele ve gönder ({n} ölçüm)", { n: filled })}
           </button>
           {filled === 0 && (
-            <span className="eyebrow">EN AZ BİR ÖLÇÜM GEREKLİ</span>
+            <span className="eyebrow">{t("EN AZ BİR ÖLÇÜM GEREKLİ")}</span>
           )}
         </div>
       )}

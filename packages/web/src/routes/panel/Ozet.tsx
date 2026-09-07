@@ -11,6 +11,7 @@ import {
   type PoolMembershipState,
 } from "../../lib/protocol";
 import { useSession } from "../../lib/session";
+import { useT } from "../../lib/i18n";
 
 interface OwnerOverview {
   contribution: ContributionState;
@@ -18,6 +19,7 @@ interface OwnerOverview {
 }
 
 export function Ozet() {
+  const t = useT();
   const navigate = useNavigate();
   const { address, chainId, provider } = useSession();
   const [overview, setOverview] = useState<OwnerOverview | null>(null);
@@ -60,35 +62,35 @@ export function Ozet() {
     <section className="owner-overview" aria-labelledby="owner-overview-title">
       <div className="owner-overview__heading">
         <div>
-          <span className="eyebrow">VERI SAHIBI / GENEL BAKIS</span>
-          <h1 id="owner-overview-title">Verinizin havuzdaki durumu</h1>
-          <p>Katki ve odul verileri tarayicida tutulmaz; her yenilemede zincirden okunur.</p>
+          <span className="eyebrow">{t("VERI SAHIBI / GENEL BAKIS")}</span>
+          <h1 id="owner-overview-title">{t("Verinizin havuzdaki durumu")}</h1>
+          <p>{t("Katki ve odul verileri tarayicida tutulmaz; her yenilemede zincirden okunur.")}</p>
         </div>
         <button className="pill pill--ghost" disabled={loading || wrongNetwork} onClick={() => void refresh()}>
-          {loading ? "Okunuyor..." : "Yenile"}
+          {loading ? t("Okunuyor...") : t("Yenile")}
         </button>
       </div>
 
       {wrongNetwork && (
         <div className="notice notice--warn" role="status">
-          Genel bakis yalnizca Sepolia agindaki sozlesmeden okunabilir.
+          {t("Genel bakis yalnizca Sepolia agindaki sozlesmeden okunabilir.")}
         </div>
       )}
       {error && <div className="notice notice--warn">{error}</div>}
 
       <div className="owner-overview__metrics" aria-live="polite">
         <article className="owner-overview__metric card">
-          <span className="eyebrow">HAVUZ KATILIMCISI</span>
+          <span className="eyebrow">{t("HAVUZ KATILIMCISI")}</span>
           <strong className="mono">{overview ? overview.membership.poolParticipants : "-"}</strong>
-          <p>{membership?.membership.active ? "Cuzdaniniz aktif havuz uyesi." : "Henuz aktif havuz uyeligi yok."}</p>
+          <p>{membership?.membership.active ? t("Cuzdaniniz aktif havuz uyesi.") : t("Henuz aktif havuz uyeligi yok.")}</p>
         </article>
         <article className="owner-overview__metric card">
-          <span className="eyebrow">KAPSADIGINIZ ALAN</span>
+          <span className="eyebrow">{t("KAPSADIGINIZ ALAN")}</span>
           <strong className="mono">{overview ? `${coveredFields}/${totalFields}` : "-"}</strong>
-          <p>Eksik isaretli alanlar kapsama sayisina dahil edilmez.</p>
+          <p>{t("Eksik isaretli alanlar kapsama sayisina dahil edilmez.")}</p>
         </article>
         <article className="owner-overview__metric card">
-          <span className="eyebrow">TOPLAM KAZANC</span>
+          <span className="eyebrow">{t("TOPLAM KAZANC")}</span>
           <strong className="mono">
             {membership?.totalEarnings === null
               ? "Okunamadi"
@@ -96,28 +98,28 @@ export function Ozet() {
                 ? formatToken(membership.totalEarnings, membership.token.decimals, membership.token.symbol)
                 : "-"}
           </strong>
-          <p>Cekilmis oduller ile bekleyen odullerin toplami.</p>
+          <p>{t("Cekilmis oduller ile bekleyen odullerin toplami.")}</p>
         </article>
         <article className="owner-overview__metric card">
-          <span className="eyebrow">BEKLEYEN ODUL</span>
+          <span className="eyebrow">{t("BEKLEYEN ODUL")}</span>
           <strong className="mono">
             {membership
               ? formatToken(membership.pendingRewards, membership.token.decimals, membership.token.symbol)
               : "-"}
           </strong>
-          <p>Oduller sekmesinden cekilebilir tutar.</p>
+          <p>{t("Oduller sekmesinden cekilebilir tutar.")}</p>
         </article>
       </div>
 
       {!loading && !wrongNetwork && !error && !hasContribution && (
         <aside className="owner-overview__next card card--bone">
           <div>
-            <span className="eyebrow">SIRADAKI ADIM</span>
-            <h2>Verinizi sifreleyip havuza katin</h2>
-            <p>Once grup kaydini olusturur, sonra genomik ve biyobelirtec alanlarini cihazinizi terk etmeden sifrelersiniz.</p>
+            <span className="eyebrow">{t("SIRADAKI ADIM")}</span>
+            <h2>{t("Verinizi sifreleyip havuza katin")}</h2>
+            <p>{t("Once grup kaydini olusturur, sonra genomik ve biyobelirtec alanlarini cihazinizi terk etmeden sifrelersiniz.")}</p>
           </div>
           <button className="pill pill--primary" onClick={() => navigate("/panel/veri-yukle")}>
-            Veri yuklemeye git
+            {t("Veri yuklemeye git")}
           </button>
         </aside>
       )}

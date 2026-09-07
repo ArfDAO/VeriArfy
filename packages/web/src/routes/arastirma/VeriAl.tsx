@@ -16,6 +16,7 @@ import {
 } from "../../lib/protocol";
 import { useSession } from "../../lib/session";
 import { GENOMIC_PANEL, METRIC_PANEL } from "../../lib/studyPanel";
+import { useT } from "../../lib/i18n";
 
 interface FieldCoverage {
   count: number;
@@ -52,6 +53,7 @@ function selectedIds(selection: Set<number>) {
 }
 
 export function VeriAl() {
+  const t = useT();
   const { address, chainId, provider, signer } = useSession();
   const [purchaseState, setPurchaseState] = useState<PurchaseState | null>(null);
   const [selectedSnps, setSelectedSnps] = useState<Set<number>>(() => new Set([0]));
@@ -195,16 +197,16 @@ export function VeriAl() {
     <section className="data-purchase" aria-labelledby="data-purchase-title">
       <div className="data-purchase__heading">
         <div>
-          <span className="eyebrow">ARASTIRMACI / VERI SATIN ALMA</span>
-          <h1 id="data-purchase-title">Yalnizca ihtiyaciniz olan alanlari secin</h1>
-          <p>Kapsama ve kitlik her yenilemede zincirden okunur. Fiyat, secilen alanlarda gercekten veri veren kisi sayisina gore hesaplanir.</p>
+          <span className="eyebrow">{t("ARASTIRMACI / VERI SATIN ALMA")}</span>
+          <h1 id="data-purchase-title">{t("Yalnizca ihtiyaciniz olan alanlari secin")}</h1>
+          <p>{t("Kapsama ve kitlik her yenilemede zincirden okunur. Fiyat, secilen alanlarda gercekten veri veren kisi sayisina gore hesaplanir.")}</p>
         </div>
         <button className="pill pill--ghost" disabled={loading || wrongNetwork} onClick={() => void refresh()}>
-          {loading ? "Okunuyor..." : "Yenile"}
+          {loading ? t("Okunuyor...") : t("Yenile")}
         </button>
       </div>
 
-      {wrongNetwork && <div className="notice notice--warn">Veri satin alma yalnizca Sepolia aginda kullanilabilir.</div>}
+      {wrongNetwork && <div className="notice notice--warn">{t("Veri satin alma yalnizca Sepolia aginda kullanilabilir.")}</div>}
       {notice && <div className={`notice notice--${notice.kind}`} role="status">{notice.text}</div>}
 
       <div className="data-purchase__layout">
@@ -212,10 +214,10 @@ export function VeriAl() {
           <section className="data-purchase__group card">
             <div className="data-purchase__group-head">
               <div>
-                <span className="eyebrow">GENOMIK VARYANTLAR</span>
+                <span className="eyebrow">{t("GENOMIK VARYANTLAR")}</span>
                 <h2>{selectedSnps.size} SNP secili</h2>
               </div>
-              <span className="badge">en az 1 gerekli</span>
+              <span className="badge">{t("en az 1 gerekli")}</span>
             </div>
             <div className="data-purchase__field-list">
               {GENOMIC_PANEL.variants.map((variant, index) => {
@@ -242,10 +244,10 @@ export function VeriAl() {
           <section className="data-purchase__group card">
             <div className="data-purchase__group-head">
               <div>
-                <span className="eyebrow">BIYOBELIRTECLER</span>
+                <span className="eyebrow">{t("BIYOBELIRTECLER")}</span>
                 <h2>{selectedMetrics.size} metrik secili</h2>
               </div>
-              <span className="badge">istege bagli</span>
+              <span className="badge">{t("istege bagli")}</span>
             </div>
             <div className="data-purchase__field-list">
               {METRIC_PANEL.metrics.map((metric, index) => {
@@ -271,27 +273,27 @@ export function VeriAl() {
         </div>
 
         <aside className="data-purchase__quote card card--bone">
-          <span className="eyebrow">ANLIK FIYAT</span>
+          <span className="eyebrow">{t("ANLIK FIYAT")}</span>
           <strong className="data-purchase__price mono">
             {pricing ? "Hesaplaniyor..." : quote && readiness ? formatToken(quote.fee, readiness.decimals, readiness.symbol) : "-"}
           </strong>
           <p>{quote ? `${quote.records} kisi × alan kaydi seciminize dahil.` : "En az bir SNP secin."}</p>
           <dl className="data-purchase__summary">
-            <div><dt>Secilen SNP</dt><dd>{snpIds.length}</dd></div>
-            <div><dt>Secilen metrik</dt><dd>{metricIds.length}</dd></div>
-            <div><dt>Cuzdan bakiyesi</dt><dd>{readiness ? formatToken(readiness.balance, readiness.decimals, readiness.symbol) : "-"}</dd></div>
+            <div><dt>{t("Secilen SNP")}</dt><dd>{snpIds.length}</dd></div>
+            <div><dt>{t("Secilen metrik")}</dt><dd>{metricIds.length}</dd></div>
+            <div><dt>{t("Cuzdan bakiyesi")}</dt><dd>{readiness ? formatToken(readiness.balance, readiness.decimals, readiness.symbol) : "-"}</dd></div>
           </dl>
-          <p className="data-purchase__fineprint">Bos alanlarin degisken fiyat payi sifirdir; toplamda sorgu dogrulama/emanet maliyeti icin zincirin taban ucreti bulunabilir.</p>
-          {!readiness?.registered && <div className="notice notice--warn">Once kayit ve hazirlik ekranindan arastirmaci kimliginizi dogrulayin.</div>}
-          {readiness?.participants === 0 && <div className="notice notice--warn">Havuz bosken sorgu acilamaz.</div>}
-          {quote && readiness && !balanceEnough && <div className="notice notice--warn">Secilen alanlar icin token bakiyesi yetersiz.</div>}
+          <p className="data-purchase__fineprint">{t("Bos alanlarin degisken fiyat payi sifirdir; toplamda sorgu dogrulama/emanet maliyeti icin zincirin taban ucreti bulunabilir.")}</p>
+          {!readiness?.registered && <div className="notice notice--warn">{t("Once kayit ve hazirlik ekranindan arastirmaci kimliginizi dogrulayin.")}</div>}
+          {readiness?.participants === 0 && <div className="notice notice--warn">{t("Havuz bosken sorgu acilamaz.")}</div>}
+          {quote && readiness && !balanceEnough && <div className="notice notice--warn">{t("Secilen alanlar icin token bakiyesi yetersiz.")}</div>}
           {activeQuery && (
             <div className="notice notice--info">
-              Sorgu #{activeQuery.queryId} halen acik. Ikinci bir odeme yapilamaz; ilerlemeyi <Link to="/arastirma/sorgular">sorgular ekranindan</Link> takip edin.
+              Sorgu #{activeQuery.queryId} halen acik. Ikinci bir odeme yapilamaz; ilerlemeyi <Link to="/arastirma/sorgular">{t("sorgular ekranindan")}</Link> {t("takip edin.")}
             </div>
           )}
           <button className="pill pill--primary" disabled={!canOpen} onClick={() => void open()}>
-            {opening ? "Sorgu aciliyor..." : "Ucreti ode ve sorguyu ac"}
+            {opening ? t("Sorgu aciliyor...") : t("Ucreti ode ve sorguyu ac")}
           </button>
         </aside>
       </div>

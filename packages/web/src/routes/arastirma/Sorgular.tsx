@@ -13,6 +13,7 @@ import {
   type DisclosureState,
 } from "../../lib/protocol";
 import { useSession } from "../../lib/session";
+import { useT } from "../../lib/i18n";
 
 interface QueryPointer {
   queryId: number;
@@ -56,59 +57,69 @@ function savePointer(address: string, pointer: QueryPointer) {
   window.localStorage.setItem(storageKey(address), JSON.stringify(pointer));
 }
 
-function stepsFor(query: QueryState): TimelineStep[] {
+type Translate = (source: string, params?: Record<string, string | number>) => string;
+
+/**
+ * Zaman cizgisi adimlari.
+ *
+ * @param t Ceviri disaridan gelir: bunlar saf fonksiyon, bilesen degil.
+ */
+function stepsFor(query: QueryState, t: Translate): TimelineStep[] {
   const { disclosure } = query;
   const appealOpen = disclosure.finalized && !disclosure.revoked && !disclosure.executed && disclosure.currentBlock < disclosure.challengeEndsAtBlock;
   const approvalDone = disclosure.finalized || disclosure.executed || query.settled;
 
   return [
-    { title: "Odendi", detail: "Ucret zincirde emanete alindi.", status: "done" },
+    { title: t("Odendi"), detail: t("Ucret zincirde emanete alindi."), status: "done" },
     {
-      title: "Onay bekliyor",
-      detail: `${disclosure.approvals}/${disclosure.requiredApprovals} yetkili dugum onayi.`,
+      title: t("Onay bekliyor"),
+      detail: t("{done}/{needed} yetkili dugum onayi.", { done: disclosure.approvals, needed: disclosure.requiredApprovals }),
       status: query.refunded ? "stopped" : approvalDone ? "done" : "current",
     },
     {
-      title: "Itiraz suresi",
-      detail: disclosure.finalized ? `Pencere blok ${disclosure.challengeEndsAtBlock.toLocaleString("tr-TR")}de biter.` : "Onay esigi bekleniyor.",
+      title: t("Itiraz suresi"),
+      detail: disclosure.finalized
+        ? t("Pencere blok {block} sonunda biter.", { block: disclosure.challengeEndsAtBlock.toLocaleString() })
+        : t("Onay esigi bekleniyor."),
       status: query.refunded ? "stopped" : disclosure.executed || query.settled ? "done" : appealOpen ? "current" : "pending",
     },
     {
-      title: "Acilim",
-      detail: disclosure.canExecute ? "Itiraz penceresi kapandi; FHE erisimi verilebilir." : "Pencerenin bitmesi bekleniyor.",
+      title: t("Acilim"),
+      detail: t(disclosure.canExecute ? t("Itiraz penceresi kapandi; FHE erisimi verilebilir.") : t("Pencerenin bitmesi bekleniyor.")),
       status: query.refunded ? "stopped" : disclosure.executed || query.settled ? "done" : disclosure.canExecute ? "current" : "pending",
     },
     {
-      title: "Cozuldu",
-      detail: disclosure.executed ? "Cozum yetkisi arastirmaci cuzdani icin zincirde verildi." : "FHE sonucuna erisim henuz verilmedi.",
+      title: t("Cozuldu"),
+      detail: t(disclosure.executed ? t("Cozum yetkisi arastirmaci cuzdani icin zincirde verildi.") : t("FHE sonucuna erisim henuz verilmedi.")),
       status: query.refunded ? "stopped" : query.settled ? "done" : disclosure.executed ? "current" : "pending",
     },
     {
-      title: "Dagitildi",
-      detail: "Emanet, protokol kurallarina gore katilimcilar ve hazine arasynda dagitilir.",
+      title: t("Dagitildi"),
+      detail: t("Emanet, protokol kurallarina gore katilimcilar ve hazine arasinda dagitilir."),
       status: query.settled ? "done" : query.refunded ? "stopped" : disclosure.executed ? "current" : "pending",
     },
     {
-      title: "Iade",
-      detail: "Onay/acilim basarisiz kalirsa ucret arastirmaciya iade edilir.",
+      title: t("Iade"),
+      detail: t("Onay/acilim basarisiz kalirsa ucret arastirmaciya iade edilir."),
       status: query.refunded ? "done" : "pending",
     },
   ];
 }
 
-function nextAction(query: QueryState): string {
-  if (query.refunded) return "Sorgu iade edildi.";
-  if (query.settled) return "Odeme dagitildi; sonuc ekranina gecebilirsiniz.";
-  if (!query.disclosure.finalized) return "Yetkili dugum onaylari bekleniyor.";
+function nextAction(query: QueryState, t: Translate): string {
+  if (query.refunded) return t("Sorgu iade edildi.");
+  if (query.settled) return t("Odeme dagitildi; sonuc ekranina gecebilirsiniz.");
+  if (!query.disclosure.finalized) return t("Yetkili dugum onaylari bekleniyor.");
   if (query.disclosure.currentBlock < query.disclosure.challengeEndsAtBlock) {
-    return `${query.disclosure.challengeEndsAtBlock - query.disclosure.currentBlock} blokluk itiraz penceresi acik.`;
+    return t("{blocks} blokluk itiraz penceresi acik.", { blocks: query.disclosure.challengeEndsAtBlock - query.disclosure.currentBlock });
   }
-  if (query.disclosure.canExecute) return "Acilim yetkisi verilmeyi bekliyor.";
-  if (query.disclosure.executed) return "Cozum tamam; odemenin dagitilmasi bekliyor.";
-  return "Zincir durumu yeniden okunuyor.";
+  if (query.disclosure.canExecute) return t("Acilim yetkisi verilmeyi bekliyor.");
+  if (query.disclosure.executed) return t("Cozum tamam; odemenin dagitilmasi bekliyor.");
+  return t("Zincir durumu yeniden okunuyor.");
 }
 
 export function Sorgular() {
+  const t = useT();
   const { address, chainId, provider, signer } = useSession();
   const [query, setQuery] = useState<QueryState | null>(null);
   const [loading, setLoading] = useState(false);
@@ -185,28 +196,28 @@ export function Sorgular() {
     }
   }, [query, refresh, signer]);
 
-  const steps = useMemo(() => query ? stepsFor(query) : [], [query]);
+  const steps = useMemo(() => query ? stepsFor(query, t) : [], [query]);
 
   return (
     <section className="research-queries" aria-labelledby="research-queries-title">
       <div className="research-queries__heading">
         <div>
-          <span className="eyebrow">ARASTIRMACI / SORGULAR</span>
-          <h1 id="research-queries-title">Sorgunuzun zincir ustundeki ilerlemesi</h1>
-          <p>Acik sorgu yenilemeden sonra zincirden devralinir. Bu sorgu kapanmadan yeni bir odeme acilamaz.</p>
+          <span className="eyebrow">{t("ARASTIRMACI / SORGULAR")}</span>
+          <h1 id="research-queries-title">{t("Sorgunuzun zincir ustundeki ilerlemesi")}</h1>
+          <p>{t("Acik sorgu yenilemeden sonra zincirden devralinir. Bu sorgu kapanmadan yeni bir odeme acilamaz.")}</p>
         </div>
         <button className="pill pill--ghost" disabled={loading || wrongNetwork} onClick={() => void refresh()}>
-          {loading ? "Okunuyor..." : "Yenile"}
+          {loading ? t("Okunuyor...") : t("Yenile")}
         </button>
       </div>
 
-      {wrongNetwork && <div className="notice notice--warn">Sorgu durumu yalnizca Sepolia aginda okunabilir.</div>}
+      {wrongNetwork && <div className="notice notice--warn">{t("Sorgu durumu yalnizca Sepolia aginda okunabilir.")}</div>}
       {notice && <div className={`notice notice--${notice.kind}`} role="status">{notice.text}</div>}
 
       {!loading && !query && (
         <div className="card card--bone">
-          <h2>Acik sorgu yok</h2>
-          <p className="card__body">Veri satin alma ekranindan alanlari secip sorgu actiginizda, bu zaman cizelgesi zincirden dolacak.</p>
+          <h2>{t("Acik sorgu yok")}</h2>
+          <p className="card__body">{t("Veri satin alma ekranindan alanlari secip sorgu actiginizda, bu zaman cizelgesi zincirden dolacak.")}</p>
         </div>
       )}
 
@@ -229,17 +240,17 @@ export function Sorgular() {
           </article>
 
           <aside className="research-queries__next card card--bone">
-            <span className="eyebrow">BEKLENEN ADIM</span>
-            <h2>{nextAction(query)}</h2>
+            <span className="eyebrow">{t("BEKLENEN ADIM")}</span>
+            <h2>{nextAction(query, t)}</h2>
             <dl className="research-queries__facts">
-              <div><dt>Ucret</dt><dd className="mono">{formatToken(query.fee, query.token.decimals, query.token.symbol)}</dd></div>
-              <div><dt>Onay</dt><dd>{query.disclosure.approvals}/{query.disclosure.requiredApprovals}</dd></div>
-              <div><dt>Guncel blok</dt><dd>{query.disclosure.currentBlock.toLocaleString("tr-TR")}</dd></div>
-              {query.disclosure.finalized && <div><dt>Itiraz sonu</dt><dd>{query.disclosure.challengeEndsAtBlock.toLocaleString("tr-TR")}</dd></div>}
-              {query.disclosure.finalized && !query.disclosure.executed && query.disclosure.currentBlock < query.disclosure.challengeEndsAtBlock && <div><dt>Kalan blok</dt><dd>{(query.disclosure.challengeEndsAtBlock - query.disclosure.currentBlock).toLocaleString("tr-TR")}</dd></div>}
+              <div><dt>{t("Ucret")}</dt><dd className="mono">{formatToken(query.fee, query.token.decimals, query.token.symbol)}</dd></div>
+              <div><dt>{t("Onay")}</dt><dd>{query.disclosure.approvals}/{query.disclosure.requiredApprovals}</dd></div>
+              <div><dt>{t("Guncel blok")}</dt><dd>{query.disclosure.currentBlock.toLocaleString("tr-TR")}</dd></div>
+              {query.disclosure.finalized && <div><dt>{t("Itiraz sonu")}</dt><dd>{query.disclosure.challengeEndsAtBlock.toLocaleString("tr-TR")}</dd></div>}
+              {query.disclosure.finalized && !query.disclosure.executed && query.disclosure.currentBlock < query.disclosure.challengeEndsAtBlock && <div><dt>{t("Kalan blok")}</dt><dd>{(query.disclosure.challengeEndsAtBlock - query.disclosure.currentBlock).toLocaleString("tr-TR")}</dd></div>}
             </dl>
-            {query.disclosure.canExecute && <button className="pill pill--primary" disabled={action !== null} onClick={() => void execute()}>{action === "execute" ? "Yetki veriliyor..." : "Acilim yetkisini ver"}</button>}
-            {query.disclosure.executed && !query.settled && !query.refunded && <p className="research-queries__handoff">Cozulmus grup toplamlari ve odeme dagitimi Sonuclar ekranindan ilerletilir.</p>}
+            {query.disclosure.canExecute && <button className="pill pill--primary" disabled={action !== null} onClick={() => void execute()}>{action === "execute" ? t("Yetki veriliyor...") : t("Acilim yetkisini ver")}</button>}
+            {query.disclosure.executed && !query.settled && !query.refunded && <p className="research-queries__handoff">{t("Cozulmus grup toplamlari ve odeme dagitimi Sonuclar ekranindan ilerletilir.")}</p>}
           </aside>
         </div>
       )}
