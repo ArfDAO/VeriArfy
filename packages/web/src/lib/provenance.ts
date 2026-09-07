@@ -27,6 +27,7 @@
  */
 import { poseidon2 } from "poseidon-lite/poseidon2";
 import { poseidon9 } from "poseidon-lite/poseidon9";
+import { PROVENANCE_CIRCUIT_WASM, PROVENANCE_CIRCUIT_ZKEY } from "../config/circuits";
 
 /** Devrenin derlendigi panel boyutu — `DataProvenance(1000, 20)`. */
 export const PANEL_SIZE = 1000;
@@ -273,8 +274,8 @@ export async function proveSelfProvenance(params: {
   const startedAt = performance.now();
   const { proof } = await snarkjs.groth16.fullProve(
     input,
-    params.wasmUrl ?? "/circuits/data_provenance.wasm",
-    params.zkeyUrl ?? "/circuits/data_provenance_final.zkey",
+    params.wasmUrl ?? PROVENANCE_CIRCUIT_WASM,
+    params.zkeyUrl ?? PROVENANCE_CIRCUIT_ZKEY,
   );
   const provingMs = performance.now() - startedAt;
 

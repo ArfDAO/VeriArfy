@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -57,4 +57,13 @@ test("refuses corrupted served output and preserves it", () => runCase(({ build,
 test("rejects unpinned build source without creating public output", () => runCase(({ build, out, lockPath }) => {
   writeFileSync(join(build, "researcher_identity_final.zkey"), "random");
   assert.throws(() => prepareCircuits({ buildDir: build, outDir: out, lockPath, log: () => {} }), /hash-verified build sources/);
+  assert.equal(existsSync(out), false);
+}));
+
+test("keeps valid public pins even when a development build has different keys", () => runCase(({ build, out, lockPath }) => {
+  prepareCircuits({ buildDir: build, outDir: out, lockPath, log: () => {} });
+  writeFileSync(join(build, "researcher_identity_final.zkey"), "different ceremony");
+  const result = prepareCircuits({ buildDir: build, outDir: out, lockPath, log: () => {} });
+  assert.equal(result.copied, false);
+  assert.equal(readFileSync(join(out, "researcher_identity_final.zkey"), "utf8"), "identity/zkey/pinned");
 }));
