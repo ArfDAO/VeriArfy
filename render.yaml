@@ -1,12 +1,16 @@
-# VeriArfy — arayuz disindaki iki servis.
+# VeriArfy — arayuz disindaki servis.
 #
-# Arayuz Vercel'de duruyor (statik). Burada yalnizca durum tutan ya da agir
-# bagimliliga sahip olanlar var:
+# Arayuz Vercel'de duruyor ve tamamen statiktir. Burada tek bir servis var:
 #
-#   kurator : Merkle agacini tutar; arastirmaci ZK kaydi bunsuz yapilamaz.
-#   ml      : sifreli/sifresiz model karsilastirmasi (ana sayfa anketi).
+#   kurator : akredite katilimci Merkle agacini tutar. Arastirmaci ZK kaydi
+#             bu agactan gelen yol olmadan yapilamaz; durum tuttugu icin
+#             sunucusuz bir fonksiyona tasinamaz.
 #
-# Ikisi de Sepolia'ya yalnizca OKUMA yapar; hicbiri ozel anahtar tutmaz.
+# ML servisi KALDIRILDI. Ana sayfadaki anket kaldirilinca tek kullanicisi
+# kalmadi; ~2 GB'lik concrete-ml imajini bosuna derlemeye gerek yok.
+# Arastirma kodu `packages/ml` altinda duruyor, yerelde calistirilabilir.
+#
+# Servis Sepolia'ya yalnizca OKUMA yapar; ozel anahtar tutmaz.
 # Kok guncellemesi (`curator:push-root`) bilincli olarak elle calistirilir —
 # zincire yazan bir islemi barindirilan servise vermek, anahtari oraya
 # koymak demekti.
@@ -24,13 +28,3 @@ services:
       # kayit akisi etkilenmez.
       - key: PINATA_JWT
         sync: false
-
-  - type: web
-    name: veriarfy-ml
-    runtime: docker
-    plan: free
-    dockerfilePath: ./packages/ml/Dockerfile
-    dockerContext: .
-    envVars:
-      - key: PORT
-        value: 10000

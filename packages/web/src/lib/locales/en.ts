@@ -575,4 +575,67 @@ export const EN: Record<string, string> = {
   // bunlar FARKLI anahtarlardir. Biri cevrilip digeri unutulursa ekranda
   // yalnizca o kelime Turkce kalir — tam olarak boyle yakalandi.
   "Hayır": "No",
+  // --- Tanitim sayfasi ------------------------------------------------------
+  "SORUN": "THE PROBLEM",
+  "Veri değerli, sahibi karşılıksız": "The data is valuable. Its owner gets nothing.",
+  "Genomik veri araştırmacılar için çok değerli; verinin geldiği kişi için neredeyse hiçbir şey ifade etmiyor.":
+    "Genomic data is worth a fortune to researchers, and almost nothing to the person it came from.",
+  "Araştırmacı için": "For the researcher",
+  "Bir GWAS çalışması binlerce katılımcının genotipine ihtiyaç duyar. Bu veriyi toplamak çalışmanın en pahalı ve en yavaş kısmıdır.":
+    "A GWAS needs genotypes from thousands of participants. Collecting that cohort is the slowest and most expensive part of the study.",
+  "Veri sahibi için": "For the data owner",
+  "Aynı veri bir kez satılır, defalarca kullanılır ve kişiye hiçbir şey dönmez. Kimin hangi çalışmada kullandığı da görünmez.":
+    "The same data is sold once, used many times, and returns nothing to the person. Who used it, and for what, stays invisible.",
+  "Ortadaki boşluk": "The gap between them",
+  "Veriyi paylaşmak mahremiyeti kaybetmek anlamına geldiği sürece, paylaşmak isteyen kişi için makul bir seçenek yoktur.":
+    "As long as sharing data means giving up privacy, there is no reasonable option for someone who would otherwise be willing to share.",
+  "NASIL ÇALIŞIYOR": "HOW IT WORKS",
+  "Şifreli kalır, yine de hesaplanır": "It stays encrypted, and still computes",
+  "Veri cihazınızda şifrelenir ve öyle kalır. Zincir üstünde yapılan her işlem şifreli değerler üzerinde çalışır.":
+    "Data is encrypted on your device and stays that way. Every on-chain operation runs on the ciphertext.",
+  "ÖDEME": "PAYMENT",
+  "Kullanıldığı kadar, nadirliği kadar": "Paid by use, weighted by scarcity",
+  "Araştırmacı yalnızca ihtiyaç duyduğu alanları satın alır. Az bulunan veri, sahibine kişi başına daha fazla kazandırır.":
+    "Researchers buy only the fields they need. Data that few people hold earns its owner more per record.",
+  "Kayıt başına ödeme": "Paid per record",
+  "Bir kayıt, bir kişinin bir alanıdır. Araştırmacı iki alan isterse ve bunlara sırasıyla 40 ve 12 kişi veri vermişse, satın aldığı şey 52 kayıttır — havuzun tamamı değil.":
+    "A record is one person and one field. If a researcher asks for two fields held by 40 and 12 people, they buy 52 records — not the whole pool.",
+  "Kıtlık çarpanı": "Scarcity multiplier",
+  "Bir alan ne kadar az kişide varsa, o alanın kayıt fiyatı o kadar yüksektir. Çarpan zincirdeki kapsama sayaçlarından türetilir; kimse elle değer atamaz.":
+    "The fewer people hold a field, the more each of its records costs. The multiplier is derived from on-chain coverage counters — nobody assigns it by hand.",
+  "Kıtlık örneği": "Scarcity example",
+  "Alan": "Field",
+  "Kaç kişide": "Held by",
+  "Kişi başı": "Per person",
+  "Yaygın varyant": "Common variant",
+  "Seyrek kohort": "Sparse cohort",
+  "Toplamda seyrek alan daha ucuza gelir — daha az veri satın alınır. Ama o veriyi taşıyan kişi kat kat fazla kazanır.":
+    "The sparse field costs less in total — less data is bought. But the person carrying it earns several times more.",
+  "TEKNOLOJİ": "TECHNOLOGY",
+  "Üç katman": "Three layers",
+  "Her katman farklı bir soruyu çözüyor; hiçbiri tek başına yeterli değil.":
+    "Each layer answers a different question. None of them is sufficient alone.",
+  "Veri açılmadan nasıl hesaplanır?": "How do you compute without decrypting?",
+  "Dozajlar ve ölçümler şifreli olarak toplanır. Kontenjans tabloları ve Welch yeterli istatistikleri hiçbir noktada çözülmeden birikir.":
+    "Dosages and measurements are aggregated while encrypted. Contingency tables and Welch sufficient statistics accumulate without ever being decrypted.",
+  "Veriniz olduğunu nasıl kanıtlarsınız?": "How do you prove you hold the data?",
+  "Devre, kapsama bitlerini taahhüde giren dozajlardan türetir. «Bu alan bende var» deyip boş göndermek matematiksel olarak imkânsızdır.":
+    "The circuit derives coverage bits from the dosages inside the commitment. Claiming a field you do not hold is mathematically impossible.",
+  "Eşikli çözüm": "Threshold decryption",
+  "Sonuca kim erişebilir?": "Who can reach the result?",
+  "Açılım, bağımsız düğümlerin eşikli onayı ve ardından bir itiraz penceresi gerektirir. Ödeme tek başına hiçbir şeyi çözmez.":
+    "Disclosure requires threshold approval from independent nodes, followed by a challenge window. Paying alone decrypts nothing.",
+  "DÜRÜST SINIRLAR": "HONEST LIMITS",
+  "Sistem neyi kanıtlamıyor": "What the system does not prove",
+  "Bir sistemin ne yapmadığını bilmek, ne yaptığını bilmek kadar önemlidir.":
+    "Knowing what a system does not do matters as much as knowing what it does.",
+  "Verinin gerçekliği kanıtlanmaz": "Authenticity is not proven",
+  "ZK kanıtı, kapsamanın taahhütle tutarlı olduğunu gösterir. Verinin gerçek bir ölçümden geldiğini göstermez — bunu ancak imzalayan akredite bir kurum söyleyebilir.":
+    "The ZK proof shows coverage is consistent with the commitment. It does not show the data came from a real measurement — only an accredited institution signing the panel can say that.",
+  "Havuzdan çıkmak geçmişi silmez": "Leaving does not erase the past",
+  "Ayrılmak gelecekteki sorgulardan pay almayı durdurur. Homomorfik toplamlara zaten karışmış veri geri çekilemez.":
+    "Leaving stops your share of future queries. Data already mixed into the homomorphic aggregates cannot be pulled back.",
+  "Test ağındayız": "This is a testnet",
+  "Sözleşmeler Sepolia üzerinde çalışıyor. Tören tek katılımcılı bir geliştirme kurulumudur; ana ağ için çok taraflı bir tören gerekir.":
+    "The contracts run on Sepolia. The trusted setup is a single-contributor development ceremony; mainnet requires a multi-party one.",
 };

@@ -1,0 +1,41 @@
+# Vercel'e YALNIZCA kaynak gider; bagimliliklar orada `npm install` ile kurulur.
+#
+# Bu dosya olmadan CLI depoyu oldugu gibi yukluyor: 6,8 GB ve yukleme
+# dusuyor. Asagidakiler ya uretilebilir ya da yalnizca yerel gelistirmede
+# gerekli.
+
+node_modules
+**/node_modules
+
+# Python sanal ortami ve onbellekler (~2 GB)
+**/.venv
+**/__pycache__
+**/*.pyc
+
+# Solidity derleme ciktilari — Vercel sozlesme derlemiyor
+packages/contracts/artifacts
+packages/contracts/artifacts-filecoin
+packages/contracts/cache
+packages/contracts/typechain-types
+packages/contracts/fhevmTemp
+
+# Devre kaynagi ve toren dosyalari.
+# DIKKAT: `packages/web/public/circuits` HARIC TUTULMAZ — tarayiciya
+# servis edilen zkey/wasm oradan gelir ve depoda islenmistir.
+packages/circuits/build
+packages/circuits/ptau
+packages/circuits/bin
+
+# Rust hedefleri ve wasm-pack ciktilari (web'in ihtiyaci `pkg`, o da
+# `npm install` sirasinda workspace bagi ile gelir)
+**/target
+
+# Buyuk ornek veriler
+packages/ml/data
+packages/study/data
+
+# Onceki derlemeler
+packages/web/dist
+dist
+
+.git

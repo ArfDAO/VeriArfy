@@ -87,3 +87,4 @@ packages/ml/data/*
 !packages/ml/data/tfhers_params*.json
 packages/ml/rust_expander/
 .vercel
+.env*

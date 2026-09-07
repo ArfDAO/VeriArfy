@@ -1,98 +1,94 @@
 # VeriArfy
 
-**Sosyal medya kullanımı anksiyete ve panik atağı artırıyor mu?**
-Bu soruyu, katılımcıların bireysel yanıtları **hiç açılmadan** yanıtlayan açık bir çalışma.
+**Şifreli genomik veri pazarı.** Veri sahibi verisini cihazında şifreler ve
+havuza katılır; araştırmacı yalnızca ihtiyaç duyduğu alanları satın alır;
+ödeme, verinin *kullanıldığı kadar* ve *ne kadar nadir olduğu kadar* dağıtılır.
 
-Kimlik doğrulaması **zero-knowledge** (Groth16), veri işleme **tamamen homomorfik
-şifreleme** (Zama FHEVM), ağ **Sepolia**.
+Hiçbir noktada bireysel kayıt açılmaz. Zincir üstündeki her işlem şifreli
+değerler üzerinde çalışır.
 
----
-
-## Güven ama doğrula
-
-Projenin çekirdek iddiası şu: *gizlilik için bilimsel doğruluktan ödün vermek
-gerekmiyor.* Bunu iddia etmekle bırakmıyoruz — **aynı veriyi iki bağımsız hattan
-geçirip sonuçların birebir aynı çıktığını gösteriyoruz.**
-
-| | **Düz-metin hattı** | **FHE hattı** |
-|---|---|---|
-| Puanlar | açık | şifreli |
-| Toplama | doğrudan | homomorfik, zincir üstünde |
-| Bireysel puan görülebilir mi | **evet** | **hayır, hiç** |
-| Sonuç | referans | doğrulanan |
-
-```bash
-npm run study:verify
-```
-
-Gerçek çıktı (60 katılımcı, gerçek ZK kanıtı + gerçek FHE işlemleri):
-
-```
-── Grup toplamlari: duz-metin vs FHE ──
-  anxiety grup 0: duz(n=20, Σx=881,  Σx²=39497) | fhe(n=20, Σx=881,  Σx²=39497)
-  anxiety grup 1: duz(n=20, Σx=1010, Σx²=51578) | fhe(n=20, Σx=1010, Σx²=51578)
-  anxiety grup 2: duz(n=20, Σx=1233, Σx²=76253) | fhe(n=20, Σx=1233, Σx²=76253)
-  panic   grup 0: duz(n=20, Σx=226,  Σx²=2782)  | fhe(n=20, Σx=226,  Σx²=2782)
-  panic   grup 1: duz(n=20, Σx=267,  Σx²=3757)  | fhe(n=20, Σx=267,  Σx²=3757)
-  panic   grup 2: duz(n=20, Σx=316,  Σx²=5154)  | fhe(n=20, Σx=316,  Σx²=5154)
-
-✓ Iki hat birebir ayni sonucu uretti.
-```
-
-### Neden birebir aynı çıkıyor?
-
-Bir grubun **bütün** istatistiği üç tamsayıdan türetilebilir:
-
-```
-n = katılımcı sayısı,  S = Σx,  Q = Σx²
-
-ortalama = S / n
-varyans  = (n·Q − S²) / (n·(n−1))
-```
-
-Bu yüzden FHE hattının bireysel puanı açmasına hiç gerek yok — sadece bu üç
-toplamı homomorfik olarak biriktiriyor. İki hat *aynı tamsayıları* ürettiği için
-sonraki Welch t-testi, Cohen's d ve p-değeri de kaçınılmaz olarak aynı çıkıyor.
-
----
-
-## Çalışma tasarımı
-
-**Maruziyet (3 grup):** günlük sosyal medya süresi — `0–5 saat` · `5–10 saat` · `10+ saat`
-**Birincil karşılaştırma:** düşük (0–5s) ↔ yüksek (10+s)
-
-**Sonuç ölçütleri**
-- **Anksiyete** — Burns Anxiety Inventory yapısı: 33 madde × 0–3 = **0–99**,
-  üç alt ölçek (Anksiyeteli Duygular 6 · Anksiyeteli Düşünceler 11 · Fiziksel Belirtiler 16),
-  yayımlanmış kesim noktaları (0–4 minimal … 51–99 aşırı/panik).
-- **Panik** — PDSS yapısı: 7 madde × 0–4 = **0–28**.
-
-**İstatistik:** Welch t-testi (Satterthwaite df) · Cohen's d · %95 güven aralığı ·
-iki yönlü p-değeri (düzenlenmiş eksik beta fonksiyonu ile, dış bağımlılık yok).
-
-> **Telif notu.** [packages/study/src/instruments.js](packages/study/src/instruments.js)
-> içindeki madde metinleri, Burns envanterinin *yapısını* (madde sayısı, alt ölçekler,
-> 0–3 puanlama, kesim noktaları) birebir izleyen **özgün Türkçe ifadelerdir**;
-> Dr. Burns'ün telifli madde metinleri değildir. Lisanslı tam metniniz varsa
-> yalnızca o dosyadaki `text` alanlarını değiştirin — puanlama, istatistik ve
-> FHE hattı hiç değişmeden çalışmaya devam eder.
-
----
-
-## Gizlilik modeli — ne açılır, ne açılmaz
-
-| Veri | Durum |
+| | |
 |---|---|
-| Kim olduğunuz | **Hiç yazılmaz.** Zincire yalnızca "akredite listede" ZK kanıtı gider |
-| Bireysel anksiyete/panik puanınız | **Hiç açılmaz.** Şifreli halde toplama katılır, saklanmaz |
-| Hangi kullanım grubunda olduğunuz | **Şifreli.** `eq`+`select` ile doğru gruba homomorfik eklenir |
-| Grup düzeyinde n, Σx, Σx² | **Açılır** — yayımlanan sonuç bu, herkes doğrulayabilsin diye |
+| **Canlı demo** | https://veri-arfy.vercel.app |
+| **Ağ** | Sepolia |
+| **Şifreleme** | Zama fhEVM (TFHE) |
+| **Kanıt** | Groth16 · circom |
 
-Ek korumalar:
-- **Çift katılım engeli** — ZK nullifier (aynı kimlik iki kez kayıt olamaz) +
-  adres başına tek gönderim.
-- **Bütünlük** — puanlar kontratta `FHE.min` ile üst sınıra kırpılır, kareler
-  kontratta hesaplanır; kötü niyetli bir katılımcı şişirilmiş değerle toplamları bozamaz.
+---
+
+## Çözülen sorun
+
+Bir GWAS çalışması binlerce katılımcının genotipine ihtiyaç duyar; bu kohortu
+toplamak çalışmanın en pahalı ve en yavaş kısmıdır. Aynı veri bir kez satılır,
+defalarca kullanılır ve verinin geldiği kişiye hiçbir şey dönmez.
+
+Veriyi paylaşmak mahremiyeti kaybetmek anlamına geldiği sürece, paylaşmak
+isteyen kişi için makul bir seçenek yok. VeriArfy bu iki tarafı, veriyi hiç
+açmadan buluşturur.
+
+---
+
+## Nasıl çalışır
+
+### Veri sahibi
+
+1. Ham tüketici dosyasını (23andMe, AncestryDNA) veya biyobelirteç ölçümlerini
+   yükler. **Dosya tarayıcıdan çıkmaz** — ayrıştırma yerelde yapılır.
+2. Sistem, çalışmanın panelindeki hangi alanların dosyada *gerçekten* bulunduğunu
+   çıkarır. Kullanıcıya sorulmaz: sıradan bir kişi dosyasının içinde hangi
+   varyantların olduğunu bilmez, dosyanın **türünü** bilir.
+3. Her değer istemcide şifrelenir; tarayıcıda bir **ZK köken kanıtı** üretilir.
+4. Şifreli değerler zincirde homomorfik olarak toplanır.
+
+### Araştırmacı
+
+1. ZK kimlik kanıtıyla araştırmacı defterine kaydolur — defter akredite
+   olduğunu bilir, kim olduğunu bilmez.
+2. Çalışması için gereken **alanları tek tek seçer**. Her alanın yanında o
+   alana kaç kişinin veri verdiği ve kıtlık çarpanı görünür; fiyat seçim
+   değiştikçe anlık güncellenir.
+3. Ücret emanete alınır. **Ödeme tek başına hiçbir şeyi çözmez.**
+4. Bağımsız düğümlerin eşikli onayı, ardından itiraz penceresi. Ancak bundan
+   sonra açılım yetkisi verilir.
+5. Dönen şey bir **grup istatistiğidir** — genomikte ki-kare + BH-FDR,
+   biyobelirteçlerde Welch t + Cohen d. Bireysel kayıt asla dönmez.
+
+---
+
+## Ödeme modeli
+
+Ücret **kayıt başınadır**: bir kayıt = bir kişi × bir alan.
+
+```
+ücret = taban + Σ  kayıt(alan) × kayıtFiyatı × kıtlık(alan)
+             alan ∈ istenen
+
+kıtlık(alan) = havuz / o alanı verenler        [1x .. tavan, varsayılan 10x]
+```
+
+Araştırmacı iki alan isterse ve bunlara 40 ile 12 kişi veri vermişse, satın
+aldığı şey **52 kayıttır** — havuzun tamamı değil. İstediği alanda verisi
+olmayan kişi için ödeme yapılmaz.
+
+**Kıtlık iki yerde birden çalışır.** Aynı çarpan hem araştırmacının fiyatını
+hem veri sahibinin payını belirler:
+
+```
+pay(kişi) = usagePot ×   Σ kıtlık(alan)      /   Σ kayıt(alan) × kıtlık(alan)
+                    kişinin verdiği alanlar      istenen alanlar
+```
+
+Payda, ücretin alan bileşeniyle birebir aynı formüldür. Ödenen ile hak edilen
+tek bir sayıdan türer.
+
+| alan | kaç kişide | toplam | kişi başı |
+|---|---|---|---|
+| yaygın varyant | 1000 | 50 birim | 1x |
+| seyrek kohort | 100 | 50 birim | **10x** |
+
+Çarpan zincirdeki kapsama sayaçlarından **türetilir**; kimse elle değer atamaz.
+"Hangi veri değerli" kararı sahibin insafına bırakılsaydı, fiyat piyasanın
+değil sahibin kararı olurdu.
 
 ---
 
@@ -100,150 +96,170 @@ Ek korumalar:
 
 ```
 packages/
-├── circuits/    Circom devresi (Poseidon + Merkle 20) + Groth16 anahtarları
-├── study/       Ölçekler, puanlama, istatistik motoru, düz-metin hattı
-├── contracts/   VeriArfyRegistry (ZK kayıt) · AnxietyStudy (FHE) · VeriArfyVault
-├── curator/     Akredite katılımcı ağacı + Merkle yolu servisi
-└── web/         React arayüz — anket, şifreleme, canlı sonuçlar
+  contracts/          fhEVM sözleşmeleri (Solidity)
+  circuits/           circom devreleri + Groth16 kurulumu
+  client-side-rust/   VCF ayrıştırıcı (Rust → wasm)
+  client-fhe-rust/    istemci tarafı FHE şifreleyici (Rust → wasm)
+  web/                arayüz (React + Vite)
+  curator/            akredite katılımcı Merkle ağacı
+  ml/                 Concrete ML köprüsü (araştırma)
+  study/              istatistik motoru (ki-kare, Welch t, BH-FDR)
+```
+
+### Üç katman, üç ayrı soru
+
+| katman | soru | çözüm |
+|---|---|---|
+| **FHE** | Veri açılmadan nasıl hesaplanır? | Zama fhEVM; kontenjans tabloları ve Welch yeterli istatistikleri şifreli birikir |
+| **ZK** | Veriniz olduğunu nasıl kanıtlarsınız? | Kapsama bitleri devrede taahhütten türetilir; uydurulamaz |
+| **KMS** | Sonuca kim erişebilir? | Eşikli onay + itiraz penceresi |
+
+### Neden kapsama ZK'dan geliyor
+
+Ödeme kullanılan alana göre dağıtılıyor. Kapsama istemciden gelseydi
+uydurulabilirdi: *"bende bu alan var"* deyip boş göndermek, veri vermeden pay
+almak demekti. İstatistiği bozmaz (şifreli değer karar verir) ama **parayı**
+bozardı.
+
+Devre kapsama bitlerini taahhüde giren dozajlardan türetir ve açık çıktı olarak
+verir. Sözleşme ayrıca kaydı olan bir katılımcının beyanının kanıtın **alt
+kümesi** olmasını şart koşar (`CoverageNotProven`) — aksi halde saldırgan önce
+dar bir kanıt gönderip sonra maskeyle genişletirdi.
+
+---
+
+## Dağıtım (Sepolia)
+
+| sözleşme | adres |
+|---|---|
+| VeriarfyProtocol | `0x623351c69c6c5365C98A8D064721D4EF7AF0B0a4` |
+| VeriarfyPayments | `0xa30bFCb288A9B81f46FD2d16c81c22D7852d74dA` |
+| VeriarfyBiomarkers | `0x20674472d2B32398C5bF656f23373099311d27a1` |
+| DataProvenanceVerifier | `0x0513373dd7CB26c20c22b0ED2cD01D49408B0e7F` |
+| VeriArfyRegistry | `0xAf206523D4C4fC8EE47919C198Fc35Ce5ddd6ED6` |
+| VeriarfyStaking | `0x5033950d0aB4148f3F6101AE1E6cac6d5cBD2C67` |
+| VeriarfyStorage | `0xa3f793c5B231d8148d77e80d8412D78bFC7014eC` |
+
+Tamamlanmış bir döngü örneği:
+
+```
+submitRecord       0x05b6b6d3db23f0101ef16557f014106d868fae2c7f5ea3feab34dc0076448483
+executeDisclosure  0xc8a0c469f452ea271cb11020ba6f420d802925942b948fa0143205349fc76f7a
+settleQuery        0xadb087bd454f6695e50e791ad5e68fac64f9709fb0fc54b54d1efa2617b96c77
 ```
 
 ---
 
 ## Kurulum
 
+Gereken: Node 20+, Rust (wasm hedefiyle), Python 3.11 (yalnızca ML köprüsü için).
+
 ```bash
 npm install
-```
 
-### 1. Devreyi derle (bir kez)
-
-```bash
+# Devreleri kur (circom indirilir, tören çalışır)
 npm run circuits:build
+
+# Rust → wasm
+npm run wasm:build
+npm run fhe:build
+
+# Sözleşmeler
+npm run contracts:compile
+npm run contracts:test
 ```
 
-### 2. Doğrulama koşumu — hiçbir şey deploy etmeden
+### Çalıştırma
 
 ```bash
-npm run study:test      # istatistik motorunun öz-testi (26 kontrol)
-npm run study:verify    # iki hattı karşılaştır (gerçek ZK + FHE, yerel)
+npm run curator      # Merkle ağacı servisi (localhost:8787)
+npm run web:dev      # arayüz (localhost:5173)
 ```
 
-Kohort boyutu: `COHORT=20 npm run study:verify` (grup başına katılımcı).
-
-### 3. Sepolia'ya deploy
-
-`packages/contracts/.env` doldurun (`.env.example`'a bakın), sonra:
+Araştırmacı kaydından sonra ağaç kökü zincire yazılmalıdır:
 
 ```bash
-npm run contracts:deploy:sepolia
+npm run curator:push-root
 ```
 
-Adresler `packages/web/src/config/deployment.json` dosyasına otomatik yazılır.
+> Bu adım bilerek elle çalıştırılır. Zincire yazan tek işlem odur; barındırılan
+> bir servise vermek özel anahtarı oraya koymak demekti.
 
-### 4. Sepolia canli kontrolu (D/15, dort asamali)
+### Ortam değişkenleri
 
-Deploy ciktisindaki `packages/contracts/deployments/sepolia.json` icindeki
-`authorizedNodes` public topolojinin tek kaynagidir. `prepare` asamasi
-`LIVE_CHECK_QUERY_TYPE` icin yalnizca `1` (GWAS), `2` (ML) veya `4`
-(STATISTICS) kabul eder; zincirde `requiredApprovals(type) === 2` degilse
-ilk mutation/proof oncesi fail-closed durur. Gercek Sepolia islemleri gas ve
-onceden yatirilmis node stake'i gerektirir; deploy veya live-check otomatik
-fonlama/stake yapmaz.
+`.env.example` dosyasını `.env` olarak kopyalayın:
 
-Onayli D/15 test profili `packages/contracts/ops/d15-sepolia.json` icinde
-yalniz public adresleri tutar: deployer, node-1 ve node-2 farklidir; sorgu ML
-(`2`), esik 2/2 ve `MIN_PARTICIPANTS=1` yalniz bu test deployment'i icindir.
-Bu profil k-anonimlik kaniti degil, M-of-N authorization kanitidir.
-
-Tum operator komutlari `scripts/d15-sepolia.ps1` uzerinden calistirilir.
-Private key dosyaya veya komut satirina yazilmaz: PowerShell maskeli prompt ile
-alir, yalniz ilgili child process'e aktarir ve `finally` icinde environment'tan
-siler. Shared `.env` yuklenmez. State-changing asamalar hem `-Execute` hem de
-elle yazilan asama-ozel onay cumlesi olmadan calismaz.
-
-Once private key kullanmayan public readiness'i, sonra transaction gondermeyen
-ve yine private key yuklemeyen deployer preflight'ini calistirin:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage readiness
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage preflight
-```
-
-Asagidaki komutlar dokumantasyon amaclidir ve Sepolia transaction'i
-gonderebilir. Yalniz ayri operasyon onayindan sonra sirasiyla kullanilir.
-Deployment komutu bilerek `--no-compile` kullanir; once ayri cihaz-yuku onayi
-ile compile ve hedef testler yeniden gecmis olmalidir:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage deploy -Execute
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage stake-node-1          # salt-okunur stake plani
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage stake-node-1 -Execute
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage stake-node-2
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage stake-node-2 -Execute
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage prepare -Execute
-
-# Prepare ciktisindaki public id'leri iki operator de aynen kullanir.
-$queryId = Read-Host "LIVE_CHECK_QUERY_ID"
-$requestId = Read-Host "LIVE_CHECK_REQUEST_ID"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage node-1 -QueryId $queryId -RequestId $requestId -Execute
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage node-2 -QueryId $queryId -RequestId $requestId -Execute
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\d15-sepolia.ps1 -Stage complete -QueryId $queryId -RequestId $requestId -Execute
-```
-
-Node operatorleri kendi ayri shell/custody ortamlarinda yalniz kendi test-only
-private key'lerini girer. Seed phrase, private key ve wallet parolasi hicbir
-zaman repository'ye, sohbete veya ortak `.env` dosyasina konmaz.
-
-Bu kanit yalniz M-of-N authorization ve iki ayri signer handoff'unu gosterir;
-HSM, DKG veya gercek threshold decryption uygulandigi iddia edilmez.
-
-### 5. Kurator servisi
-
-```bash
-npm run curator              # http://localhost:8787
-npm run curator:push-root    # ağacın kökünü zincire yazar
-```
-
-### 6. Arayüz
-
-```bash
-npm run web:dev
-```
-
-`http://localhost:5173/?preview=survey` ile anketi cüzdan/zincir olmadan
-tasarım önizlemesinde görebilirsiniz.
+| değişken | ne için |
+|---|---|
+| `SEPOLIA_RPC_URL` | zincir erişimi |
+| `DEPLOYER_PRIVATE_KEY` | dağıtım ve kurator kökü |
+| `PINATA_JWT` | IPFS yüklemesi |
+| `VITE_CURATOR_URL` | arayüzün kurator adresi |
 
 ---
 
-## Doğrulanmış durum
+## Test
 
-| Kontrol | Sonuç |
-|---|---|
-| `npm run study:test` | ✅ 26/26 — t kritik değeri yayımlanmış tabloyla eşleşiyor (2.179, df=12) |
-| `npm run study:verify` | ✅ 60 katılımcı, 18 tamsayının hepsi birebir aynı |
-| `npm run contracts:test` | ✅ 2/2 |
-| `npm run web:build` | ✅ gerçek Zama TFHE WASM paketleniyor |
-| Arayüz anket akışı | ✅ 33+7 madde, puanlama ve bant eşlemesi doğrulandı |
+```bash
+npm run contracts:test                      # sözleşmeler (fhEVM mock)
+npm run test --workspace packages/circuits  # devre: kanıt + reddetme senaryoları
+npm run test --workspace packages/web       # arayüz
+npm run study:test                          # istatistik motoru
+```
+
+Devre testlerinin çoğu **olumsuzdur**: değiştirilmiş panel, akredite olmayan
+kurum, biçim dışı dozaj, nullifier atlatma denemesi. Bir devrenin değeri neyi
+kabul ettiğinde değil, **neyi reddettiğindedir**.
+
+Gerçek ağda uçtan uca doğrulama:
+
+```bash
+npm run chain:live-check
+```
 
 ---
 
 ## Dürüst sınırlar
 
-- **Şu anki sayılar gerçek bulgu değildir.** Doğrulama koşumu, iki hattın aynı
-  sonucu ürettiğini göstermek için tohumlanmış **test verisi** kullanır
-  ([synthetic.js](packages/study/src/synthetic.js)). Gerçek bulgu, gerçek
-  katılımcılar arayüzden yanıt verdikçe oluşur.
-- **Yerel koşum FHEVM mock'u kullanır** — kod yolları, ACL ve işlem semantiği
-  gerçek, ancak kriptografi Sepolia'da (Zama koprosesörü) gerçekten yapılır.
-  Tarayıcıdaki şifreleme her durumda gerçek TFHE WASM'dir.
-- **Gözlemsel çalışmadır** — nedensellik değil, ilişki ölçer. Yüksek kullanım ile
-  yüksek anksiyete birlikte görülebilir; hangisinin hangisini doğurduğunu bu
-  tasarım söyleyemez.
-- **`AllowAllVerifier` yalnızca testtedir**, üretimde asla deploy edilmemelidir.
-- Araştırma amaçlıdır; **tıbbi tanı veya tedavi tavsiyesi değildir.**
+Bunları bulunmasındansa yazmayı tercih ediyoruz.
+
+**Verinin gerçekliği kanıtlanmıyor.** ZK kanıtı, kapsamanın taahhütle tutarlı
+olduğunu gösterir. Verinin gerçek bir ölçümden geldiğini **göstermez** — bunu
+ancak paneli imzalayan akredite bir kurum söyleyebilir. Devre iki katmanı da
+destekliyor (`attested` bayrağı) ve hangi katmanın kullanıldığını
+`recordAttested` içinde saklıyor, ama kurum entegrasyonu henüz yok. Geliştirme
+anahtarı depoda açık olduğu için imzalı katman şu an kullanılmıyor.
+
+**Tören tek katılımcılı.** Üretilen zkey bir "development ceremony" çıktısıdır.
+Ana ağ için çok taraflı bir tören şarttır.
+
+**Havuzdan çıkmak geçmişi silmez.** Ayrılmak gelecekteki sorgulardan pay almayı
+durdurur; homomorfik toplamlara karışmış veri geri çekilemez.
+
+**Zaman serisi indirgemesi zincirde doğrulanmıyor.** Biyobelirteç kanalında ham
+ölçüm dizisi tarayıcıda özetleniyor (`n`, `Σx`, `Σx²`); sözleşme bu özetin doğru
+hesaplandığını doğrulamıyor.
+
+**Test ağı ölçeği.** Doğrulamalar küçük bir Sepolia havuzunda yapıldı, popülasyon
+ölçeğinde değil.
+
+---
+
+## Mimari kararlar
+
+Her önemli karar, gerekçesi ve ölçümüyle birlikte `docs/mimari/` altında:
+
+| | |
+|---|---|
+| [MK-0003](docs/mimari/0003-veri-kokeni-eddsa.md) | Neden RSA değil EdDSA (~1,5M kısıt → birkaç bin) |
+| [MK-0011](docs/mimari/0011-panel-tavani.md) | HCU tavanı ve parti boyutu ölçümü |
+| [MK-0013](docs/mimari/0013-panel-hizalama.md) | Eksik genotip işareti ve panel hizalama |
+| [MK-0016](docs/mimari/0016-kapsama-ve-kullanima-gore-odeme.md) | Kapsama bitmap'i ve kullanıma göre ödeme |
+| [MK-0017](docs/mimari/0017-kanitli-kapsama.md) | Kapsamanın ZK devresine taşınması |
+| [MK-0018](docs/mimari/0018-kayit-basina-ve-kitliga-gore-fiyat.md) | Kayıt başına + kıtlığa göre fiyatlandırma |
+
+---
 
 ## Lisans
 
 BSD-3-Clause-Clear
-
-Kaynaklar: [Burns Anxiety Inventory yapısı ve kesim noktaları](https://www.mdapp.co/burns-anxiety-inventory-calculator-567/) · [Zama FHEVM](https://github.com/zama-ai)
