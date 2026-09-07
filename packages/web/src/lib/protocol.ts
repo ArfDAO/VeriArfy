@@ -1,4 +1,11 @@
-import { Contract, JsonRpcProvider, formatUnits, type BrowserProvider, type Signer } from "ethers";
+import {
+  Contract,
+  JsonRpcProvider,
+  formatUnits,
+  type BrowserProvider,
+  type Provider,
+  type Signer,
+} from "ethers";
 
 import { CONTRACTS, ZERO_ADDRESS } from "../config";
 import {
@@ -46,6 +53,9 @@ let readProvider: JsonRpcProvider | null = null;
  *
  * @remarks Signer gelirse DOKUNULMAZ: cagiran taraf imza atacak demektir.
  */
+export function readRunner(runner: BrowserProvider): JsonRpcProvider;
+export function readRunner(runner: Signer): Signer;
+export function readRunner(runner: BrowserProvider | Signer): Signer | JsonRpcProvider;
 export function readRunner(runner: BrowserProvider | Signer): BrowserProvider | Signer | JsonRpcProvider {
   // Signer ise (islem gonderilecekse) oldugu gibi kalir.
   if (typeof (runner as Signer).signMessage === "function") return runner;
@@ -53,7 +63,7 @@ export function readRunner(runner: BrowserProvider | Signer): BrowserProvider | 
   return readProvider;
 }
 
-export function getProtocol(runner: BrowserProvider | Signer) {
+export function getProtocol(runner: BrowserProvider | Signer | Provider) {
   return new Contract(CONTRACTS.VeriarfyProtocol, PROTOCOL_ABI, runner);
 }
 
@@ -70,7 +80,7 @@ export function getBiomarkers(runner: BrowserProvider | Signer) {
   return new Contract(address, BIOMARKERS_ABI, runner);
 }
 
-export function getPayments(runner: BrowserProvider | Signer) {
+export function getPayments(runner: BrowserProvider | Signer | Provider) {
   return new Contract(CONTRACTS.VeriarfyPayments, PAYMENTS_ABI, runner);
 }
 
@@ -992,11 +1002,18 @@ export async function readDisclosure(
   requestId: number,
   queryType: number,
 ): Promise<DisclosureState> {
-  const protocol = getProtocol(readRunner(runner) as BrowserProvider);
+  // `readRunner` intentionally preserves signers for write flows. For this
+  // read, use the signer's own provider so a connected wallet stays on its
+  // selected network; a disconnected signer cannot perform the block read.
+  const isSignerRunner = (value: BrowserProvider | Signer): value is Signer =>
+    typeof (value as Signer).signMessage === "function";
+  const provider = isSignerRunner(runner) ? runner.provider : readRunner(runner);
+  if (!provider) {
+    throw new Error("Cüzdan sağlayıcısı bağlı değil; önce cüzdanı bağlayın.");
+  }
+  const protocol = getProtocol(provider);
   // Blok numarasi da dayanikli RPC'den: cuzdan saglayicisi burada da bos
   // donebiliyor ve tek bir bos yanit tum Promise.all'i dusuruyor.
-  const provider = readRunner(runner) as any;
-
   const [info, finalized, revoked, granted, required, snpIds, metricIds, currentBlock] =
     await Promise.all([
       protocol.disclosureRequest(requestId),
@@ -1373,7 +1390,7 @@ export async function findOpenQuery(
   runner: BrowserProvider | Signer,
   researcher: string,
 ): Promise<{ queryId: number; requestId: number; fee: bigint } | null> {
-  const payments = getPayments(readRunner(runner) as BrowserProvider);
+  const payments = getPayments(readRunner(runner));
   const total = Number(await payments.nextQueryId());
 
   // En yeniden geriye; ilk uyan doner. Sinirli tarama: panelin acilisini
