@@ -11,6 +11,7 @@ import {
   parseD15NodeRole,
 } from "./scripts/d15-profile";
 import { parseLiveCheckStage } from "./scripts/live-check-state";
+import { d17SigningKey } from "./scripts/d17-signing-config";
 
 function invokesScript(name: string): boolean {
   return process.argv.some((arg) =>
@@ -22,6 +23,8 @@ function invokesScript(name: string): boolean {
 // operatorun ayri proses environment'inda explicit verilmelidir; boylece bir
 // node prosesi deployer key'ini dotenv ile kisa sureligine bile yuklemez.
 const isLiveCheckInvocation = invokesScript("live-check");
+const isD17Invocation = invokesScript("multi-participant-check");
+const d17PrivateKey = d17SigningKey(isD17Invocation, process.env);
 const isD15ReadinessInvocation = invokesScript("d15-readiness");
 const isStakeNodeInvocation = invokesScript("stake-node");
 const isDeployInvocation = invokesScript("deploy");
@@ -79,14 +82,14 @@ if (executionAck && !isD15Profile) {
 // dosyayi packages/contracts icinden calistirdigi icin kokteki .env sessizce
 // bulunamaz ve `accounts` bos kalir — deploy "no signer" ile duser.
 // Once yerel, sonra kok: yerel bir .env varsa o kazanir.
-if (!isLiveCheckConfigured && !isD15Profile) {
+if (!isLiveCheckConfigured && !isD15Profile && !isD17Invocation) {
   dotenv.config();
   dotenv.config({ path: join(__dirname, "..", "..", ".env") });
 }
 
 const SEPOLIA_RPC_URL =
   process.env.SEPOLIA_RPC_URL ?? "https://ethereum-sepolia-rpc.publicnode.com";
-if (isD15Profile) {
+if (isD15Profile || isD17Invocation) {
   const approvedProfile = loadD15Profile();
   let runtimeRpcUrl: string;
   try {
@@ -104,7 +107,7 @@ const NODE_PRIVATE_KEY = process.env.NODE_PRIVATE_KEY ?? "";
 // Hardhat loads this file before it evaluates the script. Ordinary commands
 // remain backwards compatible; the D15 profile fails closed on script, role,
 // acknowledgement and single-signer isolation before a script can run.
-let sepoliaPrivateKey = DEPLOYER_PRIVATE_KEY;
+let sepoliaPrivateKey = d17PrivateKey ?? DEPLOYER_PRIVATE_KEY;
 
 if (isLiveCheckConfigured) {
   const stage = parseLiveCheckStage(requestedLiveCheckStage);
