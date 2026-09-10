@@ -41,6 +41,51 @@ keys. Initialization records the existing participant and coverage baseline in
 the local public state. The default state path is
 `packages/contracts/ops/d17-live.json`.
 
+## Completed Sepolia run — 2026-09-10
+
+Acceptance passed at block **11,676,464**. Three new independent participant
+wallets joined the existing participant, giving four participants and coverage
+counts `[4, 2]`. Each new wallet submitted a real provenance proof, encrypted
+enrollment, all ten encrypted SNP contributions, and a KMS-backed rarity result.
+All three valid proofs passed and altered public signals were rejected.
+
+Query **1**, disclosure request **1**, received both node approvals and completed
+the challenge window. [Settlement transaction](https://sepolia.etherscan.io/tx/0x541942a3ebd0322bc72d4e0c9deda4b2276778f2aba8c23500a95b86ce14f225)
+confirmed at block 11,676,452. All four claims were confirmed and checked against
+their events, historical claimable amounts, and token balances immediately
+before and at the receipt block.
+
+| Participant | Weighted coverage | Bonus weight | Paid tUSD |
+| --- | ---: | ---: | ---: |
+| Existing deployer participant | 30,000 | 15,000 | 0.357135 |
+| New participant 1: both fields, rare carrier | 30,000 | 34,828 | 0.440592 |
+| New participant 2: common field only | 10,000 | 15,000 | 0.161135 |
+| New participant 3: common field only | 10,000 | 15,000 | 0.161135 |
+
+The rare field had a 2x scarcity weight. Participant 1's 3x total coverage weight
+relative to a common-only participant is distinct from the separate rarity and
+founding bonus. In raw token units, each payout equals
+`floor(784000 * weightedCoverage / 80000) + floor(336000 * bonusWeight / 79828)`.
+The 1.4 tUSD query fee funded a 1.12 tUSD participant pool and 0.28 tUSD treasury
+share. Claims totaled **1.119997 tUSD**, leaving **0.000003 tUSD** rounding dust.
+
+The run confirmed **35 transactions**. Gas cost was
+**0.034556918271685388 Sepolia ETH**. Funding transferred 0.054 ETH between our
+test wallets, and node stake top-ups added 0.0036146 ETH. Conservative outgoing
+accounting totaled 0.092171518271685388 ETH, below the 0.10 ETH cap. No faucet
+was needed. Keys remain in isolated local custody; only public evidence is in
+[`d17-live.json`](../packages/contracts/ops/d17-live.json).
+
+Settlement increased the dynamic minimum stake to 0.0035849 ETH. Each node has
+0.0028073 ETH staked and would need another **0.0007776 ETH** before approving a
+future query. Both had sufficient stake for this completed query.
+
+Local validation included three economic scenarios (3, 5, and 3-new-plus-1-existing
+participants), 57 Coverage/Payments tests, signing and recovery guards, launcher
+tests, and ABI synchronization checks. Live execution additionally exposed and
+fixed decimal commitment serialization and stale `latest` RPC balance reads;
+the final report uses receipt-block balance evidence.
+
 ## Execution stages
 
 The fixed defaults fund each new participant with `0.018` Sepolia ETH from

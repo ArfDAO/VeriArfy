@@ -463,7 +463,7 @@
         }
       ],
       "stakeWei": "2807300000000000",
-      "minStakeWei": "2807300000000000"
+      "minStakeWei": "3584900000000000"
     },
     "node-2": {
       "address": "0x7c8cbfdD76Ee47425CAf33aBF663509cE7A602fe",
@@ -501,11 +501,88 @@
           "status": "confirmed"
         }
       ],
-      "stakeWei": "1000000000000000",
-      "minStakeWei": "2807300000000000"
+      "stakeWei": "2807300000000000",
+      "minStakeWei": "3584900000000000"
     }
   },
-  "claims": {},
+  "claims": {
+    "0x836091ab39884bb57db4dd94ee120286ad7e4fe0": {
+      "amount": "357135",
+      "tx": {
+        "role": "deployer",
+        "kind": "claim",
+        "from": "0x836091aB39884BB57DB4Dd94Ee120286Ad7e4fe0",
+        "to": "0x46d6CE86163Cc76168AdE12CC9b07034139B9507",
+        "hash": "0x247717f558d50ba84c8230b6a5a24789e112914dc37f8b56e6245a6edda24be5",
+        "nonce": 60,
+        "valueWei": "0",
+        "gasLimit": "241516",
+        "maxFeePerGas": "2000000000",
+        "maxPriorityFeePerGas": "100000000",
+        "gasUsed": "155045",
+        "effectiveGasPriceWei": "1122457907",
+        "blockNumber": 11676454,
+        "status": "confirmed"
+      }
+    },
+    "0x472cfa25ebae8828337cd5e8746bf590cca1126a": {
+      "amount": "440592",
+      "tx": {
+        "role": "participant-1",
+        "kind": "claim",
+        "from": "0x472CFA25EBAe8828337CD5E8746BF590ccA1126a",
+        "to": "0x46d6CE86163Cc76168AdE12CC9b07034139B9507",
+        "hash": "0x9427b772b16f64013add37444c39e6564cfc86d6ed0ca9f870b3c8811243943e",
+        "nonce": 7,
+        "valueWei": "0",
+        "gasLimit": "263728",
+        "maxFeePerGas": "2000000000",
+        "maxPriorityFeePerGas": "100000000",
+        "status": "confirmed",
+        "gasUsed": "170288",
+        "effectiveGasPriceWei": "1126420182",
+        "blockNumber": 11676455
+      }
+    },
+    "0x477c88c55eba47c32ffa6f5e6b00c5dd9c34b874": {
+      "amount": "161135",
+      "tx": {
+        "role": "participant-2",
+        "kind": "claim",
+        "from": "0x477c88C55eBA47c32FFA6f5e6B00c5dD9c34B874",
+        "to": "0x46d6CE86163Cc76168AdE12CC9b07034139B9507",
+        "hash": "0xcc9be7058e9a77d05e51d84c6621bd7e1588021797d053eda314c6193d6b16e0",
+        "nonce": 7,
+        "valueWei": "0",
+        "gasLimit": "240798",
+        "maxFeePerGas": "2000000000",
+        "maxPriorityFeePerGas": "100000000",
+        "gasUsed": "154552",
+        "effectiveGasPriceWei": "1146955517",
+        "blockNumber": 11676458,
+        "status": "confirmed"
+      }
+    },
+    "0xa28b39aaf4a9d60871bf1580786862acf98ed50f": {
+      "amount": "161135",
+      "tx": {
+        "role": "participant-3",
+        "kind": "claim",
+        "from": "0xA28b39AaF4a9d60871Bf1580786862Acf98eD50F",
+        "to": "0x46d6CE86163Cc76168AdE12CC9b07034139B9507",
+        "hash": "0xf36fb8bb6b60d55a8b43a0ce92bf10d1cf1e4672dcf11cb471ae5e8dab0604a1",
+        "nonce": 7,
+        "valueWei": "0",
+        "gasLimit": "240798",
+        "maxFeePerGas": "2000000000",
+        "maxPriorityFeePerGas": "100000000",
+        "gasUsed": "154552",
+        "effectiveGasPriceWei": "1349731959",
+        "blockNumber": 11676460,
+        "status": "confirmed"
+      }
+    }
+  },
   "txs": [
     {
       "role": "node-1",
@@ -972,6 +1049,102 @@
       "gasUsed": "156723",
       "effectiveGasPriceWei": "1263337261",
       "blockNumber": 11676429
+    },
+    {
+      "role": "deployer",
+      "kind": "execute-disclosure",
+      "from": "0x836091aB39884BB57DB4Dd94Ee120286Ad7e4fe0",
+      "to": "0xcD3B1a850Eb33AC74786030919E0203005675CFB",
+      "hash": "0x9443592423955aca9628c030db9c162db44cad7eb03ad565439a5c79744037fc",
+      "nonce": 58,
+      "valueWei": "0",
+      "gasLimit": "723679",
+      "maxFeePerGas": "2000000000",
+      "maxPriorityFeePerGas": "100000000",
+      "status": "confirmed",
+      "gasUsed": "489139",
+      "effectiveGasPriceWei": "1123322072",
+      "blockNumber": 11676451
+    },
+    {
+      "role": "deployer",
+      "kind": "settle-query",
+      "from": "0x836091aB39884BB57DB4Dd94Ee120286Ad7e4fe0",
+      "to": "0x46d6CE86163Cc76168AdE12CC9b07034139B9507",
+      "hash": "0x541942a3ebd0322bc72d4e0c9deda4b2276778f2aba8c23500a95b86ce14f225",
+      "nonce": 59,
+      "valueWei": "0",
+      "gasLimit": "127685",
+      "maxFeePerGas": "2000000000",
+      "maxPriorityFeePerGas": "100000000",
+      "status": "confirmed",
+      "gasUsed": "76136",
+      "effectiveGasPriceWei": "1141467043",
+      "blockNumber": 11676452
+    },
+    {
+      "role": "deployer",
+      "kind": "claim",
+      "from": "0x836091aB39884BB57DB4Dd94Ee120286Ad7e4fe0",
+      "to": "0x46d6CE86163Cc76168AdE12CC9b07034139B9507",
+      "hash": "0x247717f558d50ba84c8230b6a5a24789e112914dc37f8b56e6245a6edda24be5",
+      "nonce": 60,
+      "valueWei": "0",
+      "gasLimit": "241516",
+      "maxFeePerGas": "2000000000",
+      "maxPriorityFeePerGas": "100000000",
+      "status": "confirmed",
+      "gasUsed": "155045",
+      "effectiveGasPriceWei": "1122457907",
+      "blockNumber": 11676454
+    },
+    {
+      "role": "participant-1",
+      "kind": "claim",
+      "from": "0x472CFA25EBAe8828337CD5E8746BF590ccA1126a",
+      "to": "0x46d6CE86163Cc76168AdE12CC9b07034139B9507",
+      "hash": "0x9427b772b16f64013add37444c39e6564cfc86d6ed0ca9f870b3c8811243943e",
+      "nonce": 7,
+      "valueWei": "0",
+      "gasLimit": "263728",
+      "maxFeePerGas": "2000000000",
+      "maxPriorityFeePerGas": "100000000",
+      "status": "confirmed",
+      "gasUsed": "170288",
+      "effectiveGasPriceWei": "1126420182",
+      "blockNumber": 11676455
+    },
+    {
+      "role": "participant-2",
+      "kind": "claim",
+      "from": "0x477c88C55eBA47c32FFA6f5e6B00c5dD9c34B874",
+      "to": "0x46d6CE86163Cc76168AdE12CC9b07034139B9507",
+      "hash": "0xcc9be7058e9a77d05e51d84c6621bd7e1588021797d053eda314c6193d6b16e0",
+      "nonce": 7,
+      "valueWei": "0",
+      "gasLimit": "240798",
+      "maxFeePerGas": "2000000000",
+      "maxPriorityFeePerGas": "100000000",
+      "status": "confirmed",
+      "gasUsed": "154552",
+      "effectiveGasPriceWei": "1146955517",
+      "blockNumber": 11676458
+    },
+    {
+      "role": "participant-3",
+      "kind": "claim",
+      "from": "0xA28b39AaF4a9d60871Bf1580786862Acf98eD50F",
+      "to": "0x46d6CE86163Cc76168AdE12CC9b07034139B9507",
+      "hash": "0xf36fb8bb6b60d55a8b43a0ce92bf10d1cf1e4672dcf11cb471ae5e8dab0604a1",
+      "nonce": 7,
+      "valueWei": "0",
+      "gasLimit": "240798",
+      "maxFeePerGas": "2000000000",
+      "maxPriorityFeePerGas": "100000000",
+      "status": "confirmed",
+      "gasUsed": "154552",
+      "effectiveGasPriceWei": "1349731959",
+      "blockNumber": 11676460
     }
   ],
   "deployment": {
@@ -1005,9 +1178,18 @@
     "node-1:approved": true,
     "node-1:stake": "2807300000000000",
     "node-2:approved": true,
-    "node-2:stake": "1000000000000000",
+    "node-2:stake": "2807300000000000",
     "pendingChallengeUntil": "11676449",
-    "pendingAtBlock": "11676430"
+    "pendingAtBlock": "11676447",
+    "disclosureGranted": true,
+    "settled": true,
+    "final": true,
+    "finalCount": 4,
+    "coverage0": "4",
+    "coverage1": "2",
+    "weightedTotal": "80000",
+    "claimedTotal": "1119997",
+    "finalBlock": 11676464
   },
   "query": {
     "queryId": "1",
@@ -1035,6 +1217,38 @@
         "gasUsed": "911534",
         "effectiveGasPriceWei": "1373960492",
         "blockNumber": 11676423,
+        "status": "confirmed"
+      },
+      {
+        "role": "deployer",
+        "kind": "execute-disclosure",
+        "from": "0x836091aB39884BB57DB4Dd94Ee120286Ad7e4fe0",
+        "to": "0xcD3B1a850Eb33AC74786030919E0203005675CFB",
+        "hash": "0x9443592423955aca9628c030db9c162db44cad7eb03ad565439a5c79744037fc",
+        "nonce": 58,
+        "valueWei": "0",
+        "gasLimit": "723679",
+        "maxFeePerGas": "2000000000",
+        "maxPriorityFeePerGas": "100000000",
+        "gasUsed": "489139",
+        "effectiveGasPriceWei": "1123322072",
+        "blockNumber": 11676451,
+        "status": "confirmed"
+      },
+      {
+        "role": "deployer",
+        "kind": "settle-query",
+        "from": "0x836091aB39884BB57DB4Dd94Ee120286Ad7e4fe0",
+        "to": "0x46d6CE86163Cc76168AdE12CC9b07034139B9507",
+        "hash": "0x541942a3ebd0322bc72d4e0c9deda4b2276778f2aba8c23500a95b86ce14f225",
+        "nonce": 59,
+        "valueWei": "0",
+        "gasLimit": "127685",
+        "maxFeePerGas": "2000000000",
+        "maxPriorityFeePerGas": "100000000",
+        "gasUsed": "76136",
+        "effectiveGasPriceWei": "1141467043",
+        "blockNumber": 11676452,
         "status": "confirmed"
       }
     ]

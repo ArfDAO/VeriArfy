@@ -814,35 +814,35 @@ async function claimStage(state: D17State, path: string, record: any, signer: an
   await assertQueryBinding(query, protocol, payments, record, queryId, BigInt(state.query.requestId), state);
   if (!query.settled) fail("claim oncesi query settled degil");
   if (await payments.hasClaimed(queryId, address)) {
-    if (!state.claims[addressKey(address)]) {
-      const journal = state.txs.find((item) => item.kind === "claim" && sameAddress(item.from, address) && item.status === "confirmed");
-      if (!journal) fail(`claim zincirde var ancak state kaniti yok: ${address}`);
-      const receipt = await ethers.provider.getTransactionReceipt(journal.hash);
-      if (!receipt) fail(`claim receipt okunamadi: ${journal.hash}`);
-      let amount: bigint | undefined;
-      for (const log of receipt.logs) {
-        try {
-          const parsed = payments.interface.parseLog(log);
-          if (parsed?.name === "RewardClaimed" && sameAddress(parsed.args.participant, address) && asBigInt(parsed.args.queryId, "claim query id") === queryId) {
-            amount = asBigInt(parsed.args.amount, "claim amount");
-            break;
-          }
-        } catch { /* a log from another contract */ }
-      }
-      if (amount === undefined) fail(`claim event bulunamadi: ${journal.hash}`);
-      state.claims[addressKey(address)] = { amount: amount.toString(), tx: journal };
-      saveD17State(path, state);
-    }
+    const existing = state.claims[addressKey(address)];
+    const journal = existing?.tx ?? state.txs.find((item) => item.kind === "claim" && sameAddress(item.from, address) && item.status === "confirmed");
+    if (!journal) fail(`claim zincirde var ancak state kaniti yok: ${address}`);
+    const amount = await assertClaimReceiptBalance(token, payments, queryId, address, journal);
+    if (existing && BigInt(existing.amount) !== amount) fail(`claim state amount mismatch: ${address}`);
+    state.claims[addressKey(address)] = { amount: amount.toString(), tx: journal };
+    saveD17State(path, state);
     return;
   }
   const amount = asBigInt(await payments.claimable(queryId, address), "claimable");
   if (amount === 0n) fail(`${role()} entitled claimable sifir`);
-  const before = asBigInt(await token.balanceOf(address), "tokenBefore");
   const result = await sendContract(state, path, role(), "claim", signer, payments, "claim", [queryId]);
-  const after = asBigInt(await token.balanceOf(address), "tokenAfter");
-  if (after - before !== amount) fail(`claim amount mismatch: ${after - before} != ${amount}`);
-  state.claims[addressKey(address)] = { amount: amount.toString(), tx: result.journal };
+  const emitted = await assertClaimReceiptBalance(token, payments, queryId, address, result.journal);
+  if (emitted !== amount) fail(`claim amount mismatch: ${emitted} != ${amount}`);
+  state.claims[addressKey(address)] = { amount: emitted.toString(), tx: result.journal };
   saveD17State(path, state);
+}
+
+async function assertClaimReceiptBalance(token: AnyContract, payments: AnyContract, queryId: bigint, address: string, journal: D17Tx): Promise<bigint> {
+  if (journal.status !== "confirmed" || journal.blockNumber === undefined || journal.blockNumber < 1) fail(`claim receipt confirmed block eksik: ${journal.hash}`);
+  const beforeBlock = journal.blockNumber - 1;
+  const expected = asBigInt(await payments.claimable(queryId, address, { blockTag: beforeBlock }), "historical claimable");
+  if (expected === 0n) fail(`historical claimable sifir: ${address}`);
+  const before = asBigInt(await token.balanceOf(address, { blockTag: beforeBlock }), "tokenBefore");
+  const after = asBigInt(await token.balanceOf(address, { blockTag: journal.blockNumber }), "tokenAfter");
+  const emitted = await claimEventAmount(payments, journal, queryId, address);
+  if (emitted !== expected) fail(`claim event/historical claimable mismatch: ${emitted} != ${expected}`);
+  if (after < before || after - before !== emitted) fail(`claim balance delta mismatch: ${after - before} != ${emitted}`);
+  return emitted;
 }
 
 async function claimEventAmount(payments: AnyContract, journal: D17Tx, queryId: bigint, address: string): Promise<bigint> {
@@ -862,7 +862,7 @@ async function claimEventAmount(payments: AnyContract, journal: D17Tx, queryId: 
 
 async function reportStage(state: D17State, path: string, record: any): Promise<void> {
   if (!state.baseline || !state.query) fail("report baseline/query eksik");
-  const { protocol, payments } = await protocolAndPayments(record);
+  const { protocol, payments, token, staking } = await protocolAndPayments(record);
   const baseline = state.baseline;
   const verifiedBaseline = await captureBaseline(protocol, record, baseline.capturedAtBlock);
   if (!verifiedBaseline) fail("baseline zincir snapshot'i okunamadi");
@@ -920,13 +920,21 @@ async function reportStage(state: D17State, path: string, record: any): Promise<
     if (!item) fail(`claim eksik: ${address}`);
     if (!(await payments.hasClaimed(queryId, address))) fail(`claim zincirde gorunmuyor: ${address}`);
     if (!item.tx) fail(`claim tx state'de eksik: ${address}`);
-    const emitted = await claimEventAmount(payments, item.tx, queryId, address);
+    const emitted = await assertClaimReceiptBalance(token, payments, queryId, address, item.tx);
     if (emitted !== BigInt(item.amount)) fail(`claim evidence amount mismatch: ${address}`);
     claimed += emitted;
   }
   if (claimed !== BigInt(query.claimedTotal) || claimed > BigInt(query.liquidityPot)) fail("claim conservation mismatch");
   const proofChecks = participantAddresses(state).every((address) => state.checks?.[`${state.participants[addressKey(address)].role}:proof`] === true && state.checks?.[`${state.participants[addressKey(address)].role}:alteredSignalRejected`] === true);
   if (!proofChecks) fail("proof positive/altered-signal checks incomplete");
+  const finalBlock = await ethers.provider.getBlockNumber();
+  const finalMinStake = (await staking.minStake({ blockTag: finalBlock })).toString();
+  for (const [nodeRole, node] of Object.entries(state.nodes)) {
+    node.stakeWei = (await staking.stakeOf(node.address, { blockTag: finalBlock })).toString();
+    node.minStakeWei = finalMinStake;
+    state.checks = { ...(state.checks ?? {}), [`${nodeRole}:stake`]: node.stakeWei };
+  }
+  state.checks = { ...(state.checks ?? {}), finalBlock };
   state.checks = { ...(state.checks ?? {}), final: true, finalCount: count, coverage0: coverage0.toString(), coverage1: coverage1.toString(), weightedTotal: weightedTotal.toString(), claimedTotal: claimed.toString() };
   saveD17State(path, state);
   console.log(JSON.stringify({ final: true, participantCount: count, coverage: [coverage0.toString(), coverage1.toString()], weightedTotal: weightedTotal.toString(), claimedTotal: claimed.toString(), queryId: state.query.queryId }, null, 2));
