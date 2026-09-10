@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "profile": "d17-sepolia-multi-participant-v1",
+  "network": "sepolia",
+  "chainId": 11155111,
+  "participants": {
+    "0x472cfa25ebae8828337cd5e8746bf590cca1126a": {
+      "role": "participant-1",
+      "address": "0x472CFA25EBAe8828337CD5E8746BF590ccA1126a",
+      "coverage": [
+        0,
+        1
+      ],
+      "txs": []
+    },
+    "0x477c88c55eba47c32ffa6f5e6b00c5dd9c34b874": {
+      "role": "participant-2",
+      "address": "0x477c88C55eBA47c32FFA6f5e6B00c5dD9c34B874",
+      "coverage": [
+        0
+      ],
+      "txs": []
+    },
+    "0xa28b39aaf4a9d60871bf1580786862acf98ed50f": {
+      "role": "participant-3",
+      "address": "0xA28b39AaF4a9d60871Bf1580786862Acf98eD50F",
+      "coverage": [
+        0
+      ],
+      "txs": []
+    }
+  },
+  "nodes": {},
+  "claims": {},
+  "txs": [],
+  "deployment": {
+    "protocol": "0xcD3B1a850Eb33AC74786030919E0203005675CFB",
+    "payments": "0x46d6CE86163Cc76168AdE12CC9b07034139B9507",
+    "staking": "0xc3e1ae7fC78be045Ac9C80D7C453B03356B69f7f",
+    "token": "0x6eE2984546034bF78C8ffFCaDB8cED1434C16758"
+  },
+  "baseline": {
+    "capturedAtBlock": 11676283,
+    "participantCount": 1,
+    "coverage": {
+      "0": "1",
+      "1": "1"
+    },
+    "rareCarrierCount": 0,
+    "participants": [
+      "0x836091aB39884BB57DB4Dd94Ee120286Ad7e4fe0"
+    ]
+  }
+}
