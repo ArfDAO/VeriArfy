@@ -516,13 +516,13 @@ async function participantStage(state: D17State, path: string, record: any, sign
   if (!participant) fail(`${roleName} state kaydi yok`);
   const panel = panelFor(participant.coverage);
   const existingCid = await protocol.userCIDs(address);
-  let commitment = await protocol.panelCommitment(address);
+  let commitment = asBigInt(await protocol.panelCommitment(address), "panelCommitment").toString();
   if (existingCid === ZeroAddress || existingCid === ethers.ZeroHash) {
     const provenance = await import("@veriarfy/circuits/provenance");
     const circuits = await import("@veriarfy/circuits");
     const cidDigest = keccak256(toUtf8Bytes(`veriarfy-d17-${address}-${Date.now()}-${Math.random()}`));
     const salt = provenance.randomSalt();
-    commitment = provenance.panelCommitment(panel, salt);
+    commitment = asBigInt(provenance.panelCommitment(panel, salt), "panel commitment").toString();
     const input = provenance.buildSelfProvenanceInput({
       dosages: panel,
       salt,

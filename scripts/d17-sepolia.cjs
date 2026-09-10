@@ -26,6 +26,11 @@ const MANIFEST_SCHEMA = "d17-wallet-manifest-v1";
 const ALLOWED_ROLES = /^(?:none|deployer|node-[12]|participant-[1-5])$/;
 const PARTICIPANT_ROLE = /^participant-([1-5])$/;
 const STAGE = /^[a-z][a-z0-9-]*$/;
+const SAFE_ERROR_CODES = new Set([
+  "CALL_EXCEPTION", "INSUFFICIENT_FUNDS", "NONCE_EXPIRED", "NETWORK_ERROR",
+  "TIMEOUT", "UNPREDICTABLE_GAS_LIMIT", "UNSUPPORTED_OPERATION", "BAD_DATA",
+  "SERVER_ERROR", "UNKNOWN_ERROR", "UNKNOWN",
+]);
 
 const USER_ENV_FILES = Object.freeze({
   deployer: { file: ".env.d17.deployer", variable: "DEPLOYER_PRIVATE_KEY" },
@@ -123,6 +128,76 @@ function redactOutput(value) {
 function safeError(error, fallback = "D17 launcher failed") {
   const message = error && typeof error.message === "string" ? error.message : fallback;
   return new Error(redactOutput(message));
+}
+
+function stackLocators(value) {
+  const stack = typeof value?.stack === "string" ? value.stack : "";
+  const locators = [];
+  for (const line of stack.split(/\r?\n/)) {
+    const match = line.match(/((?:[A-Za-z]:[\\/]|\/|file:\/\/)[^()\r\n]*[\\/](?:scripts|node_modules)[\\/][^()\r\n]*):(\d+):(\d+)/);
+    if (!match) continue;
+    let source = match[1].replace(/^file:\/\//, "").replace(/\\/g, "/");
+    const repo = REPO_ROOT.replace(/\\/g, "/").replace(/\/$/, "");
+    if (source.startsWith(`${repo}/`)) source = source.slice(repo.length + 1);
+    const locator = `${source}:${match[2]}:${match[3]}`;
+    if (!locators.includes(locator)) locators.push(locator);
+    if (locators.length === 3) break;
+  }
+  return locators;
+}
+
+function normalizeLocator(value) {
+  if (typeof value !== "string") return null;
+  const locator = value.replace(/\\/g, "/");
+  const match = locator.match(/^(.+):(\d+):(\d+)$/);
+  if (!match) return null;
+  const source = match[1];
+  if (!source || source.includes("..") || /[\r\n{}[\]"'`<>]/.test(source) || !/(^|\/)(?:scripts|node_modules)\//.test(source)) return null;
+  return `${source}:${match[2]}:${match[3]}`;
+}
+
+function safeDiagnostic(error) {
+  const value = error && typeof error === "object" ? error : {};
+  const name = typeof value.name === "string" && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(value.name)
+    ? value.name : "Error";
+  const rawCode = typeof value.code === "string" ? value.code.toUpperCase() : "UNKNOWN";
+  const code = SAFE_ERROR_CODES.has(rawCode) ? rawCode : "UNKNOWN";
+  const rawReason = [value.reason, value.shortMessage, value.message].find((item) => typeof item === "string" && item.trim()) || "operation failed";
+  const knownSecrets = [process.env.D17_PRIVATE_KEY, process.env.DEPLOYER_PRIVATE_KEY, process.env.NODE_PRIVATE_KEY]
+    .filter((item) => typeof item === "string" && item.length >= 8);
+  let reason = String(rawReason).trim();
+  for (const secret of knownSecrets) reason = reason.split(secret).join("[REDACTED]");
+  reason = reason.replace(/0x[0-9a-fA-F]{64,}/g, "[REDACTED]").replace(/\b[0-9a-fA-F]{64,}\b/g, "[REDACTED]");
+  if (reason.length > 180 || /(?:private|secret|seed|mnemonic|witness|raw|signed|serialized|request|payload|transaction|calldata|proof|token)/i.test(reason) ||
+      !/^[A-Za-z0-9][A-Za-z0-9 _().:/=+@,'-]{0,179}$/.test(reason)) {
+    reason = "operation failed";
+  }
+  const output = { name, code, reason };
+  const rawLocators = Array.isArray(value.locators) ? value.locators : stackLocators(value);
+  const locators = rawLocators.map(normalizeLocator).filter(Boolean).slice(0, 3);
+  if (locators.length) output.locators = locators;
+  const cause = value.cause && typeof value.cause === "object" ? value.cause : null;
+  if (cause) {
+    if (typeof cause.name === "string" && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(cause.name)) output.causeName = cause.name;
+    if (typeof cause.code === "string" && SAFE_ERROR_CODES.has(cause.code.toUpperCase())) output.causeCode = cause.code.toUpperCase();
+  }
+  for (const field of ["stage", "role"]) {
+    if (typeof value[field] === "string" && /^(?:[a-z][a-z0-9-]*)$/.test(value[field])) output[field] = value[field];
+  }
+  return JSON.stringify(output);
+}
+
+function childDiagnostic(stderr) {
+  const line = String(stderr || "").split(/\r?\n/).find((item) => item.startsWith("D17_FAILURE "));
+  if (!line) return "";
+  try {
+    const parsed = JSON.parse(line.slice("D17_FAILURE ".length));
+    if (!parsed || typeof parsed !== "object") return "";
+    const safe = JSON.parse(safeDiagnostic(parsed));
+    return JSON.stringify(safe);
+  } catch {
+    return "";
+  }
 }
 
 function assertRole(role) {
@@ -443,7 +518,24 @@ function runController(args, options = {}) {
   });
   if (result.error || result.status !== 0) {
     const exit = result.status === null || result.status === undefined ? "signal" : String(result.status);
-    throw new Error(`D17 role child failed (stage=${args.stage}, role=${args.role}, exit=${exit})`);
+    const diagnostic = childDiagnostic(result.stderr);
+    const failure = new Error(`D17 role child failed (stage=${args.stage}, role=${args.role}, exit=${exit})`);
+    failure.name = "D17ChildError";
+    failure.code = "UNKNOWN";
+    failure.stage = args.stage;
+    failure.role = args.role;
+    if (diagnostic) {
+      try {
+        const parsed = JSON.parse(diagnostic);
+        if (typeof parsed.code === "string") failure.code = parsed.code;
+        if (typeof parsed.reason === "string") failure.reason = parsed.reason;
+        if (Array.isArray(parsed.locators)) failure.locators = parsed.locators;
+        if (typeof parsed.causeName === "string" || typeof parsed.causeCode === "string") {
+          failure.cause = { name: parsed.causeName, code: parsed.causeCode };
+        }
+      } catch { /* diagnostic remains generic */ }
+    }
+    throw failure;
   }
   const output = redactOutput(String(result.stdout || "")).trim();
   return output;
@@ -489,6 +581,7 @@ module.exports = {
   loadSignerForRole,
   loadRolePrivateKey,
   main,
+  safeDiagnostic,
   manifestPath,
   parseArgs,
   parseEnvFile,
@@ -501,7 +594,7 @@ module.exports = {
 
 if (require.main === module) {
   main().catch((error) => {
-    process.stderr.write(`${redactOutput(error && error.message ? error.message : "D17 launcher failed")}\n`);
+    process.stderr.write(`D17_FAILURE ${safeDiagnostic(error)}\n`);
     process.exitCode = 1;
   });
 }

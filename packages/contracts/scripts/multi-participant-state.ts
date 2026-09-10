@@ -137,6 +137,14 @@ function decimal(value: unknown, field: string): void {
   if (typeof value !== "string" || !/^\d+$/.test(value)) throw new Error(`D17 state ${field} decimal olmali`);
 }
 
+function uint256(value: unknown, field: string): void {
+  decimal(value, field);
+  const numeric = BigInt(value as string);
+  if (numeric > ((1n << 256n) - 1n) || (value as string) !== numeric.toString()) {
+    throw new Error(`D17 state ${field} canonical uint256 olmali`);
+  }
+}
+
 function hash(value: unknown, field: string): void {
   if (typeof value !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(value)) throw new Error(`D17 state ${field} hash olmali`);
 }
@@ -184,7 +192,7 @@ function validateD17State(state: D17State): void {
     if (!Array.isArray(participant.txs)) throw new Error(`D17 state participants.${key}.txs eksik`);
     participant.txs.forEach((tx, index) => validateTx(tx, `participants.${key}.txs[${index}]`));
     if (participant.cidDigest !== undefined) hash(participant.cidDigest, `participants.${key}.cidDigest`);
-    if (participant.commitment !== undefined) hash(participant.commitment, `participants.${key}.commitment`);
+    if (participant.commitment !== undefined) uint256(participant.commitment, `participants.${key}.commitment`);
   }
   (state.txs ?? []).forEach((tx, index) => validateTx(tx, `txs[${index}]`));
   for (const [key, claim] of Object.entries(state.claims ?? {})) {

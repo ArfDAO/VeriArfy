@@ -22,7 +22,7 @@ describe("D/17 public state runner", () => {
         role: "participant-1",
         address: "0x0000000000000000000000000000000000000001",
         coverage: [0, 1],
-        commitment: "0x" + "11".repeat(32),
+        commitment: "123456789",
         txs: [],
       };
       recordTx(state, {
@@ -42,10 +42,18 @@ describe("D/17 public state runner", () => {
       const loaded = loadD17State(path);
       assert.equal(loaded.profile, "d17-sepolia-multi-participant-v1");
       assert.equal(loaded.txs[0].hash, "0x" + "22".repeat(32));
+      assert.equal(loaded.participants["0xparticipant"].commitment, "123456789");
       assert.equal((loaded as unknown as Record<string, unknown>).privateKey, undefined);
       assert.equal((loaded as unknown as Record<string, unknown>).witness, undefined);
       assert.equal((loaded as unknown as Record<string, unknown>).salt, undefined);
       assert.throws(() => saveD17State(path, { ...loaded, privateKey: "0xdeadbeef" } as never), /secret\/raw transaction/);
+      assert.throws(() => saveD17State(path, {
+        ...loaded,
+        participants: {
+          ...loaded.participants,
+          "0xparticipant": { ...loaded.participants["0xparticipant"], commitment: "0x" + "11".repeat(32) },
+        },
+      }), /decimal|uint256/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

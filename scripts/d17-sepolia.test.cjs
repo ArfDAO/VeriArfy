@@ -117,4 +117,59 @@ test("child failure output is redacted before it reaches the operator", () => {
     repoRoot: tempDir(), skipPublicValidation: true,
     spawnSync: () => ({ status: 1, stdout: "", stderr: `{"privateKey":"${secret}"}` }),
   }), (error) => !String(error).includes(secret) && String(error).includes("stage=contribute") && String(error).includes("role=none"));
+
+  let childError;
+  try {
+    launcher.runController({
+      stage: "contribute", role: "participant-1", execute: true, participants: 3, statePath: "C:\\temp\\d17.json",
+    }, {
+      repoRoot: tempDir(), skipPublicValidation: true,
+      spawnSync: () => ({ status: 1, stdout: "", stderr: 'D17_FAILURE {"name":"Error","code":"CALL_EXCEPTION","reason":"execution reverted: MissingRole"}\n' }),
+    });
+  } catch (error) { childError = error; }
+  assert.ok(childError);
+  const topLevel = JSON.parse(launcher.safeDiagnostic(childError));
+  assert.equal(topLevel.code, "CALL_EXCEPTION");
+  assert.equal(topLevel.reason, "execution reverted: MissingRole");
+  assert.equal(topLevel.stage, "contribute");
+  assert.equal(topLevel.role, "participant-1");
+
+  let unsafeError;
+  try {
+    launcher.runController({
+      stage: "contribute", role: "participant-1", execute: true, participants: 3, statePath: "C:\\temp\\d17.json",
+    }, {
+      repoRoot: tempDir(), skipPublicValidation: true,
+      spawnSync: () => ({ status: 1, stdout: "", stderr: 'D17_FAILURE {"reason":"request payload witness 0x' + "ab".repeat(64) + '"}\n' }),
+    });
+  } catch (error) { unsafeError = error; }
+  assert.ok(unsafeError);
+  const unsafeDiagnostic = JSON.parse(launcher.safeDiagnostic(unsafeError));
+  assert.equal(unsafeDiagnostic.reason, "operation failed");
+  assert.doesNotMatch(JSON.stringify(unsafeDiagnostic), /payload|witness|0xabab/i);
+});
+
+test("diagnostics retain only three local source locators and safe cause metadata", () => {
+  const repo = path.resolve(__dirname, "..").replace(/\\/g, "/");
+  const diagnostic = JSON.parse(launcher.safeDiagnostic({
+    name: "Error",
+    code: "CALL_EXCEPTION",
+    reason: "execution reverted: MissingRole",
+    cause: { name: "RpcError", code: "NETWORK_ERROR", message: "hidden" },
+    stack: [
+      "Error: hidden",
+      `    at first (${repo}/scripts/multi-participant-check.ts:10:2)`,
+      `    at second (${repo}/node_modules/ethers/lib.js:20:3)`,
+      "    at third (/repo/scripts/third.js:30:4)",
+      "    at fourth (/repo/scripts/fourth.js:40:5)",
+    ].join("\n"),
+  }));
+  assert.deepEqual(diagnostic.locators, [
+    "scripts/multi-participant-check.ts:10:2",
+    "node_modules/ethers/lib.js:20:3",
+    "/repo/scripts/third.js:30:4",
+  ]);
+  assert.equal(diagnostic.causeName, "RpcError");
+  assert.equal(diagnostic.causeCode, "NETWORK_ERROR");
+  assert.equal(diagnostic.message, undefined);
 });
