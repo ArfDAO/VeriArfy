@@ -18,6 +18,10 @@ import {
   scoreAnxiety,
   ANXIETY_ITEMS,
   PANIC_ITEMS,
+  E18_SYNTHETIC_FIXTURE_ID,
+  E18_SYNTHETIC_PARTICIPANTS,
+  makeE18SyntheticCohort,
+  e18PlaintextReference,
 } from "../src/index.js";
 
 let failures = 0;
@@ -142,6 +146,20 @@ console.log("\n7) Uctan uca — kohort determinizmi");
     pipeline.aggregates.anxiety.reduce((s, g) => s + g.n, 0);
   check("toplam katilimci", totalN, 15);
   check("madde sayilari", ANXIETY_ITEMS.length + PANIC_ITEMS.length, 40);
+}
+
+console.log("\n8) E/18 sentetik BMI + SNP plaintext referansi");
+{
+  const cohort = makeE18SyntheticCohort();
+  const same = makeE18SyntheticCohort();
+  const reference = e18PlaintextReference(cohort);
+  check("fixture kimligi", E18_SYNTHETIC_FIXTURE_ID, "e18-synthetic-bmi-snp-v1");
+  check("ayni fixture ayni kohort", JSON.stringify(cohort) === JSON.stringify(same), true);
+  check("katilimci sayisi", reference.participantCount, E18_SYNTHETIC_PARTICIPANTS);
+  check("kontrol SNP sayimlari", JSON.stringify(reference.contingency[0]), JSON.stringify([15, 10, 5]));
+  check("vaka SNP sayimlari", JSON.stringify(reference.contingency[1]), JSON.stringify([5, 10, 15]));
+  check("kontrol BMI toplami", reference.bmi[0].sum, 72_000);
+  check("vaka BMI toplami", reference.bmi[1].sum, 90_000);
 }
 
 console.log(

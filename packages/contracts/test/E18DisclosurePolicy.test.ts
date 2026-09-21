@@ -1,6 +1,10 @@
 import { expect } from "chai";
 import { ethers, fhevm } from "hardhat";
 import { FhevmType } from "@fhevm/mock-utils";
+import {
+  e18PlaintextReference,
+  makeE18SyntheticCohort,
+} from "@veriarfy/study";
 import { biomarkersFactory, protocolFactory } from "./helpers/factories";
 
 async function readSnp(handles: string[][], address: string, researcher: any) {
@@ -129,28 +133,29 @@ describe("E/18 one-snapshot protocol boundary", () => {
       protocol, "E18ThresholdTooLow",
     );
 
+    const cohort = makeE18SyntheticCohort();
+    const plaintext = e18PlaintextReference(cohort);
+
     async function contribute(index: number) {
+      const row = cohort[index];
       const walletAddress = `0x${(10_000 + index).toString(16).padStart(40, "0")}`;
       await ethers.provider.send("hardhat_setBalance", [walletAddress, "0xDE0B6B3A7640000"]);
       await ethers.provider.send("hardhat_impersonateAccount", [walletAddress]);
       const participant = await ethers.getSigner(walletAddress);
-      const group = index < 30 ? 0 : 1;
-      const dosage = index % 3;
-      const encryptedGroup = await fhevm.createEncryptedInput(address, walletAddress).add8(group).encrypt();
+      const encryptedGroup = await fhevm.createEncryptedInput(address, walletAddress).add8(row.group).encrypt();
       await protocol.connect(participant).enroll(encryptedGroup.handles[0], encryptedGroup.inputProof);
-      const encryptedDosage = await fhevm.createEncryptedInput(address, walletAddress).add8(dosage).encrypt();
+      const encryptedDosage = await fhevm.createEncryptedInput(address, walletAddress).add8(row.dosage).encrypt();
       await protocol.connect(participant).contributeDosages(
         encryptedDosage.handles, 1, encryptedDosage.inputProof,
       );
-      const bmi = index === 0 ? 0 : group === 0 ? 2500 : 3000;
-      const encryptedBmi = await fhevm.createEncryptedInput(metricAddress, walletAddress).add32(bmi).encrypt();
+      const encryptedBmi = await fhevm.createEncryptedInput(metricAddress, walletAddress).add32(row.bmi).encrypt();
       await biomarkers.connect(participant).contributeBiomarkers(
-        encryptedBmi.handles, bmi === 0 ? 0 : 1, encryptedBmi.inputProof,
+        encryptedBmi.handles, 1, encryptedBmi.inputProof,
       );
     }
 
-    for (let index = 0; index < 60; index++) await contribute(index);
-    expect(await protocol.participantCount()).to.equal(60n);
+    for (let index = 0; index < cohort.length; index++) await contribute(index);
+    expect(await protocol.participantCount()).to.equal(BigInt(plaintext.participantCount));
     await protocol.requestDisclosureFields(await researcher.getAddress(), 4, [0], [0]);
     await protocol.connect(node).approveDisclosure(0);
     await protocol.setMinParticipants(61);
@@ -161,7 +166,7 @@ describe("E/18 one-snapshot protocol boundary", () => {
     await protocol.executeDisclosure(0);
 
     expect(await readSnp(await protocol.disclosureContingencyAt(0, 0), address, researcher)).to.deep.equal([
-      [10, 10, 10], [10, 10, 10],
+      plaintext.contingency[0], plaintext.contingency[1],
     ]);
     const raw = await protocol.contingencyTableAt(0);
     await expect(fhevm.userDecryptEuint(
@@ -172,14 +177,14 @@ describe("E/18 one-snapshot protocol boundary", () => {
     )).to.be.rejected;
     for (let group = 0; group < 2; group++) {
       const [sum, sumSq, count] = await biomarkers.disclosureBiomarkerAt(0, 0, group);
-      for (const [type, handle] of [[FhevmType.euint64, sum], [FhevmType.euint64, sumSq], [FhevmType.euint32, count]] as const) {
-        expect(await fhevm.userDecryptEuint(type, handle, metricAddress, researcher)).to.equal(0n);
-      }
+      const expected = plaintext.bmi[group];
+      expect(await fhevm.userDecryptEuint(FhevmType.euint64, sum, metricAddress, researcher)).to.equal(BigInt(expected.sum));
+      expect(await fhevm.userDecryptEuint(FhevmType.euint64, sumSq, metricAddress, researcher)).to.equal(BigInt(expected.sumSq));
+      expect(await fhevm.userDecryptEuint(FhevmType.euint32, count, metricAddress, researcher)).to.equal(BigInt(expected.n));
       const [rawSum] = await biomarkers.biomarkerAggregate(0, group);
       await expect(fhevm.userDecryptEuint(FhevmType.euint64, rawSum, metricAddress, researcher)).to.be.rejected;
     }
 
-    await contribute(60);
     await expect(protocol.requestDisclosureFields(await researcher.getAddress(), 4, [0], [0]))
       .to.be.revertedWithCustomError(protocol, "E18AlreadyRequested");
     await expect(protocol.requestDisclosureFields(await node.getAddress(), 4, [0], [0]))

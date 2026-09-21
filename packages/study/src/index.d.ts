@@ -113,3 +113,20 @@ export function makeCohort(opts?: {
   groupSizes?: number[];
   severity?: number[];
 }): { group: number; anxietyResponses: number[]; panicResponses: number[] }[];
+
+// --- E/18 sentetik BMI + SNP parity fixture'i ---
+export const E18_SYNTHETIC_FIXTURE_ID: string;
+export const E18_SYNTHETIC_GROUP_SIZE: number;
+export const E18_SYNTHETIC_PARTICIPANTS: number;
+export interface E18SyntheticRow {
+  group: 0 | 1;
+  dosage: 0 | 1 | 2;
+  bmi: number;
+}
+export interface E18PlaintextReference {
+  participantCount: number;
+  contingency: number[][];
+  bmi: Aggregate[];
+}
+export function makeE18SyntheticCohort(): E18SyntheticRow[];
+export function e18PlaintextReference(rows: E18SyntheticRow[]): E18PlaintextReference;
