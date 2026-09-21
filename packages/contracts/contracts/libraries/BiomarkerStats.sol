@@ -165,4 +165,32 @@ library BiomarkerStats {
             FHE.allow(acc.count, researcher);
         }
     }
+
+    /// @notice E/18: both covered groups must have at least 30 observations.
+    function grantSafe(
+        mapping(uint32 => Accumulator[2]) storage frozen,
+        mapping(uint32 => Accumulator[2]) storage released,
+        uint32 metric,
+        address researcher
+    ) public {
+        ebool eligible = FHE.and(
+            FHE.ge(frozen[metric][0].count, 30),
+            FHE.ge(frozen[metric][1].count, 30)
+        );
+        euint64 zero64 = FHE.asEuint64(0);
+        euint32 zero32 = FHE.asEuint32(0);
+        for (uint8 g = 0; g < GROUP_COUNT; ++g) {
+            Accumulator storage source = frozen[metric][g];
+            Accumulator storage output = released[metric][g];
+            output.sum = FHE.select(eligible, source.sum, zero64);
+            output.sumSq = FHE.select(eligible, source.sumSq, zero64);
+            output.count = FHE.select(eligible, source.count, zero32);
+            FHE.allowThis(output.sum);
+            FHE.allowThis(output.sumSq);
+            FHE.allowThis(output.count);
+            FHE.allow(output.sum, researcher);
+            FHE.allow(output.sumSq, researcher);
+            FHE.allow(output.count, researcher);
+        }
+    }
 }

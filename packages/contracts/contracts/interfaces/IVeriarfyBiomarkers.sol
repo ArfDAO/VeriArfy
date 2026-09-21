@@ -18,4 +18,7 @@ interface IVeriarfyBiomarkers {
 
     /// @notice Dondurulmus toplamlarin cozum yetkisini arastirmaciya verir.
     function grantFor(uint256 requestId, address researcher) external;
+
+    /// @notice E/18: grant only coverage-masked aggregate handles.
+    function grantSafeFor(uint256 requestId, address researcher) external;
 }

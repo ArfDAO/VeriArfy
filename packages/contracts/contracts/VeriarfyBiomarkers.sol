@@ -220,6 +220,10 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     /// @dev `[talep][metrik][grup]` -> dondurulmus toplamlar.
     mapping(uint256 requestId => mapping(uint32 => BiomarkerStats.Accumulator[2])) private _frozen;
 
+    /// @dev E/18 result handles; raw frozen handles are never ACL-granted in this mode.
+    mapping(uint256 requestId => mapping(uint32 => BiomarkerStats.Accumulator[2])) private _safeReleased;
+    mapping(uint256 requestId => bool) private _isSafeRelease;
+
     /// @dev Talepte SECILEN metrikler - aralik degil liste.
     mapping(uint256 requestId => uint32[]) private _snapshotIds;
 
@@ -570,6 +574,15 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         }
     }
 
+    /// @notice E/18: ACL-grant only counts and sufficient statistics masked by group coverage.
+    function grantSafeFor(uint256 requestId, address researcher) external onlyProtocol {
+        _isSafeRelease[requestId] = true;
+        uint32[] storage ids = _snapshotIds[requestId];
+        for (uint256 i = 0; i < ids.length; ++i) {
+            BiomarkerStats.grantSafe(_frozen[requestId], _safeReleased[requestId], ids[i], researcher);
+        }
+    }
+
     // ---------------------------------------------------------------------------------
     // Okuma
     // ---------------------------------------------------------------------------------
@@ -609,7 +622,9 @@ contract VeriarfyBiomarkers is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         }
         if (!selected) revert MetricOutsideWindow(metric, 0, uint32(ids.length));
 
-        BiomarkerStats.Accumulator storage acc = _frozen[requestId][metric][group];
+        BiomarkerStats.Accumulator storage acc = _isSafeRelease[requestId]
+            ? _safeReleased[requestId][metric][group]
+            : _frozen[requestId][metric][group];
         return (acc.sum, acc.sumSq, acc.count);
     }
 }
