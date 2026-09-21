@@ -1,13 +1,14 @@
 import { expect } from "chai";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
 import { ethers } from "hardhat";
+import { E19_CLINICAL_POLICY } from "@veriarfy/study";
 
-const panelId = ethers.id("cpic-cyp2c19-clopidogrel-v1");
-const purposeId = ethers.id("research-pharmacogenomic-aggregate-only-v1");
-const consentVersion = ethers.id("veriarfy-clinical-consent-v1");
-const panelHash = ethers.id("synthetic-clinical-panel-document-v1");
-const documentHash = ethers.id("clinical-consent-document-v1");
-const MAX_DURATION = 365n * 24n * 60n * 60n;
+const panelId = ethers.id(E19_CLINICAL_POLICY.panelId);
+const purposeId = ethers.id(E19_CLINICAL_POLICY.purposeId);
+const consentVersion = ethers.id(E19_CLINICAL_POLICY.consentVersion);
+const panelHash = ethers.id(E19_CLINICAL_POLICY.panelDocumentId);
+const documentHash = ethers.id(E19_CLINICAL_POLICY.consentDocumentId);
+const MAX_DURATION = BigInt(E19_CLINICAL_POLICY.maximumConsentDays) * 24n * 60n * 60n;
 
 describe("E/19 clinical consent boundary", () => {
   async function fixture() {

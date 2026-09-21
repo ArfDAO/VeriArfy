@@ -21,6 +21,7 @@ const VeriYukle = lazy(async () => ({ default: (await import("./routes/panel/Ver
 const Kazanclar = lazy(async () => ({ default: (await import("./routes/panel/Kazanclar")).Kazanclar }));
 const Gizlilik = lazy(async () => ({ default: (await import("./routes/panel/Gizlilik")).Gizlilik }));
 const Dogrulama = lazy(async () => ({ default: (await import("./routes/panel/Dogrulama")).Dogrulama }));
+const KlinikOnam = lazy(async () => ({ default: (await import("./routes/panel/KlinikOnam")).KlinikOnam }));
 const Kayit = lazy(async () => ({ default: (await import("./routes/arastirma/Kayit")).Kayit }));
 const VeriAl = lazy(async () => ({ default: (await import("./routes/arastirma/VeriAl")).VeriAl }));
 const Sorgular = lazy(async () => ({ default: (await import("./routes/arastirma/Sorgular")).Sorgular }));
@@ -147,6 +148,7 @@ export default function App() {
           <Route path="veri-yukle" element={<VeriYukle />} />
           <Route path="kazanclar" element={<Kazanclar />} />
           <Route path="gizlilik" element={<Gizlilik />} />
+          <Route path="klinik-onam" element={<KlinikOnam />} />
           <Route path="dogrulama" element={<Dogrulama />} />
         </Route>
         <Route path="/arastirma/*" element={<RoleGate role="arastirmaci" />}>

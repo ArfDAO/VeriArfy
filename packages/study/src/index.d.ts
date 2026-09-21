@@ -173,3 +173,19 @@ export function buildE18ParityReport(): {
   genomic: ReturnType<typeof summarizeGenomicTable>;
   bmi: Comparison;
 };
+
+// --- E/19 clinical/pharmacogenomic consent policy ---
+export interface E19ClinicalPolicy {
+  panelId: string;
+  purposeId: string;
+  consentVersion: string;
+  consentDocumentId: string;
+  panelDocumentId: string;
+  panelUri: string;
+  maximumConsentDays: number;
+  scope: string;
+  excludes: readonly string[];
+  revocation: string;
+}
+export const E19_CLINICAL_POLICY: E19ClinicalPolicy;
+export function validateE19ClinicalPolicy(policy?: E19ClinicalPolicy): E19ClinicalPolicy;

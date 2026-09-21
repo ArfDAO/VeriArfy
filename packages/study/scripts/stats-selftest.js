@@ -23,6 +23,8 @@ import {
   makeE18SyntheticCohort,
   e18PlaintextReference,
   buildE18ParityReport,
+  E19_CLINICAL_POLICY,
+  validateE19ClinicalPolicy,
 } from "../src/index.js";
 
 let failures = 0;
@@ -170,6 +172,21 @@ console.log("\n9) E/18 immutable FHE transcript parity");
   check("SNP delta sifir", JSON.stringify(report.delta.snp), JSON.stringify([[0, 0, 0], [0, 0, 0]]));
   check("BMI kontrol delta sifir", JSON.stringify(report.delta.bmi[0]), JSON.stringify({ n: 0, sum: 0, sumSq: 0 }));
   check("BMI vaka delta sifir", JSON.stringify(report.delta.bmi[1]), JSON.stringify({ n: 0, sum: 0, sumSq: 0 }));
+}
+
+console.log("\n10) E/19 surumlenmis klinik onam politikasi");
+{
+  const policy = validateE19ClinicalPolicy();
+  check("panel kimligi", policy.panelId, "cpic-cyp2c19-clopidogrel-v1");
+  check("amaç aggregate-only", policy.purposeId, "research-pharmacogenomic-aggregate-only-v1");
+  check("onam suresi 365 gun", policy.maximumConsentDays, 365);
+  check("kapsam disi liste", policy.excludes.includes("person-level results"), true);
+  try {
+    validateE19ClinicalPolicy({ ...E19_CLINICAL_POLICY, maximumConsentDays: 366 });
+    check("366 gun reddedilir", false, true);
+  } catch (error) {
+    check("366 gun reddedilir", error instanceof RangeError, true);
+  }
 }
 
 console.log(
