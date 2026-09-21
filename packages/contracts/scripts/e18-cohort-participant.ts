@@ -12,7 +12,6 @@ import { Wallet } from "ethers";
 
 const ACK = "e18-synthetic-cohort";
 const PROFILE = "e18-synthetic-bmi-snp-v1";
-const MIN_BALANCE = ethers.parseEther("0.015");
 const MAX_FEE = ethers.parseUnits("2", "gwei");
 const PRIORITY_FEE = ethers.parseUnits("0.1", "gwei");
 const MAX_GAS = 6_000_000n;
@@ -64,48 +63,64 @@ async function send(label: string, txFactory: () => Promise<any>) {
   console.log(JSON.stringify({ label, hash: tx.hash, nonce: tx.nonce, gasUsed: receipt.gasUsed.toString(), blockNumber: receipt.blockNumber }));
 }
 
+async function assertCurrentStepBudget(label: string, signer: string, estimate: bigint) {
+  const required = estimate * 12n / 10n * MAX_FEE;
+  const balance = await ethers.provider.getBalance(signer);
+  if (balance < required) {
+    console.log(JSON.stringify({ pass: false, label, balanceWei: balance.toString(), requiredWei: required.toString(), requiredSepoliaEth: ethers.formatEther(required), gas: estimate.toString() }, null, 2));
+    fail(`${label} icin bakiye yetersiz; transaction gonderilmedi`);
+  }
+}
+
 async function main() {
   if (network.name !== "sepolia" || (await ethers.provider.getNetwork()).chainId !== 11155111n) fail("yalniz Sepolia kabul edilir");
   const row = selectedRow();
   const record = deployment();
   const signer = new Wallet(row.privateKey, ethers.provider);
   if (signer.address.toLowerCase() !== row.address.toLowerCase()) fail("vault private key/adres uyusmuyor");
-  const balance = await ethers.provider.getBalance(signer.address);
-  if (balance < MIN_BALANCE) {
-    fail(`katilimci fonu yetersiz: ${ethers.formatEther(balance)} ETH; minimum ${ethers.formatEther(MIN_BALANCE)} ETH`);
-  }
   const [protocol, biomarkers] = await Promise.all([
     ethers.getContractAt("VeriarfyProtocolE18", record.contracts.VeriarfyProtocolE18, signer),
     ethers.getContractAt("VeriarfyBiomarkers", record.contracts.VeriarfyBiomarkers, signer),
   ]);
-  if (!await protocol.e18DisclosurePolicyActive() || await protocol.minParticipants() !== 60n || await protocol.snpCount() !== 1n ||
-      (await protocol.biomarkerModule()).toLowerCase() !== record.contracts.VeriarfyBiomarkers.toLowerCase() || await biomarkers.metricCount() !== 1n) {
+  if (!(await protocol.e18DisclosurePolicyActive()) || (await protocol.minParticipants()) !== 60n || (await protocol.snpCount()) !== 1n ||
+      (await protocol.biomarkerModule()).toLowerCase() !== record.contracts.VeriarfyBiomarkers.toLowerCase() || (await biomarkers.metricCount()) !== 1n) {
     fail("canli E18 politikasi/panel bekleneni vermiyor");
   }
+  console.log(JSON.stringify({ stage: "fhe-client-init", participant: row.index }));
   await fhevm.initializeCLIApi();
   await fhevm.assertCoprocessorInitialized(record.contracts.VeriarfyProtocolE18, "VeriarfyProtocolE18");
   await fhevm.assertCoprocessorInitialized(record.contracts.VeriarfyBiomarkers, "VeriarfyBiomarkers");
+  console.log(JSON.stringify({ stage: "fhe-client-ready", participant: row.index }));
   const fee = await overrides();
 
-  if (!await protocol.isEnrolled(signer.address)) {
+  if (!(await protocol.isEnrolled(signer.address))) {
+    console.log(JSON.stringify({ stage: "encrypt-enroll", participant: row.index }));
     const input = await fhevm.createEncryptedInput(record.contracts.VeriarfyProtocolE18, signer.address).add8(row.group).encrypt();
+    console.log(JSON.stringify({ stage: "estimate-enroll", participant: row.index }));
     const estimate = await protocol.enroll.estimateGas(input.handles[0], input.inputProof, fee);
     if (estimate > MAX_GAS) fail(`enroll gas tavanini asti: ${estimate}`);
+    await assertCurrentStepBudget("enroll", signer.address, estimate);
     await send("enroll", () => protocol.enroll(input.handles[0], input.inputProof, { ...fee, gasLimit: estimate * 12n / 10n }));
   }
-  if (!await protocol.hasAggregated(signer.address)) {
+  if (!(await protocol.hasAggregated(signer.address))) {
+    console.log(JSON.stringify({ stage: "encrypt-snp", participant: row.index }));
     const input = await fhevm.createEncryptedInput(record.contracts.VeriarfyProtocolE18, signer.address).add8(row.dosage).encrypt();
+    console.log(JSON.stringify({ stage: "estimate-snp", participant: row.index }));
     const estimate = await protocol.contributeDosages.estimateGas(input.handles, 1n, input.inputProof, fee);
     if (estimate > MAX_GAS) fail(`SNP gas tavanini asti: ${estimate}`);
+    await assertCurrentStepBudget("contribute-snp", signer.address, estimate);
     await send("contribute-snp", () => protocol.contributeDosages(input.handles, 1n, input.inputProof, { ...fee, gasLimit: estimate * 12n / 10n }));
   }
-  if (!await biomarkers.hasBiomarkerPanel(signer.address)) {
+  if (!(await biomarkers.hasBiomarkerPanel(signer.address))) {
+    console.log(JSON.stringify({ stage: "encrypt-bmi", participant: row.index }));
     const input = await fhevm.createEncryptedInput(record.contracts.VeriarfyBiomarkers, signer.address).add32(row.bmi).encrypt();
+    console.log(JSON.stringify({ stage: "estimate-bmi", participant: row.index }));
     const estimate = await biomarkers.contributeBiomarkers.estimateGas(input.handles, 1n, input.inputProof, fee);
     if (estimate > MAX_GAS) fail(`BMI gas tavanini asti: ${estimate}`);
+    await assertCurrentStepBudget("contribute-bmi", signer.address, estimate);
     await send("contribute-bmi", () => biomarkers.contributeBiomarkers(input.handles, 1n, input.inputProof, { ...fee, gasLimit: estimate * 12n / 10n }));
   }
-  if (!await protocol.hasAggregated(signer.address) || !await biomarkers.hasBiomarkerPanel(signer.address)) fail("zincir katilimci katkisini dogrulamadi");
+  if (!(await protocol.hasAggregated(signer.address)) || !(await biomarkers.hasBiomarkerPanel(signer.address))) fail("zincir katilimci katkisini dogrulamadi");
   console.log(JSON.stringify({ pass: true, participant: row.index, address: signer.address, group: row.group, dosage: row.dosage, bmi: row.bmi, participantCount: (await protocol.participantCount()).toString() }));
 }
 
