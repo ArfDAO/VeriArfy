@@ -96,6 +96,30 @@ export function studentTCdf(t: number, df: number): number;
 export function studentTQuantile(p: number, df: number): number;
 export function betai(a: number, b: number, x: number): number;
 export function gammaln(x: number): number;
+export interface ChiSquareResult {
+  chi2: number; df: number; p: number; total: number; minExpected: number; reliable: boolean;
+}
+export function chiSquareP(chi2: number, df: number): number;
+export function chiSquareTest(table: number[][]): ChiSquareResult;
+export function benjaminiHochberg(pValues: number[]): number[];
+export interface GenotypeFrequencies {
+  n: number;
+  genotype: number[];
+  allele: { reference: number; alternate: number };
+  maf: number;
+}
+export function genotypeFrequencies(counts: [number, number, number]): GenotypeFrequencies;
+export function hardyWeinbergTest(counts: [number, number, number]): GenotypeFrequencies & {
+  expected: number[]; chi2: number; df: number; p: number; minExpected: number; reliable: boolean;
+};
+export function allelicOddsRatio(table: [[number, number, number], [number, number, number]]): {
+  oddsRatio: number; ci95: [number, number]; standardError: number; note: string | null;
+};
+export function fisherFreemanHaltonTest(table: number[][]): { p: number; observedProbability: number; tables: number };
+export function summarizeGenomicTable(table: [[number, number, number], [number, number, number]]): {
+  groups: { frequencies: GenotypeFrequencies; hwe: ReturnType<typeof hardyWeinbergTest> }[];
+  association: { chiSquare: ChiSquareResult; fisher: ReturnType<typeof fisherFreemanHaltonTest> | null; oddsRatio: ReturnType<typeof allelicOddsRatio> };
+};
 
 // --- Hatlar ---
 export function aggregate(
