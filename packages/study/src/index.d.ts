@@ -154,3 +154,22 @@ export interface E18PlaintextReference {
 }
 export function makeE18SyntheticCohort(): E18SyntheticRow[];
 export function e18PlaintextReference(rows: E18SyntheticRow[]): E18PlaintextReference;
+
+export interface E18ParitySnapshot {
+  fixtureId: string;
+  participantCount: number;
+  contingency: readonly (readonly [number, number, number])[];
+  bmi: readonly Aggregate[];
+  evidence: { test: string; assertion: string; scope: string };
+}
+export const E18_FHE_RELEASED_SNAPSHOT: E18ParitySnapshot;
+export function buildE18ParityReport(): {
+  fixtureId: string;
+  plaintext: E18PlaintextReference;
+  fhe: E18ParitySnapshot;
+  delta: { snp: readonly number[][]; bmi: readonly Aggregate[] };
+  checks: { fixtureId: boolean; participants: boolean; snp: boolean; bmi: boolean };
+  pass: boolean;
+  genomic: ReturnType<typeof summarizeGenomicTable>;
+  bmi: Comparison;
+};

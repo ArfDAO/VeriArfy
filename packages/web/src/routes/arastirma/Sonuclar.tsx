@@ -1,6 +1,5 @@
 import { userError } from "../../lib/userError";
 import { useCallback, useEffect, useState } from "react";
-// @ts-expect-error JS study package does not ship TS declarations through its export map.
 import { benjaminiHochberg, chiSquareTest, compareGroups, formatP } from "@veriarfy/study";
 
 import { SEPOLIA_CHAIN_ID } from "../../config";

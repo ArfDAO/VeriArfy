@@ -22,6 +22,7 @@ import {
   E18_SYNTHETIC_PARTICIPANTS,
   makeE18SyntheticCohort,
   e18PlaintextReference,
+  buildE18ParityReport,
 } from "../src/index.js";
 
 let failures = 0;
@@ -160,6 +161,15 @@ console.log("\n8) E/18 sentetik BMI + SNP plaintext referansi");
   check("vaka SNP sayimlari", JSON.stringify(reference.contingency[1]), JSON.stringify([5, 10, 15]));
   check("kontrol BMI toplami", reference.bmi[0].sum, 72_000);
   check("vaka BMI toplami", reference.bmi[1].sum, 90_000);
+}
+
+console.log("\n9) E/18 immutable FHE transcript parity");
+{
+  const report = buildE18ParityReport();
+  check("FHE/plaintext parity PASS", report.pass, true);
+  check("SNP delta sifir", JSON.stringify(report.delta.snp), JSON.stringify([[0, 0, 0], [0, 0, 0]]));
+  check("BMI kontrol delta sifir", JSON.stringify(report.delta.bmi[0]), JSON.stringify({ n: 0, sum: 0, sumSq: 0 }));
+  check("BMI vaka delta sifir", JSON.stringify(report.delta.bmi[1]), JSON.stringify({ n: 0, sum: 0, sumSq: 0 }));
 }
 
 console.log(

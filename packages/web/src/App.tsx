@@ -25,6 +25,7 @@ const Kayit = lazy(async () => ({ default: (await import("./routes/arastirma/Kay
 const VeriAl = lazy(async () => ({ default: (await import("./routes/arastirma/VeriAl")).VeriAl }));
 const Sorgular = lazy(async () => ({ default: (await import("./routes/arastirma/Sorgular")).Sorgular }));
 const Sonuclar = lazy(async () => ({ default: (await import("./routes/arastirma/Sonuclar")).Sonuclar }));
+const E18Parity = lazy(async () => ({ default: (await import("./routes/arastirma/E18Parity")).E18Parity }));
 const Dugum = lazy(async () => ({ default: (await import("./routes/arastirma/Dugum")).Dugum }));
 
 /**
@@ -153,6 +154,7 @@ export default function App() {
           <Route path="veri-al" element={<VeriAl />} />
           <Route path="sorgular" element={<Sorgular />} />
           <Route path="sonuclar" element={<Sonuclar />} />
+          <Route path="e18-parity" element={<E18Parity />} />
           <Route path="dugum" element={<Dugum />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
