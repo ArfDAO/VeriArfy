@@ -38,6 +38,10 @@ const isBmiDemoInvocation =
   invokesScript("deploy-bmi-demo") ||
   invokesScript("create-bmi-demo-wallet") ||
   invokesScript("bmi-demo-live-check");
+const isE19DemoInvocation =
+  invokesScript("create-e19-demo-wallet") ||
+  invokesScript("e19-deploy") ||
+  invokesScript("e19-preflight");
 const requestedLiveCheckStage = process.env.LIVE_CHECK_STAGE?.trim();
 if (requestedLiveCheckStage && !isLiveCheckInvocation) {
   throw new Error(
@@ -92,6 +96,8 @@ if (!isLiveCheckConfigured && !isD15Profile && !isD17Invocation) {
   // Teknofest BMI parity cüzdani ana depodaki deployer'dan tamamen ayridir.
   // Dosya git-disi kalir ve yalnızca BMI demo betikleri cagirilirken yuklenir.
   if (isBmiDemoInvocation) dotenv.config({ path: join(__dirname, ".env.bmi-demo") });
+  // E/19 sentetik profilinin deployer anahtari da ana proje deployer'ından ayrıdır.
+  if (isE19DemoInvocation) dotenv.config({ path: join(__dirname, ".env.e19-demo") });
   dotenv.config({ path: join(__dirname, "..", "..", ".env") });
 }
 
