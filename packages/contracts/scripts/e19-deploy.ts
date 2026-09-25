@@ -8,7 +8,9 @@ const ACK = "e19-synthetic-sepolia-deploy";
 const PROFILE = "e19-synthetic-cyp2c19-clopidogrel-v1";
 const CHAIN_ID = 11155111n;
 // This is deliberately conservative: partial deployments are worse than waiting for a faucet claim.
-const MIN_DEPLOY_BALANCE = ethers.parseEther("0.03");
+// Eight compact contracts plus their initialization transactions were kept
+// below this testnet guard; the margin prevents starting at a dust balance.
+const MIN_DEPLOY_BALANCE = ethers.parseEther("0.018");
 
 function fail(message: string): never { throw new Error(`E19 deploy: ${message}`); }
 

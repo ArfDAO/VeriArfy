@@ -1,0 +1,31 @@
+{
+  "profile": "e19-synthetic-cyp2c19-clopidogrel-v1",
+  "network": "sepolia",
+  "chainId": 11155111,
+  "syntheticOnly": true,
+  "deployer": "0x94a9e7997BA622c9065255cb0927FA86e1f5BA08",
+  "authorizedNodes": [
+    "0x94a9e7997BA622c9065255cb0927FA86e1f5BA08"
+  ],
+  "endpoint": "0x1d4dc53716a99e97635b558307a9270b529a6d0785a1797101593b3d2bc957ec",
+  "contracts": {
+    "Groth16Verifier": "0xC7d80b0377B2bFC6196EEB3ea8227875D3D92bcB",
+    "VeriArfyRegistry": "0x8Aa03dfF1b7D22f55594AAeBA21807eD8d15B6cA",
+    "VeriarfyProtocolE19": "0xC6128143BA5bcB8D2aE89494581BD6fc44f6Cc08",
+    "VeriarfyClinical": "0xd8d39b8977EDd8bb1348732909F56ebEf47e0922",
+    "ClinicalResponseStats": "0x4dc018F94E00Ce357D2fE7b572F251Efc1E3A410",
+    "VeriarfyClinicalAggregate": "0x7C389Fe92F1FE199586b7bF9DD939A5B28F4C7C3",
+    "StableTestToken": "0xF99a37C7e8ac0b9858ef23ba0973533109d86814",
+    "VeriarfyE19Payments": "0x9CED31F96606f258cbfFD2955a720dE357425962"
+  },
+  "deploymentStartBlock": 11781316,
+  "deployedAtBlock": 11781331,
+  "registration": {
+    "zkRequired": true,
+    "completed": false
+  },
+  "liveSettlement": {
+    "completed": false,
+    "participantTarget": 60
+  }
+}
