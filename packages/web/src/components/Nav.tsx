@@ -24,8 +24,7 @@ export function Nav() {
       </div>
       <div className="nav__actions">
         <div className="nav__links" aria-label={t("Arşiv bölümleri")}>
-          <a href="#anket" className="nav__link">{t("Anket")}</a>
-          <a href="#sonuclar" className="nav__link">{t("Sonuçlar")}</a>
+          <Link to="/demo/bmi-parity" className="nav__link">BMI demo</Link>
         </div>
         <span className="nav__divider" aria-hidden="true" />
         {/*

@@ -235,3 +235,10 @@ export const STUDY_ABI = [
   "function panicAggregate(uint8 group) view returns (bytes32 n, bytes32 sum, bytes32 sumSq)",
   "event ResponseSubmitted(address indexed participant, uint32 participantIndex)",
 ] as const;
+
+/** Sentetik-only BMI parity demo — E/18 arastirma protokolunden ayridir. */
+export const BMI_DEMO_ABI = [
+  "function calculate(bytes32 encryptedWeightDeciKg, uint16 heightCm, bytes inputProof) returns (bytes32)",
+  "function bmiHandle(address demonstrator) view returns (bytes32)",
+  "event BmiCalculated(address indexed demonstrator, uint16 indexed heightCm, bytes32 bmiHandle)",
+] as const;

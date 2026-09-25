@@ -7,7 +7,7 @@ import {
   useState,
   type PropsWithChildren,
 } from "react";
-import { BrowserProvider, type Signer } from "ethers";
+import { BrowserProvider, getAddress, type Signer } from "ethers";
 
 import { SEPOLIA_CHAIN_ID } from "../config";
 import {
@@ -172,7 +172,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
               const network = await nextProvider.getNetwork();
               return {
                 provider: nextProvider,
-                address: accounts[0],
+                address: getAddress(accounts[0]),
                 chainId: Number(network.chainId),
               };
             })();

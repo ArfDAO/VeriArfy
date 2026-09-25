@@ -33,6 +33,11 @@ const isPreflightInvocation = invokesScript("preflight");
 const isProofCheckInvocation = invokesScript("proof-check");
 const isRedeployInvocation = invokesScript("d15-redeploy");
 const isRedeployPlanInvocation = invokesScript("d15-redeploy-plan-write");
+const isBmiDemoInvocation =
+  invokesScript("bmi-demo-preflight") ||
+  invokesScript("deploy-bmi-demo") ||
+  invokesScript("create-bmi-demo-wallet") ||
+  invokesScript("bmi-demo-live-check");
 const requestedLiveCheckStage = process.env.LIVE_CHECK_STAGE?.trim();
 if (requestedLiveCheckStage && !isLiveCheckInvocation) {
   throw new Error(
@@ -84,6 +89,9 @@ if (executionAck && !isD15Profile) {
 // Once yerel, sonra kok: yerel bir .env varsa o kazanir.
 if (!isLiveCheckConfigured && !isD15Profile && !isD17Invocation) {
   dotenv.config();
+  // Teknofest BMI parity cüzdani ana depodaki deployer'dan tamamen ayridir.
+  // Dosya git-disi kalir ve yalnızca BMI demo betikleri cagirilirken yuklenir.
+  if (isBmiDemoInvocation) dotenv.config({ path: join(__dirname, ".env.bmi-demo") });
   dotenv.config({ path: join(__dirname, "..", "..", ".env") });
 }
 

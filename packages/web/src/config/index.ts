@@ -13,6 +13,24 @@ export const SEPOLIA_HEX = "0xaa36a7";
 
 export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
+/**
+ * Sentetik Teknofest BMI parity kontrati. Bu halka acik Sepolia adresi sadece
+ * demo girdileri icindir; VITE degiskeni staging/yeniden-deploy senaryolari
+ * icin bilincli olarak once gelir.
+ */
+export const BMI_DEMO_SEPOLIA_CONTRACT = "0x68cD9526eB29E5d40646496225587E9849bB6a12";
+export const BMI_DEMO_CONTRACT = import.meta.env.VITE_BMI_DEMO_CONTRACT ?? BMI_DEMO_SEPOLIA_CONTRACT;
+
+export const isBmiDemoDeployed = BMI_DEMO_CONTRACT !== ZERO_ADDRESS;
+
+/** Tarayicidan bagimsiz, gercek Sepolia fhEVM kaniti (yalniz sentetik veri). */
+export const BMI_DEMO_LIVE_PROOF = {
+  transactionHash: "0x0e886b1fc979346fdcde7d84052788bf76ad07f61695eb9f3f13f4649c45c14b",
+  heightCm: 175,
+  weightKg: "72.4",
+  bmi: "23.64",
+} as const;
+
 export const CONTRACTS = deployment.contracts as {
   Groth16Verifier: string;
   DataProvenanceVerifier: string;

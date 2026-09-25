@@ -27,6 +27,7 @@ const VeriAl = lazy(async () => ({ default: (await import("./routes/arastirma/Ve
 const Sorgular = lazy(async () => ({ default: (await import("./routes/arastirma/Sorgular")).Sorgular }));
 const Sonuclar = lazy(async () => ({ default: (await import("./routes/arastirma/Sonuclar")).Sonuclar }));
 const E18Parity = lazy(async () => ({ default: (await import("./routes/arastirma/E18Parity")).E18Parity }));
+const BmiParityDemo = lazy(async () => ({ default: (await import("./routes/BmiParityDemo")).BmiParityDemo }));
 const Dugum = lazy(async () => ({ default: (await import("./routes/arastirma/Dugum")).Dugum }));
 
 /**
@@ -143,6 +144,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<AnaSayfa />} />
         <Route path="/giris" element={<Giris />} />
+        <Route path="/demo/bmi-parity" element={<BmiParityDemo />} />
         <Route path="/panel/*" element={<RoleGate role="veri-sahibi" />}>
           <Route index element={<Ozet />} />
           <Route path="veri-yukle" element={<VeriYukle />} />

@@ -1,4 +1,4 @@
-import { BrowserProvider, type Eip1193Provider } from "ethers";
+import { BrowserProvider, getAddress, type Eip1193Provider } from "ethers";
 
 import { SEPOLIA_CHAIN_ID, SEPOLIA_HEX } from "../config";
 
@@ -91,17 +91,20 @@ export async function connectWallet(injected = window.ethereum): Promise<{
   const accounts = (await provider.send("eth_requestAccounts", [])) as string[];
   if (!accounts[0]) throw new Error("Cuzdan hesap donmedi.");
   const net = await provider.getNetwork();
-  return { provider, address: accounts[0], chainId: Number(net.chainId) };
+  // EIP-1193 hesaplari genellikle tamamen kucuk harfle doner. ethers bunu
+  // kabul eder ama Zama relayer SDK `ChecksummedAddress` zorunlu tutar.
+  return { provider, address: getAddress(accounts[0]), chainId: Number(net.chainId) };
 }
 
 /** Secilen cuzdanı Sepolia'ya gecirir; ag ekli degilse eklemeyi dener. */
 export async function ensureSepolia(injected = window.ethereum): Promise<void> {
   if (!injected) throw new Error("Cuzdan yok.");
+  const switchChain = () => injected.request({
+    method: "wallet_switchEthereumChain",
+    params: [{ chainId: SEPOLIA_HEX }],
+  });
   try {
-    await injected.request({
-      method: "wallet_switchEthereumChain",
-      params: [{ chainId: SEPOLIA_HEX }],
-    });
+    await switchChain();
   } catch (err: any) {
     if (err?.code === 4902) {
       await injected.request({
@@ -116,6 +119,10 @@ export async function ensureSepolia(injected = window.ethereum): Promise<void> {
           },
         ],
       });
+      // EIP-3085 ekleme istegi, cüzdanin yeni agi otomatik sececegi anlamina
+      // gelmez. Ozellikle mobil/embedded provider'larda ikinci, acik switch
+      // istegi olmadan uygulama eski zincirde kalir.
+      await switchChain();
     } else {
       throw err;
     }

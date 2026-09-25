@@ -1,0 +1,12 @@
+{
+  "profile": "teknofest-synthetic-bmi-parity-v1",
+  "network": "sepolia",
+  "chainId": 11155111,
+  "deployer": "0x2DC615466085151DD1990197660c8aB9ea3bA60A",
+  "contract": "0x68cD9526eB29E5d40646496225587E9849bB6a12",
+  "syntheticOnly": true,
+  "rawWeightPubliclyDecryptable": false,
+  "finalBmiPubliclyDecryptable": true,
+  "transactionHash": "0xdddadf5aba71d4520638d0f25fbc0da01cafae05235e0647d941904814122755",
+  "deployedAtBlock": 11779321
+}
