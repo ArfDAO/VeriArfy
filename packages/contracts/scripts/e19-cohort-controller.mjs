@@ -52,6 +52,7 @@ async function state(provider, participants) {
 async function main() {
   const participants = rows();
   const provider = new JsonRpcProvider(process.env.SEPOLIA_RPC_URL ?? "https://ethereum-sepolia-rpc.publicnode.com");
+  let consecutiveNoProgress = 0;
   for (;;) {
     const before = await state(provider, participants);
     if (before.next === -1) {
@@ -82,7 +83,13 @@ async function main() {
     await new Promise((resolve) => setTimeout(resolve, 5000));
     const after = await state(provider, participants);
     console.log(JSON.stringify({ before, after, attemptedRange: [before.next, end], childStatus: result.status }));
-    if (after.enrolled <= before.enrolled && after.contributed <= before.contributed) fail("FHE child exited without verified on-chain progress");
+    if (after.enrolled <= before.enrolled && after.contributed <= before.contributed) {
+      consecutiveNoProgress += 1;
+      if (consecutiveNoProgress > 5) fail("FHE child repeated without verified on-chain progress");
+      await new Promise((resolve) => setTimeout(resolve, 15000));
+      continue;
+    }
+    consecutiveNoProgress = 0;
   }
 }
 
