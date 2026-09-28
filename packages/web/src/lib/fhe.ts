@@ -46,6 +46,7 @@ interface FheInstance {
 
 interface EncryptedInputBuilder {
   add8(value: number | bigint): EncryptedInputBuilder;
+  add16(value: number | bigint): EncryptedInputBuilder;
   add32(value: number | bigint): EncryptedInputBuilder;
   encrypt(): Promise<{ handles: Uint8Array[]; inputProof: Uint8Array }>;
 }
@@ -87,7 +88,7 @@ const FHE_READ_RPC = "https://ethereum-sepolia-rpc.publicnode.com";
 /** SDK'yi bir kez baslatir ve ornegi paylasir. */
 export function getFheInstance(): Promise<FheInstance> {
   if (!instancePromise) {
-    instancePromise = (async () => {
+    const pending = (async () => {
       // Coklu is parcacigi COOP/COEP basliklari ister; onlar olmadan SDK
       // uyari basip TEK PARCACIGA duser. Calisir, yalnizca daha yavastir —
       // basliklari acmak RPC ve relayer isteklerini kirabilecegi icin
@@ -99,6 +100,14 @@ export function getFheInstance(): Promise<FheInstance> {
         network: FHE_READ_RPC,
       }) as unknown as FheInstance;
     })();
+    // Relayer/RPC baslatmasi gecici olarak basarisiz olursa reddedilmis Promise
+    // bellekte kalmasin. Aksi halde sayfayi yenilemeden sonraki her deneme ayni
+    // eski hatayi aninda tekrarlar; kullanici yeni bir FHE istegi atamaz.
+    const retriable = pending.catch((error) => {
+      if (instancePromise === retriable) instancePromise = null;
+      throw error;
+    });
+    instancePromise = retriable;
   }
   return instancePromise;
 }
@@ -210,6 +219,29 @@ export async function encryptBiomarkers(params: {
     handles: enc.handles.map(toHex),
     inputProof: toHex(enc.inputProof),
   };
+}
+
+/**
+ * Teknofest BMI parity demosu icin agirligi (kg*10) sifreler.
+ *
+ * Boy bu demoda acik bolendir; kontrat BMI'yi sifreli agirliktan hesaplar.
+ * Bu fonksiyon E/18 katkisi degildir ve sadece ayri sentetik demo kontratina
+ * girdi uretir.
+ */
+export async function encryptBmiDemoWeight(params: {
+  contractAddress: string;
+  userAddress: string;
+  weightDeciKg: number;
+}): Promise<{ handle: string; inputProof: string }> {
+  if (!Number.isInteger(params.weightDeciKg) || params.weightDeciKg < 1 || params.weightDeciKg > 3000) {
+    throw new RangeError("Demo agirligi 0,1..300,0 kg araliginda olmali");
+  }
+
+  const instance = await getFheInstance();
+  const buffer = instance.createEncryptedInput(params.contractAddress, params.userAddress);
+  buffer.add16(params.weightDeciKg);
+  const enc = await buffer.encrypt();
+  return { handle: toHex(enc.handles[0]), inputProof: toHex(enc.inputProof) };
 }
 
 /**

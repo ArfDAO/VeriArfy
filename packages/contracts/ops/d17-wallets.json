@@ -1,0 +1,21 @@
+{
+  "schema": "d17-wallet-manifest-v1",
+  "network": "sepolia",
+  "chainId": 11155111,
+  "createdAt": "2026-09-10T16:54:18.824Z",
+  "updatedAt": "2026-09-10T16:55:05.214Z",
+  "participants": [
+    {
+      "role": "participant-1",
+      "address": "0x472CFA25EBAe8828337CD5E8746BF590ccA1126a"
+    },
+    {
+      "role": "participant-2",
+      "address": "0x477c88C55eBA47c32FFA6f5e6B00c5dD9c34B874"
+    },
+    {
+      "role": "participant-3",
+      "address": "0xA28b39AaF4a9d60871Bf1580786862Acf98eD50F"
+    }
+  ]
+}

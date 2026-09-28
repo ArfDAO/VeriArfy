@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import dotenv from "dotenv";
@@ -11,6 +12,7 @@ import {
   parseD15NodeRole,
 } from "./scripts/d15-profile";
 import { parseLiveCheckStage } from "./scripts/live-check-state";
+import { d17SigningKey } from "./scripts/d17-signing-config";
 
 function invokesScript(name: string): boolean {
   return process.argv.some((arg) =>
@@ -22,6 +24,8 @@ function invokesScript(name: string): boolean {
 // operatorun ayri proses environment'inda explicit verilmelidir; boylece bir
 // node prosesi deployer key'ini dotenv ile kisa sureligine bile yuklemez.
 const isLiveCheckInvocation = invokesScript("live-check");
+const isD17Invocation = invokesScript("multi-participant-check");
+const d17PrivateKey = d17SigningKey(isD17Invocation, process.env);
 const isD15ReadinessInvocation = invokesScript("d15-readiness");
 const isStakeNodeInvocation = invokesScript("stake-node");
 const isDeployInvocation = invokesScript("deploy");
@@ -30,6 +34,19 @@ const isPreflightInvocation = invokesScript("preflight");
 const isProofCheckInvocation = invokesScript("proof-check");
 const isRedeployInvocation = invokesScript("d15-redeploy");
 const isRedeployPlanInvocation = invokesScript("d15-redeploy-plan-write");
+const isBmiDemoInvocation =
+  invokesScript("bmi-demo-preflight") ||
+  invokesScript("deploy-bmi-demo") ||
+  invokesScript("create-bmi-demo-wallet") ||
+  invokesScript("bmi-demo-live-check");
+const isE19DemoInvocation =
+  invokesScript("create-e19-demo-wallet") ||
+  invokesScript("e19-deploy") ||
+  invokesScript("e19-preflight") ||
+  invokesScript("e19-cohort-init") ||
+  invokesScript("e19-cohort-fund") ||
+  invokesScript("e19-cohort-batch") ||
+  invokesScript("e19-cohort-participant");
 const requestedLiveCheckStage = process.env.LIVE_CHECK_STAGE?.trim();
 if (requestedLiveCheckStage && !isLiveCheckInvocation) {
   throw new Error(
@@ -79,14 +96,24 @@ if (executionAck && !isD15Profile) {
 // dosyayi packages/contracts icinden calistirdigi icin kokteki .env sessizce
 // bulunamaz ve `accounts` bos kalir — deploy "no signer" ile duser.
 // Once yerel, sonra kok: yerel bir .env varsa o kazanir.
-if (!isLiveCheckConfigured && !isD15Profile) {
+if (!isLiveCheckConfigured && !isD15Profile && !isD17Invocation) {
   dotenv.config();
+  // Teknofest BMI parity cüzdani ana depodaki deployer'dan tamamen ayridir.
+  // Dosya git-disi kalir ve yalnızca BMI demo betikleri cagirilirken yuklenir.
+  if (isBmiDemoInvocation) dotenv.config({ path: join(__dirname, ".env.bmi-demo") });
+  // E/19 sentetik profilinin deployer anahtari ana proje deployer'ından ayrıdır.
+  // FarukOS kasasi varsa once oradan okunur; eski yerel dosya yalniz geriye
+  // uyumluluk icin kullanilir ve yeni anahtarlar bu yola yazilmaz.
+  if (isE19DemoInvocation) {
+    const e19Vault = join(process.env.USERPROFILE ?? "", "FarukOS", "🔐 400-Vault", "VeriArfy", "e19-demo.key");
+    dotenv.config({ path: existsSync(e19Vault) ? e19Vault : join(__dirname, ".env.e19-demo") });
+  }
   dotenv.config({ path: join(__dirname, "..", "..", ".env") });
 }
 
 const SEPOLIA_RPC_URL =
   process.env.SEPOLIA_RPC_URL ?? "https://ethereum-sepolia-rpc.publicnode.com";
-if (isD15Profile) {
+if (isD15Profile || isD17Invocation) {
   const approvedProfile = loadD15Profile();
   let runtimeRpcUrl: string;
   try {
@@ -104,7 +131,7 @@ const NODE_PRIVATE_KEY = process.env.NODE_PRIVATE_KEY ?? "";
 // Hardhat loads this file before it evaluates the script. Ordinary commands
 // remain backwards compatible; the D15 profile fails closed on script, role,
 // acknowledgement and single-signer isolation before a script can run.
-let sepoliaPrivateKey = DEPLOYER_PRIVATE_KEY;
+let sepoliaPrivateKey = d17PrivateKey ?? DEPLOYER_PRIVATE_KEY;
 
 if (isLiveCheckConfigured) {
   const stage = parseLiveCheckStage(requestedLiveCheckStage);

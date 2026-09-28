@@ -130,6 +130,9 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     error SnpOutsideWindow(uint32 snp, uint32 from, uint32 to);
     error InvalidMetricWindow(uint32 requested, uint32 maximum);
     error ModuleAlreadyLocked();
+    error E18AlreadyRequested();
+    error E18ActivationTooLate();
+    error E18ThresholdTooLow(uint32 requested);
 
     // ---------------------------------------------------------------------------------
     // Olaylar
@@ -766,13 +769,15 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     address public queryGateway;
 
     /**
-     * @notice Cozum icin gereken en az katilimci sayisi (k-anonimlik).
+     * @notice Cozum icin gereken global havuz alt siniri; tek basina k-anonimlik degildir.
      *
-     * @dev Kritik gizlilik korumasi: havuzda tek katilimci varken toplami
-     *      cozmek, dogrudan o kisinin dozajini okumak demektir. Esik kac
-     *      kurumun onayladigindan bagimsiz olarak bu siniri asamaz.
+     * @dev Grup/alan kapsamasini veya iki goruntu arasindaki farki sinirlamaz.
+     *      E/18 bu kontrole ek olarak sifreli hucre esikleri ve tek talep uygular.
      */
     uint32 public minParticipants;
+
+    /// @notice Irreversible one-request disclosure mode for a new synthetic E/18 study.
+    bool public e18DisclosurePolicyActive;
 
     struct DisclosureRequest {
         /**
@@ -807,6 +812,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
          */
         uint32 heirApprovals;
         uint32 snapshotCount;
+        bool e18Safe;
         uint64 requestedAt;
         /// @dev Esige ULASILDI mi? Tek basina cozum yetkisi VERMEZ (bkz. asagi).
         bool finalized;
@@ -851,6 +857,8 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
          * dondurulur.
          */
         mapping(uint32 => euint32[3][2]) contingencySnapshot;
+        /// @dev Only these coverage-masked handles are ACL-granted in E/18 mode.
+        mapping(uint32 => euint32[3][2]) contingencyReleased;
         /**
          * @dev Goruntunun kapsadigi SNP'ler - ARALIK DEGIL, LISTE.
          *
@@ -1721,8 +1729,19 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     }
 
     function setMinParticipants(uint32 minParticipants_) external onlyOwner {
+        if (e18DisclosurePolicyActive && minParticipants_ < 60) {
+            revert E18ThresholdTooLow(minParticipants_);
+        }
         minParticipants = minParticipants_;
         emit MinParticipantsUpdated(minParticipants_);
+    }
+
+    /// @notice Enable before any query. One frozen output vector prevents rolling A-B releases.
+    function activateE18DisclosurePolicy() external onlyOwner {
+        if (nextRequestId != 0 || e18DisclosurePolicyActive) revert E18ActivationTooLate();
+        e18DisclosurePolicyActive = true;
+        minParticipants = 60;
+        emit MinParticipantsUpdated(60);
     }
 
     // ---------------------------------------------------------------------------------
@@ -1732,11 +1751,9 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     /**
      * @notice Bir yetkili dugum havuzun cozulmesini talep eder.
      *
-     * @dev Talep aninda havuzun **anlik goruntusu** alinir. Sonradan gelen
-     *      katkilar bu goruntuyu degistirmez; boylece "onay verirken 500
-     *      katilimci vardi, cozerken 501 oldu" gibi kayma olmaz ve ardisik iki
-     *      goruntunun farkindan tek bir katilimcinin verisi cikarilamaz
-     *      (bunun icin ayrica `minParticipants` siniri vardir).
+     * @dev Talep aninda havuzun anlik goruntusu alinir. Bu tek basina A-B'yi
+     *      engellemez: iki AYRI goruntu bir kisi farkla acilabilir. E/18 modu
+     *      bu nedenle tek talep/sabit cikti siniri uygular.
      */
     /**
      * @notice Arastirmaci adina bir acilim talebi acar (rapor 2.6:
@@ -1807,6 +1824,9 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     ) private returns (uint256 requestId) {
         if (msg.sender != queryGateway) revert NotQueryGateway(msg.sender);
         if (researcher == address(0)) revert ZeroAddress();
+        // Synthetic E/18 refusals are encrypted masks, not payable research results.
+        if (e18DisclosurePolicyActive && msg.sender != owner()) revert NotQueryGateway(msg.sender);
+        if (e18DisclosurePolicyActive && nextRequestId != 0) revert E18AlreadyRequested();
         if (participantCount == 0) revert PoolEmpty();
         if (participantCount < minParticipants) {
             revert NotEnoughParticipants(participantCount, minParticipants);
@@ -1826,6 +1846,7 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
             ? 0
             : heirRequiredApprovals(queryType);
         request.snapshotCount = participantCount;
+        request.e18Safe = e18DisclosurePolicyActive;
         request.requestedAt = uint64(block.timestamp);
         request.snapshot = _dosagePool;
 
@@ -2160,6 +2181,9 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
     function executeDisclosure(uint256 requestId) external nonReentrant {
         DisclosureRequest storage request = _requests[requestId];
         if (request.requester == address(0)) revert UnknownRequest(requestId);
+        if (request.e18Safe && request.snapshotCount < minParticipants) {
+            revert NotEnoughParticipants(request.snapshotCount, minParticipants);
+        }
         if (!request.finalized) revert NotFinalized(requestId);
         if (request.revoked) revert DisclosureRevoked(requestId);
         if (request.executed) revert AlreadyFinalized(requestId);
@@ -2185,21 +2209,34 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
         //
         // Onceki surumde izin onaylayan dugumlere veriliyordu; bu, onaylayan
         // her kurumun sonucu gormesi demekti ve raporun akisiyla celisiyordu.
-        FHE.allow(request.snapshot, request.requester);
+        if (!request.e18Safe) FHE.allow(request.snapshot, request.requester);
 
         // Ki-kare icin her SNP'nin 6 hucresi cozulebilmeli; tek tek izin verilir.
         uint256 snpLength = request.snpIds.length;
         for (uint256 i = 0; i < snpLength; ++i) {
-            ContingencyStats.grant(
-                request.contingencySnapshot,
-                request.snpIds[i],
-                request.requester
-            );
+            if (request.e18Safe) {
+                ContingencyStats.grantSafe(
+                    request.contingencySnapshot,
+                    request.contingencyReleased,
+                    request.snpIds[i],
+                    request.requester
+                );
+            } else {
+                ContingencyStats.grant(
+                    request.contingencySnapshot,
+                    request.snpIds[i],
+                    request.requester
+                );
+            }
         }
 
         // Welch t-testi icin metrik basina 6 sayi cozulebilmeli.
         if (request.metricIds.length > 0) {
-            IVeriarfyBiomarkers(biomarkerModule).grantFor(requestId, request.requester);
+            if (request.e18Safe) {
+                IVeriarfyBiomarkers(biomarkerModule).grantSafeFor(requestId, request.requester);
+            } else {
+                IVeriarfyBiomarkers(biomarkerModule).grantFor(requestId, request.requester);
+            }
         }
 
         emit DisclosureGranted(requestId, request.snapshotCount);
@@ -2294,7 +2331,10 @@ contract VeriarfyProtocol is ZamaEthereumConfig, Ownable, ReentrancyGuard {
 
         uint256 length = request.snpIds.length;
         for (uint256 i = 0; i < length; ++i) {
-            if (request.snpIds[i] == snp) return request.contingencySnapshot[snp];
+            if (request.snpIds[i] == snp) {
+                if (request.e18Safe) return request.contingencyReleased[snp];
+                return request.contingencySnapshot[snp];
+            }
         }
         revert SnpOutsideWindow(snp, 0, uint32(length));
     }

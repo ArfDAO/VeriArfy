@@ -129,4 +129,33 @@ library ContingencyStats {
             }
         }
     }
+
+    /// @notice E/18: never grant the raw table; grant an all-or-nothing masked copy.
+    function grantSafe(
+        mapping(uint32 => euint32[3][2]) storage frozen,
+        mapping(uint32 => euint32[3][2]) storage released,
+        uint32 snp,
+        address researcher
+    ) public {
+        ebool eligible = FHE.asEbool(true);
+        for (uint8 g = 0; g < GROUP_COUNT; ++g) {
+            euint32 groupCount = FHE.asEuint32(0);
+            for (uint8 level = 0; level < DOSAGE_LEVELS; ++level) {
+                euint32 cell = frozen[snp][g][level];
+                eligible = FHE.and(eligible, FHE.ge(cell, 5));
+                groupCount = FHE.add(groupCount, cell);
+            }
+            eligible = FHE.and(eligible, FHE.ge(groupCount, 30));
+        }
+
+        euint32 zero = FHE.asEuint32(0);
+        for (uint8 g = 0; g < GROUP_COUNT; ++g) {
+            for (uint8 level = 0; level < DOSAGE_LEVELS; ++level) {
+                euint32 masked = FHE.select(eligible, frozen[snp][g][level], zero);
+                released[snp][g][level] = masked;
+                FHE.allowThis(masked);
+                FHE.allow(masked, researcher);
+            }
+        }
+    }
 }

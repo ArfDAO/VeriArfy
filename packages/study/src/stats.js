@@ -345,6 +345,89 @@ export function chiSquareTest(table) {
  * @param {number[]} pValues
  * @returns {number[]} Girdiyle AYNI SIRADA duzeltilmis p-degerleri.
  */
+function requireGenotypeTable(table) {
+  if (!Array.isArray(table) || table.length !== 2 || table.some((row) => !Array.isArray(row) || row.length !== 3)) throw new TypeError("genotip tablosu 2x3 olmali");
+  for (const count of table.flat()) if (!Number.isSafeInteger(count) || count < 0) throw new TypeError("genotip sayimlari negatif olmayan tamsayi olmali");
+}
+
+/** Bir grubun 0/1/2 dozaj sayimlarindan genotip/allel frekanslari ve MAF. */
+export function genotypeFrequencies(counts) {
+  if (!Array.isArray(counts) || counts.length !== 3 || counts.some((count) => !Number.isSafeInteger(count) || count < 0)) throw new TypeError("genotip sayimlari uc negatif olmayan tamsayi olmali");
+  const n = counts[0] + counts[1] + counts[2];
+  if (n === 0) return { n: 0, genotype: [NaN, NaN, NaN], allele: { reference: NaN, alternate: NaN }, maf: NaN };
+  const alternate = (counts[1] + 2 * counts[2]) / (2 * n);
+  return { n, genotype: counts.map((count) => count / n), allele: { reference: 1 - alternate, alternate }, maf: Math.min(alternate, 1 - alternate) };
+}
+
+/** Biallelic diploid HWE ki-kare testi; allel frekansi tahmin edildigi icin df=1. */
+export function hardyWeinbergTest(counts) {
+  const frequencies = genotypeFrequencies(counts);
+  const { n, allele } = frequencies;
+  if (n === 0 || allele.alternate === 0 || allele.alternate === 1) return { ...frequencies, expected: [NaN, NaN, NaN], chi2: NaN, df: 0, p: NaN, minExpected: NaN, reliable: false };
+  const p = allele.alternate;
+  const expected = [n * (1 - p) ** 2, n * 2 * p * (1 - p), n * p ** 2];
+  const chi2 = counts.reduce((sum, observed, index) => sum + ((observed - expected[index]) ** 2) / expected[index], 0);
+  const minExpected = Math.min(...expected);
+  return { ...frequencies, expected, chi2, df: 1, p: chiSquareP(chi2, 1), minExpected, reliable: minExpected >= 5 };
+}
+
+/** Allel sayimlarindan case/control OR ve Wald %95 guven araligi. */
+export function allelicOddsRatio(table) {
+  requireGenotypeTable(table);
+  const control = genotypeFrequencies(table[0]);
+  const cases = genotypeFrequencies(table[1]);
+  const controlAlt = table[0][1] + 2 * table[0][2];
+  const controlRef = 2 * control.n - controlAlt;
+  const caseAlt = table[1][1] + 2 * table[1][2];
+  const caseRef = 2 * cases.n - caseAlt;
+  if ([controlAlt, controlRef, caseAlt, caseRef].some((count) => count === 0)) return { oddsRatio: NaN, ci95: [NaN, NaN], standardError: NaN, note: "Sifir allel hucresi nedeniyle Wald odds ratio hesaplanamadi." };
+  const oddsRatio = (caseAlt * controlRef) / (caseRef * controlAlt);
+  const standardError = Math.sqrt(1 / caseAlt + 1 / caseRef + 1 / controlAlt + 1 / controlRef);
+  const logOdds = Math.log(oddsRatio);
+  return { oddsRatio, ci95: [Math.exp(logOdds - 1.96 * standardError), Math.exp(logOdds + 1.96 * standardError)], standardError, note: null };
+}
+
+/** Fisher-Freeman-Halton iki-tarafli exact p-degeri (2xC, sabit marjinler). */
+export function fisherFreemanHaltonTest(table) {
+  if (!Array.isArray(table) || table.length !== 2 || table[0].length !== table[1].length || table[0].length < 2) throw new TypeError("Fisher-Freeman-Halton tablosu 2xC olmali");
+  for (const count of table.flat()) if (!Number.isSafeInteger(count) || count < 0) throw new TypeError("tablo sayimlari negatif olmayan tamsayi olmali");
+  const columns = table[0].map((count, index) => count + table[1][index]);
+  const row0 = table[0].reduce((sum, count) => sum + count, 0);
+  const row1 = table[1].reduce((sum, count) => sum + count, 0);
+  const total = row0 + row1;
+  if (total === 0 || columns.some((count) => count === 0)) return { p: NaN, observedProbability: NaN, tables: 0 };
+  const constant = gammaln(row0 + 1) + gammaln(row1 + 1) + columns.reduce((sum, count) => sum + gammaln(count + 1), 0) - gammaln(total + 1);
+  const logProbability = (firstRow) => constant - firstRow.reduce((sum, value, index) => sum + gammaln(value + 1) + gammaln(columns[index] - value + 1), 0);
+  const observed = logProbability(table[0]);
+  const firstRow = new Array(columns.length).fill(0);
+  let p = 0;
+  let tables = 0;
+  function enumerate(column, remaining) {
+    if (column === columns.length - 1) {
+      if (remaining < 0 || remaining > columns[column]) return;
+      firstRow[column] = remaining;
+      const logP = logProbability(firstRow);
+      tables += 1;
+      if (logP <= observed + 1e-12) p += Math.exp(logP);
+      return;
+    }
+    const rest = columns.slice(column + 1).reduce((sum, count) => sum + count, 0);
+    for (let value = Math.max(0, remaining - rest); value <= Math.min(columns[column], remaining); value++) {
+      firstRow[column] = value;
+      enumerate(column + 1, remaining - value);
+    }
+  }
+  enumerate(0, row0);
+  return { p: Math.min(1, p), observedProbability: Math.exp(observed), tables };
+}
+
+/** E/18'in izinli 2x3 aggregate tablosundan tum standart genomik ozetleri uretir. */
+export function summarizeGenomicTable(table) {
+  requireGenotypeTable(table);
+  const chiSquare = chiSquareTest(table);
+  return { groups: table.map((counts) => ({ frequencies: genotypeFrequencies(counts), hwe: hardyWeinbergTest(counts) })), association: { chiSquare, fisher: chiSquare.reliable ? null : fisherFreemanHaltonTest(table), oddsRatio: allelicOddsRatio(table) } };
+}
+
 export function benjaminiHochberg(pValues) {
   const m = pValues.length;
   if (m === 0) return [];
