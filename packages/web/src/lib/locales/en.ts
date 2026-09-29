@@ -645,4 +645,14 @@ export const EN: Record<string, string> = {
     "Your commitment was added to the curator tree (position #{index}), but the curator service is not authorised to write the root on chain. This is not a step you can complete: the operator has to transfer root-writing authority to the curator wallet. Once that is done, try again from this page - your commitment is kept, you do not need to create it again.",
   "Taahhut kuratora eklendi ancak kok zincirde henuz guncellenmedi (kurator: {tree}, zincir: {chain}). Birkac dakika sonra yeniden deneyin.":
     "The commitment was added to the curator, but the on-chain root is not updated yet (curator: {tree}, chain: {chain}). Try again in a few minutes.",
+
+  "DURUM OKUNUYOR": "READING STATUS",
+  "DEPLOY EDILMEDI": "NOT DEPLOYED",
+  "DAGITILDI - ZINCIR OKUNAMADI": "DEPLOYED - CHAIN UNREADABLE",
+  "DAGITILDI - {count} KATILIMCI": "DEPLOYED - {count} PARTICIPANTS",
+  "DAGITILDI - {count}/{target} KATILIMCI": "DEPLOYED - {count}/{target} PARTICIPANTS",
+  "sentetiktir": "is synthetic",
+  "gercek veridir": "is real data",
+  "E/19 klinik yigini Sepolia'ya dagitildi{block}. Kohort {synthetic}. Bu ekran yalnizca onam sinirlarini ilan eder; onami zincire yazan akis ayridir ve buradan tetiklenmez.":
+    "The E/19 clinical stack is deployed on Sepolia{block}. The cohort {synthetic}. This screen only declares the consent boundaries; the flow that writes consent on chain is separate and is not triggered from here.",
 };

@@ -63,6 +63,20 @@ export function readRunner(runner: BrowserProvider | Signer): BrowserProvider | 
   return readProvider;
 }
 
+/**
+ * Cuzdan baglanmadan da kullanilabilen salt-okunur saglayici.
+ *
+ * Bazi ekranlar zincir durumunu yalnizca GOSTERIR ve bunun icin kullanicinin
+ * cuzdan baglamasini beklemek dogru degil: bilgi cuzdana bagli degil, zincire
+ * bagli. Alternatif, durumu sayfaya sabit yazmakti - klinik onam ekraninda
+ * tam olarak bu yapilmis ve dagitim gerceklestikten sonra metin "deploy
+ * edilmedi" demeye devam etmisti.
+ */
+export function publicProvider(): JsonRpcProvider {
+  readProvider ??= new JsonRpcProvider(READ_RPC);
+  return readProvider;
+}
+
 export function getProtocol(runner: BrowserProvider | Signer | Provider) {
   return new Contract(CONTRACTS.VeriarfyProtocol, PROTOCOL_ABI, runner);
 }
