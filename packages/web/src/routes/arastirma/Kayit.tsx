@@ -7,6 +7,8 @@ import { enroll, getMerklePath } from "../../lib/curator";
 import { formatToken, getPaymentToken, getPayments, readResearcherReadiness, type ResearcherReadiness } from "../../lib/protocol";
 import { useSession } from "../../lib/session";
 import {
+  EXTERNAL_NULLIFIER,
+  computeNullifierHash,
   createIdentity,
   deserializeIdentity,
   generateProof,
@@ -44,27 +46,24 @@ type Action = "register" | "approve" | null;
 function storedIdentity(address: string | null | undefined): Identity | null {
   if (!address) return null;
 
-  let raw = window.localStorage.getItem(identityKey(address));
-
-  // Tek anahtarli surumden gecis: eski kimlik, o sirada bagli olan cuzdana
-  // aitti. Ilk acilista onu bu adresin altina taşıyoruz, yoksa daha once
-  // kaydolmus kullanici kendi kimligini kaybeder ve bir daha ayni nullifier'i
-  // kullanamadigi icin kaydini kurtaramaz. Tasima yalnizca bu adresin kendi
-  // kaydi henuz yoksa yapilir.
-  if (!raw) {
-    const legacy = window.localStorage.getItem(LEGACY_IDENTITY_KEY);
-    if (legacy) {
-      window.localStorage.setItem(identityKey(address), legacy);
-      window.localStorage.removeItem(LEGACY_IDENTITY_KEY);
-      raw = legacy;
-    }
-  }
-
+  const raw = window.localStorage.getItem(identityKey(address));
   if (!raw) return null;
 
   try {
     return deserializeIdentity(raw);
   } catch {
+    return null;
+  }
+}
+
+function legacyIdentity(): Identity | null {
+  const raw = window.localStorage.getItem(LEGACY_IDENTITY_KEY);
+  if (!raw) return null;
+
+  try {
+    return deserializeIdentity(raw);
+  } catch {
+    window.localStorage.removeItem(LEGACY_IDENTITY_KEY);
     return null;
   }
 }
@@ -105,9 +104,67 @@ export function Kayit() {
 
   // Cuzdan degisince kimlik de degismeli; aksi halde yeni hesap eski hesabin
   // harcanmis nullifier'iyla kaydolmaya calisir.
+  //
+  // Tek anahtarli surumden gecis burada yapiliyor ve ZINCIRE SORULUYOR. Eski
+  // kimligi kosulsuz devralmak yanlis olurdu: o kimlik baska bir cuzdanla
+  // kaydolmus olabilir, nullifier'i harcanmistir ve devralan cuzdan her
+  // denemede `NullifierAlreadySpent` alir - tam da duzeltmeye calistigimiz
+  // hatanin aynisi. Harcanmamissa devralinir (kullanici kaydini kaybetmesin),
+  // harcanmissa atilir: kayit zincirde kalici oldugu icin harcanmis bir
+  // kimligin baska bir isi kalmaz.
   useEffect(() => {
-    setIdentity(storedIdentity(address));
-  }, [address]);
+    let cancelled = false;
+
+    async function load() {
+      if (!address) {
+        setIdentity(null);
+        return;
+      }
+
+      const own = storedIdentity(address);
+      if (own) {
+        if (!cancelled) setIdentity(own);
+        return;
+      }
+
+      const legacy = legacyIdentity();
+      if (!legacy) {
+        if (!cancelled) setIdentity(null);
+        return;
+      }
+
+      // Zincire soramiyorsak eski kimligi TASIMIYORUZ. Yanlis tarafa dusmek
+      // kullaniciyi cozumu olmayan bir hataya kilitler; tasimamak ise en
+      // fazla yeni bir kimlik uretilmesine yol acar.
+      if (!provider || chainId !== SEPOLIA_CHAIN_ID) {
+        if (!cancelled) setIdentity(null);
+        return;
+      }
+
+      try {
+        const hash = computeNullifierHash(EXTERNAL_NULLIFIER, legacy.nullifier);
+        const spent = (await getRegistry(provider).nullifierSpent(hash)) as boolean;
+        if (cancelled) return;
+
+        if (spent) {
+          window.localStorage.removeItem(LEGACY_IDENTITY_KEY);
+          setIdentity(null);
+          return;
+        }
+
+        window.localStorage.setItem(identityKey(address), serializeIdentity(legacy));
+        window.localStorage.removeItem(LEGACY_IDENTITY_KEY);
+        setIdentity(legacy);
+      } catch {
+        if (!cancelled) setIdentity(null);
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [address, chainId, provider]);
   const [action, setAction] = useState<Action>(null);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<{ kind: "warn" | "ok" | "info"; text: string } | null>(null);

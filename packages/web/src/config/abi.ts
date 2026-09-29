@@ -4,6 +4,10 @@ export const REGISTRY_ABI = [
   "function isRegistered(address) view returns (bool)",
   "function researcherCount() view returns (uint256)",
   "function currentRoot() view returns (uint256)",
+  // Tek anahtarli surumden devralinan kimligin hala kullanilabilir olup
+  // olmadigini anlamak icin; harcanmis bir nullifier devralinirsa cuzdan
+  // cozumu olmayan bir hataya kilitlenir.
+  "function nullifierSpent(uint256) view returns (bool)",
   "function register(uint256 root, uint256 nullifierHash, uint256[2] pA, uint256[2][2] pB, uint256[2] pC)",
   "event ResearcherRegistered(address indexed account, uint256 indexed nullifierHash)",
 ] as const;
