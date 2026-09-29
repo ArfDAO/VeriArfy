@@ -220,6 +220,15 @@ döner. Üretimde her düğüm ayrı kurumda, ayrı anahtarla, ayrı politikayla
 
 ## Kurulum
 
+**`@pkgjs/parseargs` neden kök bağımlılıkta:** doğrudan kullanılmıyor;
+`jackspeak` onu *isteğe bağlı* bağımlılık olarak bildiriyor ve npm bunu
+sürümüne göre kilide yazıp yazmamayı değiştiriyor. Sonuç: aynı kilit dosyası
+npm 9/10/11 ile **farklı ağaçlar** üretiyordu (1314 / 1327 / 1398 paket) ve
+Vercel'de `npm ci` "Missing: @pkgjs/parseargs from lock file" ile düşüyordu.
+Açıkça bildirilince üç sürüm de aynı ağacı kuruyor (1328). Kaldırmayın;
+kaldırılırsa hata yerelde görünmeden yalnızca dağıtımda geri gelir.
+
+
 Gereken: Node 20+, Rust (wasm hedefiyle), Python 3.11 (yalnızca ML köprüsü için).
 
 ```bash
