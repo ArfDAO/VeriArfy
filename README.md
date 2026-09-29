@@ -215,6 +215,30 @@ bunu gizlemez, açılışta uyarır ve sağlık ucunda `independentNodes: false`
 döner. Üretimde her düğüm ayrı kurumda, ayrı anahtarla, ayrı politikayla
 çalışmalıdır.
 
+**Teminat eşiği büyür — izlenmesi gerekir.** `minStake()` havuzun toplam
+değeriyle birlikte yükselir (progresif teminat, rapor 2.7.1). Sabit bir
+teminat bir süre sonra eşiğin altında kalır ve düğüm sessizce
+`canApprove=false` olur. O anda servis çalışır, tarama başarılıdır,
+`lastError` boştur — yani **dışarıdan sağlıklı görünür ama hiçbir talebi
+onaylayamaz.** Bu bir kez yaşandı.
+
+Sağlık ucu bu yüzden `canApproveAny` ve düğüm başına `readiness` döndürür:
+
+```
+canApproveAny: true
+readiness: [{ authorized, canApprove, stake, requiredStake, gas, lowGas }]
+```
+
+`canApproveAny: false` görüldüğünde teminat yenilenmelidir:
+
+```
+NODE_WALLETS=... npx hardhat run scripts/bootstrap-nodes.ts --network sepolia
+```
+
+Betik hedefi eşiğin **4 katı** olarak alır; sadece eşiği karşılamak bir
+sonraki sorguda yine yetersiz kalırdı.
+
+
 
 ---
 

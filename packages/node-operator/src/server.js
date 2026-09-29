@@ -46,7 +46,13 @@ const PROTOCOL_ABI = [
   "function minParticipants() view returns (uint32)",
   "function nextRequestId() view returns (uint256)",
 ];
-const STAKING_ABI = ["function canApprove(address) view returns (bool)"];
+const STAKING_ABI = [
+  "function canApprove(address) view returns (bool)",
+  // Saglik raporu icin: teminatin esige gore NEREDE oldugunu gostermek,
+  // yalnizca "yetersiz" demekten cok daha kullanisli.
+  "function stakeOf(address) view returns (uint256)",
+  "function minStake() view returns (uint256)",
+];
 
 function loadNodeKeys() {
   // Barindirilan ortamda dosya yok; anahtarlar ortam degiskeninden gelir.
@@ -97,7 +103,53 @@ if (wallets.length > 1) {
 }
 
 /** Son onay denemesinin sonucu - saglik ucu bunu gosterir. */
-const state = { lastScan: null, lastError: null, approved: [], skipped: 0 };
+const state = { lastScan: null, lastError: null, approved: [], skipped: 0, readiness: [] };
+
+/**
+ * Dugumlerin onay VEREBILIR durumda olup olmadigini olcer.
+ *
+ * NEDEN SAGLIK UCUNDA: teminat esigi (`minStake`) havuzun toplam degeriyle
+ * birlikte buyuyor. Sabit bir teminat bir sure sonra esigin altinda kaliyor
+ * ve dugum sessizce `canApprove=false` oluyor. O anda servis calisiyor, tarama
+ * basarili, `lastError` bos - yani DISARIDAN SAGLIKLI GORUNUYOR, ama hicbir
+ * talebi onaylayamiyor. Tam olarak bu yasandi.
+ *
+ * Calisir gorunmek ile calismak arasindaki farki gosteren tek sey bu alan.
+ */
+async function measureReadiness() {
+  const rows = [];
+  let required = null;
+  try {
+    required = await staking.minStake();
+  } catch {
+    /* esik okunamadi; asagida null olarak raporlanir */
+  }
+
+  for (const wallet of wallets) {
+    try {
+      const [authorized, staked, approves, gas] = await Promise.all([
+        readProtocol.isAuthorizedNode(wallet.address),
+        staking.stakeOf(wallet.address),
+        staking.canApprove(wallet.address),
+        provider.getBalance(wallet.address),
+      ]);
+      rows.push({
+        node: wallet.address,
+        authorized,
+        canApprove: approves,
+        stake: ethers.formatEther(staked),
+        requiredStake: required === null ? null : ethers.formatEther(required),
+        gas: ethers.formatEther(gas),
+        // Gaz bitince onay islemi gonderilemez; teminat yeterli olsa bile
+        // servis durur. Esik dusuk ama sifirdan buyuk olmali.
+        lowGas: gas < ethers.parseEther("0.002"),
+      });
+    } catch (error) {
+      rows.push({ node: wallet.address, error: error.shortMessage ?? error.message });
+    }
+  }
+  state.readiness = rows;
+}
 
 // Ayni cuzdanin iki islemi ayni nonce'u almasin diye cuzdan basina siraya dizilir.
 const chains = new Map(wallets.map((w) => [w.address, Promise.resolve()]));
@@ -176,6 +228,7 @@ async function scan() {
       if (finalized || revoked) continue;
       await considerRequest(id);
     }
+    await measureReadiness();
     state.lastScan = new Date().toISOString();
     state.lastError = null;
   } catch (error) {
@@ -197,6 +250,9 @@ createServer((req, res) => {
       nodes: wallets.map((w) => w.address),
       independentNodes: wallets.length === 1,
       pollMs: POLL_MS,
+      // `lastError` bos olmasi yetmez: hicbir dugum onay veremiyorsa servis
+      // hatasiz calisip hicbir ise yaramiyordur.
+      canApproveAny: state.readiness.some((r) => r.canApprove === true),
       ...state,
     }),
   );
