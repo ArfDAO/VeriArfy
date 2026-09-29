@@ -682,4 +682,6 @@ export const EN: Record<string, string> = {
   "Paylar serbest birakilamadi.": "The shares could not be released.",
   "Ucret sorgu acilirken emanete alindi ve acilim yetkisi verildi; paylar henuz dagitilmadi. Dagitimi siz baslatabilirsiniz, arastirmaciyi beklemeniz gerekmiyor.":
     "The fee was escrowed when the query was opened and the disclosure was granted; the shares have not been distributed yet. You can start the distribution yourself - there is no need to wait for the researcher.",
+  "Kurator servisi uyaniyor, bu ilk istekte yarim dakikayi bulabilir...":
+    "The curator service is waking up; the first request can take up to half a minute...",
 };

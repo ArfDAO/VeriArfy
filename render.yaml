@@ -14,12 +14,24 @@
 # Kok guncellemesi (`curator:push-root`) bilincli olarak elle calistirilir —
 # zincire yazan bir islemi barindirilan servise vermek, anahtari oraya
 # koymak demekti.
+
+# KURULUM KOMUTLARI NEDEN HEDEFLI
+#
+# Kok `npm install` TUM calisma alanlarini kuruyor: hardhat, truffle, web3 ve
+# sozlesme araclari dahil 800 paket. Bu servislerin ihtiyaci ise 65 paket.
+# Fark yalnizca disk degil: agir agacta `keccak`, `secp256k1`, `blake-hash`
+# gibi yerel derleme gerektiren paketler var ve Render'in sectigi yeni Node
+# surumu icin hazir ikili bulunmadiginda bunlar KAYNAKTAN derleniyor. Ilk
+# servis olusturma bu yuzden dakikalarca suruyordu.
+#
+# `--workspace` ile yalniz ilgili paketin bagimliliklari kuruluyor; calisma
+# alani baglantilari (ornegin @veriarfy/circuits) korunuyor.
 services:
   - type: web
     name: veriarfy-curator
     runtime: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm install --workspace packages/curator
     startCommand: node packages/curator/src/server.js
     envVars:
       - key: CURATOR_PORT
@@ -56,7 +68,7 @@ services:
     name: veriarfy-node-operator
     runtime: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm install --workspace packages/node-operator
     startCommand: node packages/node-operator/src/server.js
     envVars:
       - key: NODE_OPERATOR_PORT
