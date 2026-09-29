@@ -21,9 +21,19 @@ import { isAbsolute, join } from "node:path";
 
 import { ethers, network } from "hardhat";
 
-/** Dugum basina yatirilacak teminat. minStake() havuz degeriyle olceklendigi
- *  icin taban degerin (0,001 ETH) uzerine pay birakiyoruz. */
-const STAKE = ethers.parseEther("0.005");
+/**
+ * Teminat, o anki `minStake()` degerinin bu kati kadar yatirilir.
+ *
+ * SABIT BIR TUTAR YETMEZ. `minStake()` havuzun toplam degeriyle birlikte
+ * BUYUYOR (progresif teminat). Sabit 0,005 ETH yatirildiginda esik bir sure
+ * sonra onu asti ve dugumler sessizce `canApprove=false` oldu: servis
+ * calisiyor, hata vermiyor, ama hicbir talebi onaylayamiyordu. Pay birakmak
+ * bu sessiz durusu geciktirir; tamamen engellemek icin izleme sart.
+ */
+const STAKE_MULTIPLIER = 4n;
+
+/** Havuz henuz degersizken bile anlamli bir taban. */
+const MIN_STAKE_FLOOR = ethers.parseEther("0.005");
 /** Onay islemlerinin gazi icin dugumde birakilan tutar. */
 const GAS_BUFFER = ethers.parseEther("0.004");
 
@@ -63,16 +73,23 @@ async function main() {
       continue;
     }
 
-    // Zaten yeterli teminati varsa dokunmuyoruz: betik tekrar calistirildiginda
-    // ikinci kez para yatirmasin.
     const staked = await staking.stakeOf(address);
     const required = await staking.minStake();
-    if (staked >= required) {
-      console.log(`  teminat yeterli (${ethers.formatEther(staked)} ETH) - atlandi`);
+
+    // HEDEF, esigin KATI olarak belirlenir. Sadece esigi karsilamak yeterli
+    // degil: esik havuz buyudukce yukseliyor ve dugum bir sonraki sorguda
+    // yine altinda kalirdi.
+    let target = required * STAKE_MULTIPLIER;
+    if (target < MIN_STAKE_FLOOR) target = MIN_STAKE_FLOOR;
+
+    console.log(`  esik ${ethers.formatEther(required)} / mevcut ${ethers.formatEther(staked)} / hedef ${ethers.formatEther(target)}`);
+
+    if (staked >= target) {
+      console.log("  teminat yeterli - atlandi");
       continue;
     }
 
-    const missing = required > STAKE ? required - staked : STAKE - staked;
+    const missing = target - staked;
     const balance = await ethers.provider.getBalance(address);
     const needed = missing + GAS_BUFFER;
 
