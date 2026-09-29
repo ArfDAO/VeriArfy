@@ -655,4 +655,16 @@ export const EN: Record<string, string> = {
   "gercek veridir": "is real data",
   "E/19 klinik yigini Sepolia'ya dagitildi{block}. Kohort {synthetic}. Bu ekran yalnizca onam sinirlarini ilan eder; onami zincire yazan akis ayridir ve buradan tetiklenmez.":
     "The E/19 clinical stack is deployed on Sepolia{block}. The cohort {synthetic}. This screen only declares the consent boundaries; the flow that writes consent on chain is separate and is not triggered from here.",
+
+  "Etki buyuklugu ve kalite": "Effect size and quality",
+  "ODDS ORANI + HWE": "ODDS RATIO + HWE",
+  "ODDS ORANI (%95 CI)": "ODDS RATIO (95% CI)",
+  "MAF K/V": "MAF CTRL/CASE",
+  "HWE p (KONTROL)": "HWE p (CONTROLS)",
+  "CSV indir": "Download CSV",
+  "JSON indir": "Download JSON",
+  "Odds orani alel sayimlarindan hesaplanir. Guven araligi genisse etkinin yonu bile belirsizdir; kucuk kohortta beklenen durum budur. Beklenen hucre 5'in altindayken ki-kare yerine Fisher exact p gecerlidir. HWE yalniz kontrol grubunda degerlendirilir - vakadaki sapma iliskinin kendisinden gelebilir.":
+    "The odds ratio is computed from allele counts. A wide confidence interval means even the direction of the effect is uncertain; that is expected in a small cohort. When an expected cell is below 5, the Fisher exact p applies instead of chi-square. HWE is assessed in controls only - a deviation among cases can come from the association itself.",
+  "Bazı varyantlarda sifir alel hucresi var; odds orani hesaplanamadi.":
+    "Some variants have a zero allele cell, so the odds ratio could not be computed.",
 };

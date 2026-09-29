@@ -287,6 +287,10 @@
 .table__row { border-bottom: 1px solid var(--border-subtle); font-size: .77rem; }
 .table__head--gwas, .table__row--gwas { grid-template-columns: 1fr 1.1fr 1.1fr .7fr .9fr .9fr; min-width: 620px; }
 .table__head--welch, .table__row--welch { grid-template-columns: 1.3fr 1.5fr 1.5fr .6fr .8fr; min-width: 560px; }
+/* Etki buyuklugu + kalite tablosu. Mevcut --gwas izgarasi kasitli olarak
+   degistirilmedi: calisan bir duzeni genisletmek yerine yanina ayri bir tablo
+   konuldu, boylece eklenen kolonlar eskisini kaydirmiyor. */
+.table__head--effect, .table__row--effect { grid-template-columns: 1fr 1.6fr .9fr .8fr .9fr; min-width: 640px; }
 .table__row--gwas.is-hit { background: var(--status-success-surface); }
 .progress { height: .25rem; overflow: hidden; border-radius: .125rem; background: var(--surface-muted); }
 .progress__fill, .bar-fill { height: 100%; background: var(--accent-primary); }
@@ -554,3 +558,5 @@
 @media (max-width: 820px) {
   .pricing-explain { grid-template-columns: 1fr; }
 }
+
+.research-results__export { gap: var(--spacing-12); }
