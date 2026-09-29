@@ -132,16 +132,40 @@ dar bir kanıt gönderip sonra maskeyle genişletirdi.
 
 | sözleşme | adres |
 |---|---|
-| VeriarfyProtocol | `0xcD3B1a850Eb33AC74786030919E0203005675CFB` |
-| VeriarfyPayments | `0x46d6CE86163Cc76168AdE12CC9b07034139B9507` |
-| VeriarfyBiomarkers | `0xEe4804448fC0E246763868C90Ca8A1B4CfA8014f` |
-| DataProvenanceVerifier | `0x67c4Cb7E33602394827fc7186B205dAd9F0fA1a3` |
-| VeriArfyRegistry | `0xfc6b3eeA139c3FDe044a52c65CdC6D0ff71c790B` |
-| VeriarfyStaking | `0xc3e1ae7fC78be045Ac9C80D7C453B03356B69f7f` |
-| VeriarfyStorage | `0x5DbC770ed983Be52359B47D971598F09Aa4fD058` |
+| VeriarfyProtocol | `0x273FF690e1070e9F18ebef4823c2bC73D3E40AAE` |
+| VeriarfyPayments | `0x448800a2AfDDa4918aC6Fe621C506FBD09fFE37b` |
+| VeriarfyBiomarkers | `0x02FB666Fd374A6585Ae635b8C0eE5C347E50fA6a` |
+| DataProvenanceVerifier | `0x853Fa62357Be96f6463f5b6927436371C35E85C3` |
+| VeriArfyRegistry | `0xcd1FeaCe584d95f20A3695586aD59411C4Cda267` |
+| VeriarfyStaking | `0x5d06da5Bc53D69547c562cc6194f296Ab3aFf44A` |
+| VeriarfyStorage | `0x03504F85c474aafF7718A85fcCa15A13A6BB64ed` |
+| Groth16Verifier | `0x0CCC953CA14a1842E4f13454304D8359d398A24d` |
+| AnxietyStudy | `0xb7BBD086713C229c41729621F185Efb239F68C03` |
+| PaymentToken (test) | `0x2ee18AbC5C72FAF378675fD7D68093F09A89f319` |
 
-Blok `11647006` itibarıyla geçerli. Nonce-24 yeniden dağıtımının işlem
-kayıtları ve canlı kabul kanıtı [D15 operatör planında](docs/D15-REDEPLOY.md).
+Blok `11807543` itibarıyla geçerli (2026-09-29).
+Eşik 2/2, `MIN_PARTICIPANTS = 10`.
+
+Bu dağıtımdaki **her anahtar proje ekibinde**: deployer, iki yetkili düğüm ve
+kök yazan kurator cüzdanı. Bir önceki nonce-24 dağıtımında düğüm ve sahip
+anahtarları erişilebilir degildi; `approveDisclosure` hem `isAuthorizedNode`
+hem teminat sarti aradigi icin arastirmaci o dagitimda bir sorgunun sonucunu
+hicbir zaman ALAMAZDI. O dagitimin islem kayitlari
+[D15 operatör planında](docs/D15-REDEPLOY.md) durmaya devam ediyor.
+
+### Rol ayrimi
+
+| rol | adres | yetkisi |
+|---|---|---|
+| deployer / sahip | `0xD37Df9f97E5e1D285a5B6143e2FB970fD9B108D4` | Protocol, Payments, Staking yonetimi |
+| kurator | `0xdEE96eF2dd20bDC98b4673e1496f1824FE1Ca2E0` | **yalnizca** `VeriArfyRegistry.updateRoot` |
+| yetkili dugum 1 | `0xCc49139712cc1816121607BF3993e7CaE0E67af8` | `approveDisclosure`, `heartbeat` |
+| yetkili dugum 2 | `0xa3f313FcB16040F1D669afc8657c9e118D79B4C7` | `approveDisclosure`, `heartbeat` |
+
+Registry sahipligi kasitli olarak deployer'da DEGIL. Kok yazimi kurator
+servisinin otomatik yaptigi bir is oldugu icin anahtari barindirilan servise
+girmek gerekiyor; o anahtarin ele gecmesi halinde kaybedilen tek sey akredite
+agac kokudur, protokolun yonetimi degil.
 
 ---
 
