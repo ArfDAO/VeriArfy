@@ -76,6 +76,7 @@ describe("Web ABI senkronizasyonu", () => {
     PAYMENTS_ABI: "VeriarfyPayments",
     REGISTRY_ABI: "VeriArfyRegistry",
     STUDY_ABI: "AnxietyStudy",
+    BMI_DEMO_ABI: "VeriarfyBmiDemo",
     STORAGE_ABI: "VeriarfyStorage",
     ERC20_ABI: "StableTestToken",
   };

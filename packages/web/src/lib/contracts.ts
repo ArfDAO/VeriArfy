@@ -2,13 +2,18 @@ import { Contract, type BrowserProvider, type Signer } from "ethers";
 
 import { CONTRACTS } from "../config";
 import { REGISTRY_ABI, STUDY_ABI } from "../config/abi";
+import { readRunner } from "./protocol";
 
+// Imzalayan dokunulmadan gecer (yazma), saglayici ise dogrudan okuma
+// saglayicisina yonlendirilir. Gerekcesi `protocol.ts` icindeki `readSafe`
+// aciklamasinda: cuzdan RPC'si toplu `eth_call` isteklerinde dusuyor ve bu,
+// okuyan her ekranda ayri ayri hatirlanmasi gereken bir kural olmamali.
 export function getRegistry(runner: BrowserProvider | Signer) {
-  return new Contract(CONTRACTS.VeriArfyRegistry, REGISTRY_ABI, runner);
+  return new Contract(CONTRACTS.VeriArfyRegistry, REGISTRY_ABI, readRunner(runner));
 }
 
 export function getStudy(runner: BrowserProvider | Signer) {
-  return new Contract(CONTRACTS.AnxietyStudy, STUDY_ABI, runner);
+  return new Contract(CONTRACTS.AnxietyStudy, STUDY_ABI, readRunner(runner));
 }
 
 /** Bir adresin calisma durumunu okur. */

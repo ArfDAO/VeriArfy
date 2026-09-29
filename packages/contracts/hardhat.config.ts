@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import dotenv from "dotenv";
@@ -33,6 +34,19 @@ const isPreflightInvocation = invokesScript("preflight");
 const isProofCheckInvocation = invokesScript("proof-check");
 const isRedeployInvocation = invokesScript("d15-redeploy");
 const isRedeployPlanInvocation = invokesScript("d15-redeploy-plan-write");
+const isBmiDemoInvocation =
+  invokesScript("bmi-demo-preflight") ||
+  invokesScript("deploy-bmi-demo") ||
+  invokesScript("create-bmi-demo-wallet") ||
+  invokesScript("bmi-demo-live-check");
+const isE19DemoInvocation =
+  invokesScript("create-e19-demo-wallet") ||
+  invokesScript("e19-deploy") ||
+  invokesScript("e19-preflight") ||
+  invokesScript("e19-cohort-init") ||
+  invokesScript("e19-cohort-fund") ||
+  invokesScript("e19-cohort-batch") ||
+  invokesScript("e19-cohort-participant");
 const requestedLiveCheckStage = process.env.LIVE_CHECK_STAGE?.trim();
 if (requestedLiveCheckStage && !isLiveCheckInvocation) {
   throw new Error(
@@ -84,6 +98,16 @@ if (executionAck && !isD15Profile) {
 // Once yerel, sonra kok: yerel bir .env varsa o kazanir.
 if (!isLiveCheckConfigured && !isD15Profile && !isD17Invocation) {
   dotenv.config();
+  // Teknofest BMI parity cüzdani ana depodaki deployer'dan tamamen ayridir.
+  // Dosya git-disi kalir ve yalnızca BMI demo betikleri cagirilirken yuklenir.
+  if (isBmiDemoInvocation) dotenv.config({ path: join(__dirname, ".env.bmi-demo") });
+  // E/19 sentetik profilinin deployer anahtari ana proje deployer'ından ayrıdır.
+  // FarukOS kasasi varsa once oradan okunur; eski yerel dosya yalniz geriye
+  // uyumluluk icin kullanilir ve yeni anahtarlar bu yola yazilmaz.
+  if (isE19DemoInvocation) {
+    const e19Vault = join(process.env.USERPROFILE ?? "", "FarukOS", "🔐 400-Vault", "VeriArfy", "e19-demo.key");
+    dotenv.config({ path: existsSync(e19Vault) ? e19Vault : join(__dirname, ".env.e19-demo") });
+  }
   dotenv.config({ path: join(__dirname, "..", "..", ".env") });
 }
 

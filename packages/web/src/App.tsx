@@ -21,10 +21,13 @@ const VeriYukle = lazy(async () => ({ default: (await import("./routes/panel/Ver
 const Kazanclar = lazy(async () => ({ default: (await import("./routes/panel/Kazanclar")).Kazanclar }));
 const Gizlilik = lazy(async () => ({ default: (await import("./routes/panel/Gizlilik")).Gizlilik }));
 const Dogrulama = lazy(async () => ({ default: (await import("./routes/panel/Dogrulama")).Dogrulama }));
+const KlinikOnam = lazy(async () => ({ default: (await import("./routes/panel/KlinikOnam")).KlinikOnam }));
 const Kayit = lazy(async () => ({ default: (await import("./routes/arastirma/Kayit")).Kayit }));
 const VeriAl = lazy(async () => ({ default: (await import("./routes/arastirma/VeriAl")).VeriAl }));
 const Sorgular = lazy(async () => ({ default: (await import("./routes/arastirma/Sorgular")).Sorgular }));
 const Sonuclar = lazy(async () => ({ default: (await import("./routes/arastirma/Sonuclar")).Sonuclar }));
+const E18Parity = lazy(async () => ({ default: (await import("./routes/arastirma/E18Parity")).E18Parity }));
+const BmiParityDemo = lazy(async () => ({ default: (await import("./routes/BmiParityDemo")).BmiParityDemo }));
 const Dugum = lazy(async () => ({ default: (await import("./routes/arastirma/Dugum")).Dugum }));
 
 /**
@@ -141,11 +144,13 @@ export default function App() {
       <Routes>
         <Route path="/" element={<AnaSayfa />} />
         <Route path="/giris" element={<Giris />} />
+        <Route path="/demo/bmi-parity" element={<BmiParityDemo />} />
         <Route path="/panel/*" element={<RoleGate role="veri-sahibi" />}>
           <Route index element={<Ozet />} />
           <Route path="veri-yukle" element={<VeriYukle />} />
           <Route path="kazanclar" element={<Kazanclar />} />
           <Route path="gizlilik" element={<Gizlilik />} />
+          <Route path="klinik-onam" element={<KlinikOnam />} />
           <Route path="dogrulama" element={<Dogrulama />} />
         </Route>
         <Route path="/arastirma/*" element={<RoleGate role="arastirmaci" />}>
@@ -153,6 +158,7 @@ export default function App() {
           <Route path="veri-al" element={<VeriAl />} />
           <Route path="sorgular" element={<Sorgular />} />
           <Route path="sonuclar" element={<Sonuclar />} />
+          <Route path="e18-parity" element={<E18Parity />} />
           <Route path="dugum" element={<Dugum />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

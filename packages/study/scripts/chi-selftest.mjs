@@ -6,7 +6,16 @@
  * icin bu kontrol sart: sessizce yanlis bir p-degeri, "anlamli bulgu"
  * uretirdi.
  */
-import { chiSquareP, chiSquareTest, benjaminiHochberg } from "../src/stats.js";
+import {
+  allelicOddsRatio,
+  chiSquareP,
+  chiSquareTest,
+  fisherFreemanHaltonTest,
+  genotypeFrequencies,
+  hardyWeinbergTest,
+  summarizeGenomicTable,
+  benjaminiHochberg,
+} from "../src/stats.js";
 
 const near = (a, b, tol, label) => {
   const ok = Math.abs(a - b) < tol;
@@ -35,5 +44,20 @@ if (sparse.df !== 1 || !Number.isFinite(sparse.chi2)) process.exitCode = 1;
 const bh = benjaminiHochberg([0.001, 0.008, 0.039, 0.041, 0.042]);
 console.log("  ok  BH:", bh.map((x) => x.toFixed(4)).join(" "));
 for (let i = 1; i < bh.length; i++) if (bh[i] < bh[i - 1] - 1e-12) process.exitCode = 1;
+
+// E/18 genomik ozetleri: elle hesaplanabilir simetrik 2x3 tablo.
+const genomic = [[15, 10, 5], [5, 10, 15]];
+const control = genotypeFrequencies(genomic[0]);
+near(control.allele.alternate, 1 / 3, 1e-12, "kontrol alt allel frekansi");
+near(control.maf, 1 / 3, 1e-12, "kontrol MAF");
+const hwe = hardyWeinbergTest(genomic[0]);
+near(hwe.chi2, 1.875, 1e-12, "HWE ki-kare");
+if (hwe.df !== 1 || hwe.reliable) process.exitCode = 1;
+const odds = allelicOddsRatio(genomic);
+near(odds.oddsRatio, 4, 1e-12, "allel odds ratio");
+const fisher2x2 = fisherFreemanHaltonTest([[1, 9], [11, 3]]);
+near(fisher2x2.p, 0.002759456, 1e-8, "Fisher iki tarafli 2x2");
+const summary = summarizeGenomicTable(genomic);
+if (summary.association.fisher || !summary.association.chiSquare.reliable) process.exitCode = 1;
 
 console.log(process.exitCode ? "\nBASARISIZ" : "\n✓ Ki-kare ve BH dogrulandi.");

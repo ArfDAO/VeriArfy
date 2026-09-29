@@ -63,8 +63,43 @@ export function readRunner(runner: BrowserProvider | Signer): BrowserProvider | 
   return readProvider;
 }
 
+/**
+ * Cuzdan baglanmadan da kullanilabilen salt-okunur saglayici.
+ *
+ * Bazi ekranlar zincir durumunu yalnizca GOSTERIR ve bunun icin kullanicinin
+ * cuzdan baglamasini beklemek dogru degil: bilgi cuzdana bagli degil, zincire
+ * bagli. Alternatif, durumu sayfaya sabit yazmakti - klinik onam ekraninda
+ * tam olarak bu yapilmis ve dagitim gerceklestikten sonra metin "deploy
+ * edilmedi" demeye devam etmisti.
+ */
+export function publicProvider(): JsonRpcProvider {
+  readProvider ??= new JsonRpcProvider(READ_RPC);
+  return readProvider;
+}
+
+/**
+ * KONTRAT KURUCULARI OKUMA YOLUNU KENDILERI SAGLAMLASTIRIR.
+ *
+ * Imzalayan gelirse dokunulmaz - islem gonderilecek demektir. Ama bir
+ * `BrowserProvider` gelirse bu YALNIZCA okuma icindir (yazmak imza ister) ve
+ * cagri cuzdanin RPC'si yerine dogrudan bir saglayiciya yonlendirilir.
+ *
+ * NEDEN BURADA, cagri yerlerinde degil: cuzdan RPC'si toplu `eth_call`
+ * isteklerinde duzenli olarak dusuyor. Bu daha once `readDisclosure` ve
+ * `findOpenQuery` icinde TEK TEK duzeltilmisti; ama kalip her yeni ekranda
+ * tekrar ediyor ve sorgu ekraninda tekrar etti: `Promise.all` icindeki
+ * cagrilar cuzdan uzerinden gidiyor, istek dusuyor, kullanici ACIK bir
+ * sorgusu varken "acik sorgu yok" goruyordu.
+ *
+ * Sagligi tek tek hatirlanmasi gereken bir kural olmaktan cikarip varsayilan
+ * hale getirmek, bu hata sinifini tamamen kapatir.
+ */
+function readSafe(runner: BrowserProvider | Signer | Provider) {
+  return readRunner(runner as BrowserProvider | Signer);
+}
+
 export function getProtocol(runner: BrowserProvider | Signer | Provider) {
-  return new Contract(CONTRACTS.VeriarfyProtocol, PROTOCOL_ABI, runner);
+  return new Contract(CONTRACTS.VeriarfyProtocol, PROTOCOL_ABI, readSafe(runner));
 }
 
 /**
@@ -77,15 +112,15 @@ export function getProtocol(runner: BrowserProvider | Signer | Provider) {
 export function getBiomarkers(runner: BrowserProvider | Signer) {
   const address = CONTRACTS.VeriarfyBiomarkers;
   if (!address) throw new Error("Biyobelirtec modulu bu dagitimda yok.");
-  return new Contract(address, BIOMARKERS_ABI, runner);
+  return new Contract(address, BIOMARKERS_ABI, readSafe(runner));
 }
 
 export function getPayments(runner: BrowserProvider | Signer | Provider) {
-  return new Contract(CONTRACTS.VeriarfyPayments, PAYMENTS_ABI, runner);
+  return new Contract(CONTRACTS.VeriarfyPayments, PAYMENTS_ABI, readSafe(runner));
 }
 
 export function getPaymentToken(runner: BrowserProvider | Signer) {
-  return new Contract(CONTRACTS.PaymentToken, ERC20_ABI, runner);
+  return new Contract(CONTRACTS.PaymentToken, ERC20_ABI, readSafe(runner));
 }
 
 /** Sorgu tipi bit maskesi — kontrattaki `QUERY_TYPE_*` sabitleriyle ayni. */
@@ -432,7 +467,24 @@ export async function readDashboard(
           stage = "onay-bekliyor";
         } else {
           const endsAt = Number(await protocol.challengeWindowEnd(requestId));
-          stage = blockNumber < endsAt ? "itiraz-suresi" : "yurutme-bekliyor";
+          if (blockNumber < endsAt) {
+            stage = "itiraz-suresi";
+          } else {
+            // YETKI VERILDI AMA PAYLAR DAGITILMADI.
+            //
+            // Bu ayrim, katilimci icin belirleyici: `claimable` sorgu
+            // dagitilmadan SIFIR doner, dolayisiyla katilimci ekraninda hicbir
+            // sey gorunmez. Ucret ise `openQuery` sirasinda zaten emanete
+            // alinmistir - yani para durmaktadir, yalnizca serbest
+            // birakilmamistir.
+            //
+            // `settleQuery` erisim kontrolu TASIMAZ: katilimci kendi payini
+            // kendisi serbest birakabilir. Bu asama ayirt edilmezse arastirmaci
+            // dugmeye basmadikca katilimcilar bekler, oysa beklemeleri
+            // gerekmiyordu.
+            const granted = (await protocol.isDisclosureGranted(requestId)) as boolean;
+            stage = granted ? "paylasim-bekliyor" : "yurutme-bekliyor";
+          }
         }
       }
 
@@ -1386,6 +1438,68 @@ export async function stakeNode(signer: Signer, amountWei: bigint): Promise<TxOu
  *
  * @returns En yeni acik sorgu, yoksa `null`.
  */
+/**
+ * Arastirmacinin COZEBILECEGI tum sorgulari dondurur - odemesi dagitilmis
+ * olanlar dahil.
+ *
+ * NEDEN AYRI BIR ARAMA: `findOpenQuery` odemesi dagitilmis sorgulari atlar ve
+ * bu, acik sorgu aramak icin dogrudur. Ama sonuc ekrani yalnizca ona
+ * dayaniyordu; arastirmaci "odemeyi dagit" dugmesine basar basmaz - yani
+ * arayuzun kendisinin yonlendirdigi adimi tamamlayinca - satin aldigi cikti
+ * ekrandan kayboluyordu ve geri getirmenin yolu yoktu.
+ *
+ * Oysa cozum yetkisi (`FHE.allow`) KALICIDIR: geri alinamaz ve odemenin
+ * dagitilmasindan etkilenmez. Yani veri kaybolmus degildi, yalnizca arayuz
+ * onu bulamiyordu.
+ *
+ * Arama zincirden yapilir, tarayici deposundan degil: kullanici cikis
+ * yaptiginda ya da baska bir cihaza gectiginde yerel iz kaybolur, zincirdeki
+ * gercek kaybolmaz.
+ */
+export interface ResearcherQuery {
+  queryId: number;
+  requestId: number;
+  fee: bigint;
+  settled: boolean;
+  /** Cozum yetkisi zincirde verildi mi? Verilmediyse sonuc uretilemez. */
+  granted: boolean;
+}
+
+export async function listResearcherQueries(
+  runner: BrowserProvider | Signer,
+  researcher: string,
+  limit = 25,
+): Promise<ResearcherQuery[]> {
+  const reader = readRunner(runner);
+  const payments = getPayments(reader);
+  const protocol = getProtocol(reader);
+  const total = Number(await payments.nextQueryId());
+
+  const out: ResearcherQuery[] = [];
+  const oldest = Math.max(0, total - limit);
+
+  for (let id = total - 1; id >= oldest; id--) {
+    const q = await payments.query(id);
+    if ((q.researcher as string).toLowerCase() !== researcher.toLowerCase()) continue;
+    // Iadesi yapilmis sorgunun karsiligi yok; listede yeri de yok.
+    if (q.refunded) continue;
+
+    const requestId = Number(q.disclosureRequestId);
+    out.push({
+      queryId: id,
+      requestId,
+      fee: q.fee as bigint,
+      settled: q.settled as boolean,
+      // Henuz yetki verilmemis sorgu LISTEDEN CIKARILMAZ: kullanici parasini
+      // odedigi ve bekledigi sorguyu gormeli, yoksa "sorgum nerede" sorusuna
+      // arayuz cevap veremez.
+      granted: (await protocol.isDisclosureGranted(requestId)) as boolean,
+    });
+  }
+
+  return out;
+}
+
 export async function findOpenQuery(
   runner: BrowserProvider | Signer,
   researcher: string,

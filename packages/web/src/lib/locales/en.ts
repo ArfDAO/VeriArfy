@@ -638,4 +638,48 @@ export const EN: Record<string, string> = {
   "Test ağındayız": "This is a testnet",
   "Sözleşmeler Sepolia üzerinde çalışıyor. Tören tek katılımcılı bir geliştirme kurulumudur; ana ağ için çok taraflı bir tören gerekir.":
     "The contracts run on Sepolia. The trusted setup is a single-contributor development ceremony; mainnet requires a multi-party one.",
+
+  "Kurator kokunu zincire yaziyor, onaylanmasi bekleniyor...":
+    "The curator is writing the root on chain, waiting for confirmation...",
+  "Taahhudunuz kurator agacina eklendi (sira #{index}), ancak kurator servisi kokU zincire yazma yetkisine sahip degil. Bu, sizin tamamlayabileceginiz bir adim degil: operatorun kok yazma yetkisini kurator cuzdanina devretmesi gerekiyor. Devir tamamlandiktan sonra bu sayfadan tekrar deneyin; taahhudunuz korunuyor, bastan olusturmaniz gerekmez.":
+    "Your commitment was added to the curator tree (position #{index}), but the curator service is not authorised to write the root on chain. This is not a step you can complete: the operator has to transfer root-writing authority to the curator wallet. Once that is done, try again from this page - your commitment is kept, you do not need to create it again.",
+  "Taahhut kuratora eklendi ancak kok zincirde henuz guncellenmedi (kurator: {tree}, zincir: {chain}). Birkac dakika sonra yeniden deneyin.":
+    "The commitment was added to the curator, but the on-chain root is not updated yet (curator: {tree}, chain: {chain}). Try again in a few minutes.",
+
+  "DURUM OKUNUYOR": "READING STATUS",
+  "DEPLOY EDILMEDI": "NOT DEPLOYED",
+  "DAGITILDI - ZINCIR OKUNAMADI": "DEPLOYED - CHAIN UNREADABLE",
+  "DAGITILDI - {count} KATILIMCI": "DEPLOYED - {count} PARTICIPANTS",
+  "DAGITILDI - {count}/{target} KATILIMCI": "DEPLOYED - {count}/{target} PARTICIPANTS",
+  "sentetiktir": "is synthetic",
+  "gercek veridir": "is real data",
+  "E/19 klinik yigini Sepolia'ya dagitildi{block}. Kohort {synthetic}. Bu ekran yalnizca onam sinirlarini ilan eder; onami zincire yazan akis ayridir ve buradan tetiklenmez.":
+    "The E/19 clinical stack is deployed on Sepolia{block}. The cohort {synthetic}. This screen only declares the consent boundaries; the flow that writes consent on chain is separate and is not triggered from here.",
+
+  "Etki buyuklugu ve kalite": "Effect size and quality",
+  "ODDS ORANI + HWE": "ODDS RATIO + HWE",
+  "ODDS ORANI (%95 CI)": "ODDS RATIO (95% CI)",
+  "MAF K/V": "MAF CTRL/CASE",
+  "HWE p (KONTROL)": "HWE p (CONTROLS)",
+  "CSV indir": "Download CSV",
+  "JSON indir": "Download JSON",
+  "Odds orani alel sayimlarindan hesaplanir. Guven araligi genisse etkinin yonu bile belirsizdir; kucuk kohortta beklenen durum budur. Beklenen hucre 5'in altindayken ki-kare yerine Fisher exact p gecerlidir. HWE yalniz kontrol grubunda degerlendirilir - vakadaki sapma iliskinin kendisinden gelebilir.":
+    "The odds ratio is computed from allele counts. A wide confidence interval means even the direction of the effect is uncertain; that is expected in a small cohort. When an expected cell is below 5, the Fisher exact p applies instead of chi-square. HWE is assessed in controls only - a deviation among cases can come from the association itself.",
+  "Bazı varyantlarda sifir alel hucresi var; odds orani hesaplanamadi.":
+    "Some variants have a zero allele cell, so the odds ratio could not be computed.",
+  "Sorgu #{id} icin odeme dagitildi. Cozum yetkisi zincirde kalici oldugu icin sonuclari istediginiz zaman yeniden uretebilirsiniz; yeniden odeme yapilmaz, yalnizca cuzdan imzasi istenir.":
+    "Payment for query #{id} has been distributed. The decryption grant is permanent on chain, so you can regenerate the results at any time - there is no second payment, only a wallet signature.",
+  "SORGULARINIZ": "YOUR QUERIES",
+  "cozulebilir": "ready",
+  "bekliyor": "pending",
+  "Birden fazla sorgunuz var. Yeni bir sorgu acmak eskilerin sonucuna erisimi kapatmaz; cozum yetkisi zincirde kalicidir.":
+    "You have more than one query. Opening a new one does not close access to earlier results - the decryption grant is permanent on chain.",
+  "Katilimci paylarini serbest birak": "Release participant shares",
+  "Ucret sorguyu acarken zaten emanete alindi; bu adim odeme yapmaz, emanetteki tutari katilimcilara acar. Islemi katilimcilar da baslatabilir.":
+    "The fee was escrowed when the query was opened; this step does not pay anything, it releases the escrowed amount to participants. Participants can trigger it themselves too.",
+  "Paylari serbest birak": "Release shares",
+  "Serbest birakiliyor...": "Releasing...",
+  "Paylar serbest birakilamadi.": "The shares could not be released.",
+  "Ucret sorgu acilirken emanete alindi ve acilim yetkisi verildi; paylar henuz dagitilmadi. Dagitimi siz baslatabilirsiniz, arastirmaciyi beklemeniz gerekmiyor.":
+    "The fee was escrowed when the query was opened and the disclosure was granted; the shares have not been distributed yet. You can start the distribution yourself - there is no need to wait for the researcher.",
 };

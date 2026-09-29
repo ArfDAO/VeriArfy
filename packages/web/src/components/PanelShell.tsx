@@ -11,6 +11,7 @@ const ownerItems = [
   { to: "/panel/veri-yukle", label: "Veri yukle", end: false },
   { to: "/panel/kazanclar", label: "Kazanclar", end: false },
   { to: "/panel/gizlilik", label: "Gizlilik", end: false },
+  { to: "/panel/klinik-onam", label: "Klinik onam", end: false },
   { to: "/panel/dogrulama", label: "Dogrulama", end: false },
 ];
 const researcherItems = [
@@ -18,6 +19,7 @@ const researcherItems = [
   { to: "/arastirma/veri-al", label: "Veri satin al", end: false },
   { to: "/arastirma/sorgular", label: "Sorgular", end: false },
   { to: "/arastirma/sonuclar", label: "Sonuclar", end: false },
+  { to: "/arastirma/e18-parity", label: "E/18 parity", end: false },
   { to: "/arastirma/dugum", label: "Dugum", end: false },
 ];
 

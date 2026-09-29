@@ -96,6 +96,30 @@ export function studentTCdf(t: number, df: number): number;
 export function studentTQuantile(p: number, df: number): number;
 export function betai(a: number, b: number, x: number): number;
 export function gammaln(x: number): number;
+export interface ChiSquareResult {
+  chi2: number; df: number; p: number; total: number; minExpected: number; reliable: boolean;
+}
+export function chiSquareP(chi2: number, df: number): number;
+export function chiSquareTest(table: number[][]): ChiSquareResult;
+export function benjaminiHochberg(pValues: number[]): number[];
+export interface GenotypeFrequencies {
+  n: number;
+  genotype: number[];
+  allele: { reference: number; alternate: number };
+  maf: number;
+}
+export function genotypeFrequencies(counts: [number, number, number]): GenotypeFrequencies;
+export function hardyWeinbergTest(counts: [number, number, number]): GenotypeFrequencies & {
+  expected: number[]; chi2: number; df: number; p: number; minExpected: number; reliable: boolean;
+};
+export function allelicOddsRatio(table: [[number, number, number], [number, number, number]]): {
+  oddsRatio: number; ci95: [number, number]; standardError: number; note: string | null;
+};
+export function fisherFreemanHaltonTest(table: number[][]): { p: number; observedProbability: number; tables: number };
+export function summarizeGenomicTable(table: [[number, number, number], [number, number, number]]): {
+  groups: { frequencies: GenotypeFrequencies; hwe: ReturnType<typeof hardyWeinbergTest> }[];
+  association: { chiSquare: ChiSquareResult; fisher: ReturnType<typeof fisherFreemanHaltonTest> | null; oddsRatio: ReturnType<typeof allelicOddsRatio> };
+};
 
 // --- Hatlar ---
 export function aggregate(
@@ -113,3 +137,55 @@ export function makeCohort(opts?: {
   groupSizes?: number[];
   severity?: number[];
 }): { group: number; anxietyResponses: number[]; panicResponses: number[] }[];
+
+// --- E/18 sentetik BMI + SNP parity fixture'i ---
+export const E18_SYNTHETIC_FIXTURE_ID: string;
+export const E18_SYNTHETIC_GROUP_SIZE: number;
+export const E18_SYNTHETIC_PARTICIPANTS: number;
+export interface E18SyntheticRow {
+  group: 0 | 1;
+  dosage: 0 | 1 | 2;
+  bmi: number;
+}
+export interface E18PlaintextReference {
+  participantCount: number;
+  contingency: number[][];
+  bmi: Aggregate[];
+}
+export function makeE18SyntheticCohort(): E18SyntheticRow[];
+export function e18PlaintextReference(rows: E18SyntheticRow[]): E18PlaintextReference;
+
+export interface E18ParitySnapshot {
+  fixtureId: string;
+  participantCount: number;
+  contingency: readonly (readonly [number, number, number])[];
+  bmi: readonly Aggregate[];
+  evidence: { test: string; assertion: string; scope: string };
+}
+export const E18_FHE_RELEASED_SNAPSHOT: E18ParitySnapshot;
+export function buildE18ParityReport(): {
+  fixtureId: string;
+  plaintext: E18PlaintextReference;
+  fhe: E18ParitySnapshot;
+  delta: { snp: readonly number[][]; bmi: readonly Aggregate[] };
+  checks: { fixtureId: boolean; participants: boolean; snp: boolean; bmi: boolean };
+  pass: boolean;
+  genomic: ReturnType<typeof summarizeGenomicTable>;
+  bmi: Comparison;
+};
+
+// --- E/19 clinical/pharmacogenomic consent policy ---
+export interface E19ClinicalPolicy {
+  panelId: string;
+  purposeId: string;
+  consentVersion: string;
+  consentDocumentId: string;
+  panelDocumentId: string;
+  panelUri: string;
+  maximumConsentDays: number;
+  scope: string;
+  excludes: readonly string[];
+  revocation: string;
+}
+export const E19_CLINICAL_POLICY: E19ClinicalPolicy;
+export function validateE19ClinicalPolicy(policy?: E19ClinicalPolicy): E19ClinicalPolicy;

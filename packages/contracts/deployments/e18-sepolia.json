@@ -1,0 +1,20 @@
+{
+  "profile": "e18-synthetic-bmi-snp-v1",
+  "network": "sepolia",
+  "chainId": 11155111,
+  "deployer": "0xE92Cd3D22A876C51a1eD72027759923540C52012",
+  "authorizedNodes": [
+    "0x26E2b3a873B057E50f4caC0D3efA9489dEF93208",
+    "0x7c8cbfdD76Ee47425CAf33aBF663509cE7A602fe"
+  ],
+  "contracts": {
+    "DataProvenanceVerifier": "0xCbAe8a0893D62C0c1c6B66Aa48A6775243B07B89",
+    "ContingencyStats": "0xcc0366349dcB9b2E308036bD4EA17BddC0cC86B5",
+    "CoverageBits": "0xE54Bd140d2907E5d04fF6dC38976Efbb0F7B751c",
+    "VeriarfyProtocolE18": "0xdcA0DaA61235F342d0bC28C136DfFCD359F4EF14",
+    "BiomarkerStats": "0x17e62903217aCfeb5914A695Cd5dAeC91b8803C3",
+    "VeriarfyBiomarkers": "0x582DDC1aa1c7Edc145a20D52d6A350e44ff2D22e"
+  },
+  "syntheticOnly": true,
+  "deployedAtBlock": 11752509
+}

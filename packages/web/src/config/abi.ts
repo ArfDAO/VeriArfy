@@ -4,6 +4,10 @@ export const REGISTRY_ABI = [
   "function isRegistered(address) view returns (bool)",
   "function researcherCount() view returns (uint256)",
   "function currentRoot() view returns (uint256)",
+  // Tek anahtarli surumden devralinan kimligin hala kullanilabilir olup
+  // olmadigini anlamak icin; harcanmis bir nullifier devralinirsa cuzdan
+  // cozumu olmayan bir hataya kilitlenir.
+  "function nullifierSpent(uint256) view returns (bool)",
   "function register(uint256 root, uint256 nullifierHash, uint256[2] pA, uint256[2][2] pB, uint256[2] pC)",
   "event ResearcherRegistered(address indexed account, uint256 indexed nullifierHash)",
 ] as const;
@@ -234,4 +238,11 @@ export const STUDY_ABI = [
   "function anxietyAggregate(uint8 group) view returns (bytes32 n, bytes32 sum, bytes32 sumSq)",
   "function panicAggregate(uint8 group) view returns (bytes32 n, bytes32 sum, bytes32 sumSq)",
   "event ResponseSubmitted(address indexed participant, uint32 participantIndex)",
+] as const;
+
+/** Sentetik-only BMI parity demo — E/18 arastirma protokolunden ayridir. */
+export const BMI_DEMO_ABI = [
+  "function calculate(bytes32 encryptedWeightDeciKg, uint16 heightCm, bytes inputProof) returns (bytes32)",
+  "function bmiHandle(address demonstrator) view returns (bytes32)",
+  "event BmiCalculated(address indexed demonstrator, uint16 indexed heightCm, bytes32 bmiHandle)",
 ] as const;

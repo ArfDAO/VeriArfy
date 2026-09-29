@@ -2,7 +2,7 @@
   "name": "veriarfy",
   "private": true,
   "version": "0.1.0",
-  "description": "VeriArfy — FHE tabanli biyoinformatik veri paylasim agi. ZK ile kimlik, FHE ile veri.",
+  "description": "VeriArfy \u2014 FHE tabanli biyoinformatik veri paylasim agi. ZK ile kimlik, FHE ile veri.",
   "engines": {
     "node": ">=20"
   },
@@ -13,6 +13,7 @@
     "packages/study",
     "packages/contracts",
     "packages/curator",
+    "packages/node-operator",
     "packages/web",
     "packages/ml"
   ],
@@ -45,7 +46,9 @@
     "chain:d15-redeploy": "npm run d15-redeploy:sepolia --workspace packages/contracts",
     "chain:stake-node": "npm run stake-node:sepolia --workspace packages/contracts",
     "chain:live-check": "npm run live-check:sepolia --workspace packages/contracts",
-    "storage:e2e": "node scripts/e2e-storage.mjs"
+    "storage:e2e": "node scripts/e2e-storage.mjs",
+    "node-operator": "npm run start --workspace packages/node-operator",
+    "node-operator:test": "npm run test --workspace packages/node-operator"
   },
   "devDependencies": {
     "multiformats": "^13.4.2"

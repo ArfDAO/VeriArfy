@@ -88,3 +88,6 @@ packages/ml/data/*
 packages/ml/rust_expander/
 .vercel
 .env*
+
+# Yerel operator cuzdanlari - asla commit edilmez
+*.local.json

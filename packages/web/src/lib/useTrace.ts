@@ -73,7 +73,7 @@ function useTraceStore(): TraceApi {
           ? error.message
           : typeof error === "string"
             ? error
-            : JSON.stringify(error);
+            : describeUnknown(error);
 
       update(id, (s) => ({
         ...s,
@@ -108,6 +108,24 @@ function useTraceStore(): TraceApi {
 export function TraceProvider({ children }: PropsWithChildren) {
   const trace = useTraceStore();
   return createElement(TraceContext.Provider, { value: trace }, children);
+}
+
+/**
+ * Hata olmayan bir degeri ekranda gosterilebilir bir metne cevirir.
+ *
+ * `JSON.stringify` DOGRUDAN CAGRILAMAZ: BigInt iceren bir deger
+ * "Do not know how to serialize a BigInt" ile patlar ve bu, HATA ISLERKEN
+ * olur - yani asil hata tamamen kaybolur ve yerine alakasiz bir istisna
+ * gecer. Teshisi imkansizlastiran tam olarak budur.
+ */
+function describeUnknown(value: unknown): string {
+  try {
+    return JSON.stringify(value, (_key, entry) =>
+      typeof entry === "bigint" ? entry.toString() : entry,
+    ) ?? String(value);
+  } catch {
+    return String(value);
+  }
 }
 
 export function useTrace(): TraceApi {

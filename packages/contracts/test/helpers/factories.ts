@@ -13,7 +13,7 @@ import { ethers } from "hardhat";
  */
 
 /** Kontenjans tablosu kutuphanesi baglanmis protokol fabrikasi. */
-export async function protocolFactory() {
+export async function protocolFactory(contractName = "VeriarfyProtocol") {
   const Contingency = await ethers.getContractFactory("ContingencyStats");
   const contingency = await Contingency.deploy();
   await contingency.waitForDeployment();
@@ -22,7 +22,7 @@ export async function protocolFactory() {
   const coverage = await Coverage.deploy();
   await coverage.waitForDeployment();
 
-  return ethers.getContractFactory("VeriarfyProtocol", {
+  return ethers.getContractFactory(contractName, {
     libraries: {
       ContingencyStats: await contingency.getAddress(),
       CoverageBits: await coverage.getAddress(),

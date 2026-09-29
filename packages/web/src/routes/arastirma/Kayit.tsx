@@ -7,6 +7,8 @@ import { enroll, getMerklePath } from "../../lib/curator";
 import { formatToken, getPaymentToken, getPayments, readResearcherReadiness, type ResearcherReadiness } from "../../lib/protocol";
 import { useSession } from "../../lib/session";
 import {
+  EXTERNAL_NULLIFIER,
+  computeNullifierHash,
   createIdentity,
   deserializeIdentity,
   generateProof,
@@ -15,17 +17,53 @@ import {
 } from "../../lib/zk";
 import { useT } from "../../lib/i18n";
 
-const IDENTITY_KEY = "veriarfy.researcher.identity";
+/**
+ * ZK kimligi CUZDAN BASINA saklanir.
+ *
+ * Eskiden tek bir sabit anahtar vardi ve kimlik tarayici basina tutuluyordu.
+ * Sonucu: bir cuzdanla kaydolduktan sonra MetaMask'te hesap degistirip tekrar
+ * denemek AYNI nullifier'i ikinci kez harcamaya calisiyor, zincir
+ * `NullifierAlreadySpent` ile reddediyordu. Yani "birden fazla hesapla giris"
+ * tarayicinin kendisi yuzunden imkansizdi ve hata mesaji bunu soylemiyordu.
+ *
+ * Nullifier tek kullanimlik oldugu icin her cuzdanin kendi kimligi olmak
+ * zorunda; anahtar adresle isimlendiriliyor.
+ */
+const IDENTITY_PREFIX = "veriarfy.researcher.identity";
+const LEGACY_IDENTITY_KEY = IDENTITY_PREFIX;
+
+function identityKey(address: string): string {
+  return `${IDENTITY_PREFIX}.${address.toLowerCase()}`;
+}
+
+// Kok yazma islemi Sepolia'da tipik olarak 15-30 saniye surer; 12 x 5 sn = 60 sn
+// pencere, yogun blok zamanlarinda da yetiyor ve kullaniciyi bosa bekletmiyor.
+const ROOT_WAIT_ATTEMPTS = 12;
+const ROOT_WAIT_INTERVAL_MS = 5_000;
 
 type Action = "register" | "approve" | null;
 
-function storedIdentity(): Identity | null {
-  const raw = window.localStorage.getItem(IDENTITY_KEY);
+function storedIdentity(address: string | null | undefined): Identity | null {
+  if (!address) return null;
+
+  const raw = window.localStorage.getItem(identityKey(address));
   if (!raw) return null;
 
   try {
     return deserializeIdentity(raw);
   } catch {
+    return null;
+  }
+}
+
+function legacyIdentity(): Identity | null {
+  const raw = window.localStorage.getItem(LEGACY_IDENTITY_KEY);
+  if (!raw) return null;
+
+  try {
+    return deserializeIdentity(raw);
+  } catch {
+    window.localStorage.removeItem(LEGACY_IDENTITY_KEY);
     return null;
   }
 }
@@ -62,7 +100,71 @@ export function Kayit() {
   const t = useT();
   const { address, chainId, provider, signer, refresh: refreshSession } = useSession();
   const [readiness, setReadiness] = useState<ResearcherReadiness | null>(null);
-  const [identity, setIdentity] = useState<Identity | null>(storedIdentity);
+  const [identity, setIdentity] = useState<Identity | null>(null);
+
+  // Cuzdan degisince kimlik de degismeli; aksi halde yeni hesap eski hesabin
+  // harcanmis nullifier'iyla kaydolmaya calisir.
+  //
+  // Tek anahtarli surumden gecis burada yapiliyor ve ZINCIRE SORULUYOR. Eski
+  // kimligi kosulsuz devralmak yanlis olurdu: o kimlik baska bir cuzdanla
+  // kaydolmus olabilir, nullifier'i harcanmistir ve devralan cuzdan her
+  // denemede `NullifierAlreadySpent` alir - tam da duzeltmeye calistigimiz
+  // hatanin aynisi. Harcanmamissa devralinir (kullanici kaydini kaybetmesin),
+  // harcanmissa atilir: kayit zincirde kalici oldugu icin harcanmis bir
+  // kimligin baska bir isi kalmaz.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      if (!address) {
+        setIdentity(null);
+        return;
+      }
+
+      const own = storedIdentity(address);
+      if (own) {
+        if (!cancelled) setIdentity(own);
+        return;
+      }
+
+      const legacy = legacyIdentity();
+      if (!legacy) {
+        if (!cancelled) setIdentity(null);
+        return;
+      }
+
+      // Zincire soramiyorsak eski kimligi TASIMIYORUZ. Yanlis tarafa dusmek
+      // kullaniciyi cozumu olmayan bir hataya kilitler; tasimamak ise en
+      // fazla yeni bir kimlik uretilmesine yol acar.
+      if (!provider || chainId !== SEPOLIA_CHAIN_ID) {
+        if (!cancelled) setIdentity(null);
+        return;
+      }
+
+      try {
+        const hash = computeNullifierHash(EXTERNAL_NULLIFIER, legacy.nullifier);
+        const spent = (await getRegistry(provider).nullifierSpent(hash)) as boolean;
+        if (cancelled) return;
+
+        if (spent) {
+          window.localStorage.removeItem(LEGACY_IDENTITY_KEY);
+          setIdentity(null);
+          return;
+        }
+
+        window.localStorage.setItem(identityKey(address), serializeIdentity(legacy));
+        window.localStorage.removeItem(LEGACY_IDENTITY_KEY);
+        setIdentity(legacy);
+      } catch {
+        if (!cancelled) setIdentity(null);
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [address, chainId, provider]);
   const [action, setAction] = useState<Action>(null);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<{ kind: "warn" | "ok" | "info"; text: string } | null>(null);
@@ -99,23 +201,49 @@ export function Kayit() {
       let nextIdentity = identity;
       if (!nextIdentity) {
         nextIdentity = createIdentity();
-        window.localStorage.setItem(IDENTITY_KEY, serializeIdentity(nextIdentity));
+        window.localStorage.setItem(identityKey(address), serializeIdentity(nextIdentity));
         setIdentity(nextIdentity);
       }
 
       // Kurator yalnizca acik taahhudu gorur; trapdoor/nullifier tarayicidan cikmaz.
-      await enroll(nextIdentity.commitment);
-      const [path, chainRoot] = await Promise.all([
-        getMerklePath(nextIdentity.commitment),
-        getRegistry(provider).currentRoot() as Promise<bigint>,
-      ]);
+      const enrollment = await enroll(nextIdentity.commitment);
+      const path = await getMerklePath(nextIdentity.commitment);
+      const registry = getRegistry(provider);
 
-      // Yeni taahhut, yetkili kurator `push-root` calistirmadan zincirde kanitlanamaz.
-      // Bu kontrol olmadan kullanici yalnizca `UnknownRoot` revert'i gorurdu.
-      if (BigInt(path.root) !== chainRoot) {
+      // Yeni taahhut, kok zincire yazilmadan kanitlanamaz; yazilmadan devam
+      // edilirse kullanici yalnizca anlamsiz bir `UnknownRoot` revert'i gorur.
+      //
+      // Kurator kokU kendisi yaziyorsa islem birkac blok surer, bu yuzden
+      // hemen vazgecmek yerine kisa bir sure bekleyip zinciri yeniden okuyoruz.
+      // Yazma yetkisi yoksa (`rootPending`) beklemenin anlami yok - o durum
+      // kullanicinin degil operatorun cozecegi bir eksiklik.
+      const treeRoot = BigInt(path.root);
+      let chainRoot = (await registry.currentRoot()) as bigint;
+
+      if (treeRoot !== chainRoot && enrollment.rootPending !== true) {
+        setNotice({
+          kind: "info",
+          text: t("Kurator kokunu zincire yaziyor, onaylanmasi bekleniyor..."),
+        });
+        for (let attempt = 0; attempt < ROOT_WAIT_ATTEMPTS && treeRoot !== chainRoot; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, ROOT_WAIT_INTERVAL_MS));
+          chainRoot = (await registry.currentRoot()) as bigint;
+        }
+      }
+
+      if (treeRoot !== chainRoot) {
         setNotice({
           kind: "warn",
-          text: `Taahhut kuratora eklendi; ancak kurator kokunun zincire yazilmasini henuz tamamlamadi (kurator: ${shortRoot(path.root)}, zincir: ${shortRoot(chainRoot)}). Kök guncellendikten sonra yeniden deneyin.`,
+          text:
+            enrollment.rootPending === true
+              ? t(
+                  "Taahhudunuz kurator agacina eklendi (sira #{index}), ancak kurator servisi kokU zincire yazma yetkisine sahip degil. Bu, sizin tamamlayabileceginiz bir adim degil: operatorun kok yazma yetkisini kurator cuzdanina devretmesi gerekiyor. Devir tamamlandiktan sonra bu sayfadan tekrar deneyin; taahhudunuz korunuyor, bastan olusturmaniz gerekmez.",
+                  { index: enrollment.index },
+                )
+              : t(
+                  "Taahhut kuratora eklendi ancak kok zincirde henuz guncellenmedi (kurator: {tree}, zincir: {chain}). Birkac dakika sonra yeniden deneyin.",
+                  { tree: shortRoot(path.root), chain: shortRoot(chainRoot) },
+                ),
         });
         return;
       }

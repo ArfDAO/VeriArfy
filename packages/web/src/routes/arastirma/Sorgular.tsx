@@ -54,7 +54,21 @@ function readSavedPointer(address: string): QueryPointer | null {
 }
 
 function savePointer(address: string, pointer: QueryPointer) {
-  window.localStorage.setItem(storageKey(address), JSON.stringify(pointer));
+  // ALANLAR ACIKCA SECILIYOR, nesne oldugu gibi yazilmiyor.
+  //
+  // `findOpenQuery` isaretciyi fazladan bir `fee: bigint` ile donduruyor ve
+  // nesnenin tamami `JSON.stringify`'a verildiginde bu alan
+  // "Do not know how to serialize a BigInt" ile patliyordu. Yapisal tipleme
+  // fazladan alani sessizce gecirdigi icin derleyici bunu yakalamadi.
+  //
+  // Arizanin yonu tersti ve teshisi zorlastiriyordu: hata YALNIZCA gercekten
+  // acik bir sorgu varken olusuyordu (sorgu yokken `fee` de yoktu), yani
+  // basari yolu dusuyor ve ekran "acik sorgu yok" diyordu.
+  //
+  // Burada yalnizca gercekten ihtiyac duyulan iki tamsayi yazilir; kaynak
+  // nesneye alan eklenmesi bu yolu bir daha kiramaz.
+  const stored: QueryPointer = { queryId: pointer.queryId, requestId: pointer.requestId };
+  window.localStorage.setItem(storageKey(address), JSON.stringify(stored));
 }
 
 type Translate = (source: string, params?: Record<string, string | number>) => string;

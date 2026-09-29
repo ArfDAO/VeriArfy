@@ -45,8 +45,22 @@ async function call(path: string, init?: RequestInit) {
   return res.json();
 }
 
+export interface EnrollResult {
+  index: number;
+  root: string;
+  /**
+   * Kurator taahhudu ekledi ama kokU zincire YAZAMADI.
+   *
+   * Kurator servisinde `CURATOR_PRIVATE_KEY` tanimliysa kok yazimi otomatiktir
+   * ve bu alan `false` doner. `true` dondugunde eksik olan kullanicinin yaptigi
+   * bir sey degil, operator tarafindaki yetki; arayuz bunu boyle anlatmali.
+   * Eski kurator surumleri alani hic dondurmez, bu yuzden `undefined` olabilir.
+   */
+  rootPending?: boolean;
+}
+
 /** Taahhudu akredite agaca eklet. */
-export async function enroll(commitment: bigint): Promise<{ index: number }> {
+export async function enroll(commitment: bigint): Promise<EnrollResult> {
   return call("/enroll", {
     method: "POST",
     body: JSON.stringify({ commitment: commitment.toString() }),
@@ -62,4 +76,24 @@ export async function getMerklePath(commitment: bigint): Promise<MerklePath> {
 export async function getRoot(): Promise<string> {
   const { root } = await call("/root");
   return root;
+}
+
+export interface CuratorStatus {
+  root: string;
+  size: number;
+  /** Kuratorun zincirden okudugu kok; okuyamazsa null. */
+  chainRoot: string | null;
+  /** Kurator kokU kendisi yazabiliyor mu (anahtar tanimli mi). */
+  autoPush: boolean;
+}
+
+/** Kurator + zincir kok durumunu birlikte al. */
+export async function getStatus(): Promise<CuratorStatus> {
+  const body = await call("/root");
+  return {
+    root: String(body.root),
+    size: Number(body.size ?? 0),
+    chainRoot: body.chainRoot == null ? null : String(body.chainRoot),
+    autoPush: Boolean(body.autoPush),
+  };
 }
