@@ -77,8 +77,29 @@ export function publicProvider(): JsonRpcProvider {
   return readProvider;
 }
 
+/**
+ * KONTRAT KURUCULARI OKUMA YOLUNU KENDILERI SAGLAMLASTIRIR.
+ *
+ * Imzalayan gelirse dokunulmaz - islem gonderilecek demektir. Ama bir
+ * `BrowserProvider` gelirse bu YALNIZCA okuma icindir (yazmak imza ister) ve
+ * cagri cuzdanin RPC'si yerine dogrudan bir saglayiciya yonlendirilir.
+ *
+ * NEDEN BURADA, cagri yerlerinde degil: cuzdan RPC'si toplu `eth_call`
+ * isteklerinde duzenli olarak dusuyor. Bu daha once `readDisclosure` ve
+ * `findOpenQuery` icinde TEK TEK duzeltilmisti; ama kalip her yeni ekranda
+ * tekrar ediyor ve sorgu ekraninda tekrar etti: `Promise.all` icindeki
+ * cagrilar cuzdan uzerinden gidiyor, istek dusuyor, kullanici ACIK bir
+ * sorgusu varken "acik sorgu yok" goruyordu.
+ *
+ * Sagligi tek tek hatirlanmasi gereken bir kural olmaktan cikarip varsayilan
+ * hale getirmek, bu hata sinifini tamamen kapatir.
+ */
+function readSafe(runner: BrowserProvider | Signer | Provider) {
+  return readRunner(runner as BrowserProvider | Signer);
+}
+
 export function getProtocol(runner: BrowserProvider | Signer | Provider) {
-  return new Contract(CONTRACTS.VeriarfyProtocol, PROTOCOL_ABI, runner);
+  return new Contract(CONTRACTS.VeriarfyProtocol, PROTOCOL_ABI, readSafe(runner));
 }
 
 /**
@@ -91,15 +112,15 @@ export function getProtocol(runner: BrowserProvider | Signer | Provider) {
 export function getBiomarkers(runner: BrowserProvider | Signer) {
   const address = CONTRACTS.VeriarfyBiomarkers;
   if (!address) throw new Error("Biyobelirtec modulu bu dagitimda yok.");
-  return new Contract(address, BIOMARKERS_ABI, runner);
+  return new Contract(address, BIOMARKERS_ABI, readSafe(runner));
 }
 
 export function getPayments(runner: BrowserProvider | Signer | Provider) {
-  return new Contract(CONTRACTS.VeriarfyPayments, PAYMENTS_ABI, runner);
+  return new Contract(CONTRACTS.VeriarfyPayments, PAYMENTS_ABI, readSafe(runner));
 }
 
 export function getPaymentToken(runner: BrowserProvider | Signer) {
-  return new Contract(CONTRACTS.PaymentToken, ERC20_ABI, runner);
+  return new Contract(CONTRACTS.PaymentToken, ERC20_ABI, readSafe(runner));
 }
 
 /** Sorgu tipi bit maskesi — kontrattaki `QUERY_TYPE_*` sabitleriyle ayni. */
