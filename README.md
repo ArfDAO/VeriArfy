@@ -133,7 +133,7 @@ dar bir kanıt gönderip sonra maskeyle genişletirdi.
 | sözleşme | adres |
 |---|---|
 | VeriarfyProtocol | `0x273FF690e1070e9F18ebef4823c2bC73D3E40AAE` |
-| VeriarfyPayments | `0x448800a2AfDDa4918aC6Fe621C506FBD09fFE37b` |
+| VeriarfyPayments | `0xFA42A0aF6D5426289499F5B6FA2fA571c18E30C8` |
 | VeriarfyBiomarkers | `0x02FB666Fd374A6585Ae635b8C0eE5C347E50fA6a` |
 | DataProvenanceVerifier | `0x853Fa62357Be96f6463f5b6927436371C35E85C3` |
 | VeriArfyRegistry | `0xcd1FeaCe584d95f20A3695586aD59411C4Cda267` |
@@ -141,10 +141,26 @@ dar bir kanıt gönderip sonra maskeyle genişletirdi.
 | VeriarfyStorage | `0x03504F85c474aafF7718A85fcCa15A13A6BB64ed` |
 | Groth16Verifier | `0x0CCC953CA14a1842E4f13454304D8359d398A24d` |
 | AnxietyStudy | `0xb7BBD086713C229c41729621F185Efb239F68C03` |
-| PaymentToken (test) | `0x2ee18AbC5C72FAF378675fD7D68093F09A89f319` |
+| PaymentToken (Circle test USDC) | `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` |
 
 Blok `11807543` itibarıyla geçerli (2026-09-29).
 Eşik 2/2, `MIN_PARTICIPANTS = 10`.
+
+### Ödeme birimi
+
+Sorgu ücretleri **Circle'ın Sepolia test USDC'si** ile ödenir — mainnet'teki
+USDC ile aynı arayüz, aynı 6 ondalık, aynı `approve` + `transferFrom` yolu.
+Mainnet'e çıkarken değişen tek şey `PAYMENT_TOKEN` değişkenidir; kod yolu
+birebir aynı kalır.
+
+Araştırmacı token'ı **kendisi** alır: <https://faucet.circle.com> (Sepolia
+ağını seçin). Operatörün kimseye token basması gerekmez.
+
+Depoda bir `StableTestToken` de var ama bu dağıtımda **kullanılmıyor**. Arzını
+operatör kontrol ettiği için her yeni araştırmacı bir komut beklemek zorunda
+kalırdı; ayrıca mainnet'ten farklı bir kurulum demek olurdu. `PAYMENT_TOKEN`
+verilmediğinde `deploy.ts` ona düşer — yeni bir ağa çıkarken bu değişkeni
+vermeyi unutmayın.
 
 Bu dağıtımdaki **her anahtar proje ekibinde**: deployer, iki yetkili düğüm ve
 kök yazan kurator cüzdanı. Bir önceki nonce-24 dağıtımında düğüm ve sahip
