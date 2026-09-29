@@ -183,6 +183,39 @@ servisinin otomatik yaptigi bir is oldugu icin anahtari barindirilan servise
 girmek gerekiyor; o anahtarin ele gecmesi halinde kaybedilen tek sey akredite
 agac kokudur, protokolun yonetimi degil.
 
+### Yetkili düğüm servisi
+
+Araştırmacı ücreti ödediğinde zincirde bir açılım talebi açılır, ama talep
+**kendiliğinden onaylanmaz**: `approveDisclosure` yetkili ve teminatlı bir
+düğümden gelmek zorundadır. Bu onay gelmeden sonuç üretilemez ve kullanıcının
+yapabileceği bir şey yoktur.
+
+`packages/node-operator` bu onayı veren servistir. Bekleyen talepleri tarar
+(olay dinlemek yerine tarama: servis kapalıyken gelen talep olay akışında
+kaybolur, tarama yeniden başlayınca onu da bulur) ve `src/policy.js`'deki
+kurallara göre onaylar:
+
+- talep açık mı (iptal/yürütülmüş/eşiğe ulaşmış değil)
+- cüzdan yetkili düğüm mü, daha önce onaylamış mı
+- teminatı yeterli mi — onayın ekonomik karşılığı budur
+- kohort `minParticipants` eşiğini geçiyor mu
+
+Kurallar ağ çağrılarından ayrı tutulur, doğrudan test edilir:
+`npm run node-operator:test`.
+
+**Ne kontrol etmez:** talebin bilimsel değerini. Üretimde bir kurum düğümü
+"bu araştırma meşru mu" sorusunu sorar; bu servis soramaz ve sorduğunu iddia
+etmez. Sabit panel ve yalnız-aggregate çıktı karar uzayını sözleşme düzeyinde
+zaten daralttığı için testnette bu kabul edilebilir — üretimde değildir.
+
+**Bağımsızlık uyarısı:** M-of-N eşiği düğümlerin bağımsız olmasını varsayar.
+Bu servise birden fazla anahtar verilirse hepsi adına onay verir; o düğümler
+pratikte tek bir taraftır ve eşik gerçek bir dağıtımı temsil etmez. Servis
+bunu gizlemez, açılışta uyarır ve sağlık ucunda `independentNodes: false`
+döner. Üretimde her düğüm ayrı kurumda, ayrı anahtarla, ayrı politikayla
+çalışmalıdır.
+
+
 ---
 
 ## Kurulum

@@ -42,3 +42,28 @@ services:
         sync: false
       - key: SEPOLIA_RPC_URL
         sync: false
+
+  # Yetkili dugum servisi - acilim taleplerini politikaya gore onaylar.
+  #
+  # Bu servis olmadan arastirmaci ucreti oder, talep acilir ve HIC
+  # onaylanmaz; sonuc uretilemez ve kullanicinin yapabilecegi bir sey yoktur.
+  #
+  # BAGIMSIZLIK: NODE_PRIVATE_KEYS'e birden fazla anahtar konursa hepsi TEK
+  # proseste calisir ve M-of-N esigi gercek bir dagitimi temsil etmez. Testnet
+  # icin kabul edilebilir; uretimde her dugum ayri kurumda, ayri servis olarak
+  # calismalidir.
+  - type: web
+    name: veriarfy-node-operator
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node packages/node-operator/src/server.js
+    envVars:
+      - key: NODE_OPERATOR_PORT
+        value: 10000
+      # Virgulle ayrilmis dugum ozel anahtarlari. Yalnizca `approveDisclosure`
+      # ve `heartbeat` yetkisi vardir; dagitim anahtarini BURAYA KOYMAYIN.
+      - key: NODE_PRIVATE_KEYS
+        sync: false
+      - key: SEPOLIA_RPC_URL
+        sync: false
