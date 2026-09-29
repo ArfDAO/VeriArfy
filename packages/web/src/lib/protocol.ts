@@ -467,7 +467,24 @@ export async function readDashboard(
           stage = "onay-bekliyor";
         } else {
           const endsAt = Number(await protocol.challengeWindowEnd(requestId));
-          stage = blockNumber < endsAt ? "itiraz-suresi" : "yurutme-bekliyor";
+          if (blockNumber < endsAt) {
+            stage = "itiraz-suresi";
+          } else {
+            // YETKI VERILDI AMA PAYLAR DAGITILMADI.
+            //
+            // Bu ayrim, katilimci icin belirleyici: `claimable` sorgu
+            // dagitilmadan SIFIR doner, dolayisiyla katilimci ekraninda hicbir
+            // sey gorunmez. Ucret ise `openQuery` sirasinda zaten emanete
+            // alinmistir - yani para durmaktadir, yalnizca serbest
+            // birakilmamistir.
+            //
+            // `settleQuery` erisim kontrolu TASIMAZ: katilimci kendi payini
+            // kendisi serbest birakabilir. Bu asama ayirt edilmezse arastirmaci
+            // dugmeye basmadikca katilimcilar bekler, oysa beklemeleri
+            // gerekmiyordu.
+            const granted = (await protocol.isDisclosureGranted(requestId)) as boolean;
+            stage = granted ? "paylasim-bekliyor" : "yurutme-bekliyor";
+          }
         }
       }
 

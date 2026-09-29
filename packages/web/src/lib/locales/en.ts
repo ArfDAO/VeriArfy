@@ -674,4 +674,12 @@ export const EN: Record<string, string> = {
   "bekliyor": "pending",
   "Birden fazla sorgunuz var. Yeni bir sorgu acmak eskilerin sonucuna erisimi kapatmaz; cozum yetkisi zincirde kalicidir.":
     "You have more than one query. Opening a new one does not close access to earlier results - the decryption grant is permanent on chain.",
+  "Katilimci paylarini serbest birak": "Release participant shares",
+  "Ucret sorguyu acarken zaten emanete alindi; bu adim odeme yapmaz, emanetteki tutari katilimcilara acar. Islemi katilimcilar da baslatabilir.":
+    "The fee was escrowed when the query was opened; this step does not pay anything, it releases the escrowed amount to participants. Participants can trigger it themselves too.",
+  "Paylari serbest birak": "Release shares",
+  "Serbest birakiliyor...": "Releasing...",
+  "Paylar serbest birakilamadi.": "The shares could not be released.",
+  "Ucret sorgu acilirken emanete alindi ve acilim yetkisi verildi; paylar henuz dagitilmadi. Dagitimi siz baslatabilirsiniz, arastirmaciyi beklemeniz gerekmiyor.":
+    "The fee was escrowed when the query was opened and the disclosure was granted; the shares have not been distributed yet. You can start the distribution yourself - there is no need to wait for the researcher.",
 };

@@ -562,3 +562,5 @@
 .research-results__export { gap: var(--spacing-12); }
 
 .research-results__picker .chips { margin-top: var(--spacing-12); }
+
+.research-results__settle-note { margin-top: var(--spacing-8); color: var(--text-secondary); font-size: .72rem; line-height: 1.5; }

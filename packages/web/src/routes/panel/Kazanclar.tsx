@@ -2,7 +2,7 @@ import { userError } from "../../lib/userError";
 import { useCallback, useEffect, useState } from "react";
 
 import { SEPOLIA_CHAIN_ID } from "../../config";
-import { claimReward, formatToken, readDashboard, type DashboardState, type QuerySummary } from "../../lib/protocol";
+import { claimReward, formatToken, readDashboard, settleQuery, type DashboardState, type QuerySummary } from "../../lib/protocol";
 import { useSession } from "../../lib/session";
 import { useT } from "../../lib/i18n";
 
@@ -37,6 +37,7 @@ export function Kazanclar() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [claiming, setClaiming] = useState<number | null>(null);
+  const [releasing, setReleasing] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
     if (!provider || !address || chainId !== SEPOLIA_CHAIN_ID) return;
@@ -67,6 +68,29 @@ export function Kazanclar() {
       setError(userError(nextError, "Odul cekilemedi."));
     } finally {
       setClaiming(null);
+    }
+  }, [refresh, signer]);
+
+  /**
+   * Paylari serbest birakir.
+   *
+   * Ucret sorgu acilirken zaten emanete alindi; bu islem para TRANSFER ETMEZ,
+   * yalnizca emanetteki tutari katilimci havuzuna acar. `settleQuery` erisim
+   * kontrolu tasimaz, yani katilimci arastirmacinin dugmeye basmasini beklemek
+   * zorunda degil - beklemesi gerektigi sanilan durum, yalnizca arayuzun ona
+   * bu yolu sunmamasindan kaynaklaniyordu.
+   */
+  const release = useCallback(async (queryId: number) => {
+    if (!signer) return;
+    setReleasing(queryId);
+    setError(null);
+    try {
+      await settleQuery(signer, queryId);
+      await refresh();
+    } catch (nextError) {
+      setError(userError(nextError, "Paylar serbest birakilamadi."));
+    } finally {
+      setReleasing(null);
     }
   }, [refresh, signer]);
 
@@ -133,7 +157,12 @@ export function Kazanclar() {
               {query.weightedCoverage > query.coverageWeight * 10_000 ? t(" bu sorguda nadir alan primi var.") : t(" bu sorguda ek nadirlik primi yok.")}
             </p>
 
-            {query.claimed ? (
+            {query.stage === "paylasim-bekliyor" ? (
+              <div>
+                <p className="earnings__explanation">{t("Ucret sorgu acilirken emanete alindi ve acilim yetkisi verildi; paylar henuz dagitilmadi. Dagitimi siz baslatabilirsiniz, arastirmaciyi beklemeniz gerekmiyor.")}</p>
+                <button className="pill pill--primary" disabled={releasing !== null || !signer} onClick={() => void release(query.id)}>{releasing === query.id ? t("Serbest birakiliyor...") : t("Paylari serbest birak")}</button>
+              </div>
+            ) : query.claimed ? (
               <span className="eyebrow">{t("CEKILDI")}</span>
             ) : query.claimable > 0n ? (
               <button className="pill pill--primary" disabled={claiming !== null} onClick={() => void claim(query.id)}>
