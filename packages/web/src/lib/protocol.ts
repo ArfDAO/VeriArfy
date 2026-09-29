@@ -1439,29 +1439,45 @@ export async function stakeNode(signer: Signer, amountWei: bigint): Promise<TxOu
  * yaptiginda ya da baska bir cihaza gectiginde yerel iz kaybolur, zincirdeki
  * gercek kaybolmaz.
  */
-export async function findGrantedQueries(
+export interface ResearcherQuery {
+  queryId: number;
+  requestId: number;
+  fee: bigint;
+  settled: boolean;
+  /** Cozum yetkisi zincirde verildi mi? Verilmediyse sonuc uretilemez. */
+  granted: boolean;
+}
+
+export async function listResearcherQueries(
   runner: BrowserProvider | Signer,
   researcher: string,
   limit = 25,
-): Promise<{ queryId: number; requestId: number; fee: bigint; settled: boolean }[]> {
+): Promise<ResearcherQuery[]> {
   const reader = readRunner(runner);
   const payments = getPayments(reader);
   const protocol = getProtocol(reader);
   const total = Number(await payments.nextQueryId());
 
-  const out: { queryId: number; requestId: number; fee: bigint; settled: boolean }[] = [];
+  const out: ResearcherQuery[] = [];
   const oldest = Math.max(0, total - limit);
 
   for (let id = total - 1; id >= oldest; id--) {
     const q = await payments.query(id);
     if ((q.researcher as string).toLowerCase() !== researcher.toLowerCase()) continue;
+    // Iadesi yapilmis sorgunun karsiligi yok; listede yeri de yok.
     if (q.refunded) continue;
 
     const requestId = Number(q.disclosureRequestId);
-    // Yetki verilmemis bir sorgu burada ise yaramaz: cozulecek bir sey yok.
-    if (!(await protocol.isDisclosureGranted(requestId))) continue;
-
-    out.push({ queryId: id, requestId, fee: q.fee as bigint, settled: q.settled as boolean });
+    out.push({
+      queryId: id,
+      requestId,
+      fee: q.fee as bigint,
+      settled: q.settled as boolean,
+      // Henuz yetki verilmemis sorgu LISTEDEN CIKARILMAZ: kullanici parasini
+      // odedigi ve bekledigi sorguyu gormeli, yoksa "sorgum nerede" sorusuna
+      // arayuz cevap veremez.
+      granted: (await protocol.isDisclosureGranted(requestId)) as boolean,
+    });
   }
 
   return out;

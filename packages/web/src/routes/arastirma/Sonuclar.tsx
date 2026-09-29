@@ -12,8 +12,8 @@ import { CONTRACTS, SEPOLIA_CHAIN_ID } from "../../config";
 import { buildCsv, buildJson, downloadText } from "../../lib/exportResults";
 import {
   collectDisclosureHandles,
-  findGrantedQueries,
-  findOpenQuery,
+  listResearcherQueries,
+  type ResearcherQuery,
   readDisclosure,
   settleQuery,
   type DisclosureState,
@@ -82,6 +82,9 @@ export function Sonuclar() {
   const t = useT();
   const { address, chainId, provider, signer } = useSession();
   const [open, setOpen] = useState<OpenQuery | null>(null);
+  const [queries, setQueries] = useState<ResearcherQuery[]>([]);
+  /** Kullanicinin elle sectigi sorgu; null ise varsayilan secim uygulanir. */
+  const [picked, setPicked] = useState<number | null>(null);
   const [disclosure, setDisclosure] = useState<DisclosureState | null>(null);
   const [snps, setSnps] = useState<SnpResult[] | null>(null);
   const [metrics, setMetrics] = useState<MetricResult[] | null>(null);
@@ -96,23 +99,30 @@ export function Sonuclar() {
     setLoading(true);
     setNotice(null);
     try {
-      const current = await findOpenQuery(provider, address);
+      const all = await listResearcherQueries(provider, address);
+      setQueries(all);
 
-      // Acik sorgu yoksa, cozulebilir GECMIS sorgulara bakilir. Odemesi
-      // dagitilmis bir sorgu acik degildir ama yetkisi durdugu icin sonucu
-      // hala uretilebilir; aksi halde arastirmaci odedigi ciktiya bir daha
-      // ulasamazdi.
-      const pointer = current
-        ? { queryId: current.queryId, requestId: current.requestId, settled: false }
-        : (await findGrantedQueries(provider, address))[0] ?? null;
-
-      if (!pointer) {
+      if (all.length === 0) {
         setOpen(null);
         setDisclosure(null);
         return;
       }
-      const state = await readDisclosure(provider, pointer.requestId, 4);
-      setOpen(pointer);
+
+      // SECIM KURALI.
+      //
+      // Kullanici elle bir sorgu sectiyse ona saygi gosterilir. Aksi halde
+      // once COZULEBILIR en yeni sorgu secilir, o da yoksa en yeni sorgu.
+      //
+      // Sadece "en yeni" secilseydi, yeni acilan ve henuz onay bekleyen bir
+      // sorgu, daha once cozulmus sorgularin sonucuna erisimi kilitlerdi -
+      // tam olarak yasanan durum buydu.
+      const chosen =
+        (picked !== null ? all.find((q) => q.queryId === picked) : undefined) ??
+        all.find((q) => q.granted) ??
+        all[0];
+
+      const state = await readDisclosure(provider, chosen.requestId, 4);
+      setOpen({ queryId: chosen.queryId, requestId: chosen.requestId, settled: chosen.settled });
       setDisclosure(state);
     } catch (error) {
       setOpen(null);
@@ -121,7 +131,7 @@ export function Sonuclar() {
     } finally {
       setLoading(false);
     }
-  }, [address, chainId, provider]);
+  }, [address, chainId, picked, provider]);
 
   useEffect(() => {
     void refresh();
@@ -276,6 +286,7 @@ export function Sonuclar() {
       {wrongNetwork && <div className="notice notice--warn">{t("Sonuclar yalnizca Sepolia aginda okunabilir.")}</div>}
       {notice && <div className={`notice notice--${notice.kind}`} role="status">{notice.text}</div>}
       {!loading && !open && <div className="card card--bone"><h2>{t("Cozulmus acik sorgu yok")}</h2><p className="card__body">{t("Sorgular ekraninda acilim yetkisi verildikten sonra burada analiz yapabilirsiniz.")}</p></div>}
+      {queries.length > 1 && <div className="card card--bone research-results__picker"><span className="eyebrow">{t("SORGULARINIZ")}</span><div className="chips">{queries.map((item) => <button className={`chip${item.queryId === open?.queryId ? " chip--on" : ""}`} key={item.queryId} onClick={() => { setPicked(item.queryId); setSnps(null); setMetrics(null); setNotice(null); }} type="button">{t("#{id}", { id: item.queryId })} {item.granted ? t("cozulebilir") : t("bekliyor")}</button>)}</div><p className="card__body">{t("Birden fazla sorgunuz var. Yeni bir sorgu acmak eskilerin sonucuna erisimi kapatmaz; cozum yetkisi zincirde kalicidir.")}</p></div>}
       {open?.settled && <div className="notice notice--info">{t("Sorgu #{id} icin odeme dagitildi. Cozum yetkisi zincirde kalici oldugu icin sonuclari istediginiz zaman yeniden uretebilirsiniz; yeniden odeme yapilmaz, yalnizca cuzdan imzasi istenir.", { id: open.queryId })}</div>}
       {open && !disclosure?.executed && <div className="notice notice--info">Sorgu #{open.queryId} henuz cozum yetkisi almadi. Itiraz penceresi ve acilim adimini Sorgular ekranindan takip edin.</div>}
       {disclosure?.executed && <div className="research-results__action card card--bone"><div><span className="eyebrow">SORGU #{open?.queryId}</span><h2>{t("Grup toplamini coz ve hesapla")}</h2><p>{t("Ki-kare ve BH-FDR genomik tablolarda; Welch t ve Cohen d biyobelirtec tablolarinda gosterilir.")}</p></div><button className="pill pill--primary" disabled={analyzing || !signer} onClick={() => void analyze()}>{analyzing ? t("Cozuluyor...") : t("Toplamlari coz ve analiz et")}</button></div>}

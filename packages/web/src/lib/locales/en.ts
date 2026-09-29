@@ -669,4 +669,9 @@ export const EN: Record<string, string> = {
     "Some variants have a zero allele cell, so the odds ratio could not be computed.",
   "Sorgu #{id} icin odeme dagitildi. Cozum yetkisi zincirde kalici oldugu icin sonuclari istediginiz zaman yeniden uretebilirsiniz; yeniden odeme yapilmaz, yalnizca cuzdan imzasi istenir.":
     "Payment for query #{id} has been distributed. The decryption grant is permanent on chain, so you can regenerate the results at any time - there is no second payment, only a wallet signature.",
+  "SORGULARINIZ": "YOUR QUERIES",
+  "cozulebilir": "ready",
+  "bekliyor": "pending",
+  "Birden fazla sorgunuz var. Yeni bir sorgu acmak eskilerin sonucuna erisimi kapatmaz; cozum yetkisi zincirde kalicidir.":
+    "You have more than one query. Opening a new one does not close access to earlier results - the decryption grant is permanent on chain.",
 };

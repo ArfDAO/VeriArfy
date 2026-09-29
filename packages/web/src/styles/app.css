@@ -560,3 +560,5 @@
 }
 
 .research-results__export { gap: var(--spacing-12); }
+
+.research-results__picker .chips { margin-top: var(--spacing-12); }
