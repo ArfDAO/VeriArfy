@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { CIRCUIT_WASM, CIRCUIT_ZKEY, SEPOLIA_CHAIN_ID } from "../../config";
 import { getRegistry } from "../../lib/contracts";
-import { enroll, getMerklePath } from "../../lib/curator";
+import { CURATOR_SLOW_MS, enroll, getMerklePath } from "../../lib/curator";
 import { formatToken, getPaymentToken, getPayments, readResearcherReadiness, type ResearcherReadiness } from "../../lib/protocol";
 import { useSession } from "../../lib/session";
 import {
@@ -205,8 +205,21 @@ export function Kayit() {
         setIdentity(nextIdentity);
       }
 
+      // Barindirilan kurator hareketsizlikte uyutuluyor ve ilk istek uyanmayi
+      // bekliyor (~35 sn). Bu sure boyunca ekranda yalnizca "Isleniyor..."
+      // yaziyordu; kullanicinin bunu donmus saymamasi icin sebebini soyluyoruz.
+      // Mesaj yalnizca cagri GERCEKTEN uzarsa cikar, hizli yanitta hic gorunmez.
+      const slowTimer = setTimeout(() => {
+        setNotice({ kind: "info", text: t("Kurator servisi uyaniyor, bu ilk istekte yarim dakikayi bulabilir...") });
+      }, CURATOR_SLOW_MS);
+
       // Kurator yalnizca acik taahhudu gorur; trapdoor/nullifier tarayicidan cikmaz.
-      const enrollment = await enroll(nextIdentity.commitment);
+      let enrollment;
+      try {
+        enrollment = await enroll(nextIdentity.commitment);
+      } finally {
+        clearTimeout(slowTimer);
+      }
       const path = await getMerklePath(nextIdentity.commitment);
       const registry = getRegistry(provider);
 

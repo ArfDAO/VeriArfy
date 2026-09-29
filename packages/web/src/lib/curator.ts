@@ -14,14 +14,40 @@ export interface MerklePath {
   index: number;
 }
 
+/**
+ * Kurator cagrisi icin zaman asimi.
+ *
+ * Barindirilan servis hareketsizlikte uyutuluyor ve ilk istek uyanmayi
+ * bekliyor - olculen sure ~35 saniye. Bu yuzden sinir comert; erken kesmek
+ * calisan bir servisi kapali gibi gosterirdi.
+ *
+ * Ama sinirsiz da birakilamaz: zaman asimi yokken servis tamamen kapali
+ * oldugunda istek SONSUZA KADAR asili kaliyor, dugme "Isleniyor..." yaziyor
+ * ve kullaniciya hicbir sey soylenmiyordu.
+ */
+const CURATOR_TIMEOUT_MS = 90_000;
+
+/** Bu sureden uzun suren cagri "servis uyaniyor" demektir. */
+export const CURATOR_SLOW_MS = 3_000;
+
 async function call(path: string, init?: RequestInit) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CURATOR_TIMEOUT_MS);
+
   let res: Response;
   try {
     res = await fetch(`${CURATOR_URL}${path}`, {
       headers: { "content-type": "application/json" },
+      signal: controller.signal,
       ...init,
     });
   } catch (reason) {
+    if (reason instanceof Error && reason.name === "AbortError") {
+      throw new Error(
+        `Kurator servisi ${CURATOR_TIMEOUT_MS / 1000} saniye icinde yanit vermedi ` +
+          `(${CURATOR_URL}). Servis kapali olabilir; birazdan yeniden deneyin.`,
+      );
+    }
     // AYRI BIR HATA OLMAK ZORUNDA.
     //
     // Ulasilamayan kurator, tarayicida "Failed to fetch" verir. O metin
@@ -37,6 +63,8 @@ async function call(path: string, init?: RequestInit) {
       `Kurator servisine ulasilamadi (${CURATOR_URL}). ` +
         `Servisi baslatin: npm run curator [${detail}]`,
     );
+  } finally {
+    clearTimeout(timer);
   }
   if (!res.ok) {
     const body = await res.text().catch(() => "");
