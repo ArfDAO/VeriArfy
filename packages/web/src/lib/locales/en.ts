@@ -667,4 +667,6 @@ export const EN: Record<string, string> = {
     "The odds ratio is computed from allele counts. A wide confidence interval means even the direction of the effect is uncertain; that is expected in a small cohort. When an expected cell is below 5, the Fisher exact p applies instead of chi-square. HWE is assessed in controls only - a deviation among cases can come from the association itself.",
   "Bazı varyantlarda sifir alel hucresi var; odds orani hesaplanamadi.":
     "Some variants have a zero allele cell, so the odds ratio could not be computed.",
+  "Sorgu #{id} icin odeme dagitildi. Cozum yetkisi zincirde kalici oldugu icin sonuclari istediginiz zaman yeniden uretebilirsiniz; yeniden odeme yapilmaz, yalnizca cuzdan imzasi istenir.":
+    "Payment for query #{id} has been distributed. The decryption grant is permanent on chain, so you can regenerate the results at any time - there is no second payment, only a wallet signature.",
 };

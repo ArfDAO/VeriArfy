@@ -1421,6 +1421,52 @@ export async function stakeNode(signer: Signer, amountWei: bigint): Promise<TxOu
  *
  * @returns En yeni acik sorgu, yoksa `null`.
  */
+/**
+ * Arastirmacinin COZEBILECEGI tum sorgulari dondurur - odemesi dagitilmis
+ * olanlar dahil.
+ *
+ * NEDEN AYRI BIR ARAMA: `findOpenQuery` odemesi dagitilmis sorgulari atlar ve
+ * bu, acik sorgu aramak icin dogrudur. Ama sonuc ekrani yalnizca ona
+ * dayaniyordu; arastirmaci "odemeyi dagit" dugmesine basar basmaz - yani
+ * arayuzun kendisinin yonlendirdigi adimi tamamlayinca - satin aldigi cikti
+ * ekrandan kayboluyordu ve geri getirmenin yolu yoktu.
+ *
+ * Oysa cozum yetkisi (`FHE.allow`) KALICIDIR: geri alinamaz ve odemenin
+ * dagitilmasindan etkilenmez. Yani veri kaybolmus degildi, yalnizca arayuz
+ * onu bulamiyordu.
+ *
+ * Arama zincirden yapilir, tarayici deposundan degil: kullanici cikis
+ * yaptiginda ya da baska bir cihaza gectiginde yerel iz kaybolur, zincirdeki
+ * gercek kaybolmaz.
+ */
+export async function findGrantedQueries(
+  runner: BrowserProvider | Signer,
+  researcher: string,
+  limit = 25,
+): Promise<{ queryId: number; requestId: number; fee: bigint; settled: boolean }[]> {
+  const reader = readRunner(runner);
+  const payments = getPayments(reader);
+  const protocol = getProtocol(reader);
+  const total = Number(await payments.nextQueryId());
+
+  const out: { queryId: number; requestId: number; fee: bigint; settled: boolean }[] = [];
+  const oldest = Math.max(0, total - limit);
+
+  for (let id = total - 1; id >= oldest; id--) {
+    const q = await payments.query(id);
+    if ((q.researcher as string).toLowerCase() !== researcher.toLowerCase()) continue;
+    if (q.refunded) continue;
+
+    const requestId = Number(q.disclosureRequestId);
+    // Yetki verilmemis bir sorgu burada ise yaramaz: cozulecek bir sey yok.
+    if (!(await protocol.isDisclosureGranted(requestId))) continue;
+
+    out.push({ queryId: id, requestId, fee: q.fee as bigint, settled: q.settled as boolean });
+  }
+
+  return out;
+}
+
 export async function findOpenQuery(
   runner: BrowserProvider | Signer,
   researcher: string,
