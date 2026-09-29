@@ -2,6 +2,7 @@
 export function userError(error: unknown, fallback: string): string {
   const candidate = error instanceof Error ? error.message : typeof error === "string" ? error : "";
   const message = candidate.toLowerCase();
+  const detail = technicalDetail(candidate);
 
   if (message.includes("user rejected") || message.includes("rejected the request") || message.includes("action_rejected")) {
     return "İşlem cüzdanda onaylanmadı. Devam etmek isterseniz isteği yeniden başlatın.";
@@ -44,5 +45,26 @@ export function userError(error: unknown, fallback: string): string {
     return `${fallback} Zincirdeki güncel koşulları yenileyip tekrar deneyin.`;
   }
 
-  return fallback;
+  // TANIMADIGIMIZ HATADA HAM SEBEBI GOSTER.
+  //
+  // Buraya dusen hata, kaliplarin hicbirine uymayan hatadir - yani tam da
+  // hakkinda en az sey bildigimiz hata. Onu genel bir cumlenin arkasina
+  // saklamak kullaniciyi da bizi de kor birakiyor: ekranda "sorgu durumu
+  // okunamadi" yaziyor, konsola bakilmadan sebebi ogrenmenin yolu yok.
+  // Tanidigimiz hatalarda ise ham metni EKLEMIYORUZ; orada zaten ne
+  // yapilacagini soyluyoruz ve teknik ayrinti yalnizca gurultu olur.
+  return detail === null ? fallback : `${fallback} (${detail})`;
+}
+
+/** Ham hata metnini ekranda gosterilebilecek kisa bir ozete indirir. */
+function technicalDetail(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (trimmed === "") return null;
+
+  // Saglayici hatalari cok satirli JSON govdeleri tasiyabiliyor; ilk satir
+  // neredeyse her zaman ayirt edici olani.
+  const firstLine = trimmed.split("\n")[0].trim();
+  if (firstLine === "") return null;
+
+  return firstLine.length > 160 ? `${firstLine.slice(0, 157)}...` : firstLine;
 }
