@@ -28,3 +28,17 @@ services:
       # kayit akisi etkilenmez.
       - key: PINATA_JWT
         sync: false
+      # Kurator kokunu zincire YAZAN cuzdan.
+      #
+      # Tanimliysa servis her yeni kayittan sonra VeriArfyRegistry.updateRoot
+      # cagirir ve arastirmaci kaydi tek adimda tamamlanir. Tanimli degilse
+      # kayit akisi calismaya devam eder ama kok yazimi elle yapilmalidir
+      # (npm run curator:push-root) ve /enroll `rootPending: true` doner.
+      #
+      # KAPSAM: bu cuzdanin tek yetkisi `updateRoot`. Dagitim anahtarini
+      # BURAYA KOYMAYIN - ayri bir cuzdan uretin ve registry sahipligini ona
+      # devredin (packages/contracts/scripts/transfer-registry-owner.ts).
+      - key: CURATOR_PRIVATE_KEY
+        sync: false
+      - key: SEPOLIA_RPC_URL
+        sync: false

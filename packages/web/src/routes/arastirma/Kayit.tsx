@@ -17,6 +17,11 @@ import { useT } from "../../lib/i18n";
 
 const IDENTITY_KEY = "veriarfy.researcher.identity";
 
+// Kok yazma islemi Sepolia'da tipik olarak 15-30 saniye surer; 12 x 5 sn = 60 sn
+// pencere, yogun blok zamanlarinda da yetiyor ve kullaniciyi bosa bekletmiyor.
+const ROOT_WAIT_ATTEMPTS = 12;
+const ROOT_WAIT_INTERVAL_MS = 5_000;
+
 type Action = "register" | "approve" | null;
 
 function storedIdentity(): Identity | null {
@@ -104,18 +109,44 @@ export function Kayit() {
       }
 
       // Kurator yalnizca acik taahhudu gorur; trapdoor/nullifier tarayicidan cikmaz.
-      await enroll(nextIdentity.commitment);
-      const [path, chainRoot] = await Promise.all([
-        getMerklePath(nextIdentity.commitment),
-        getRegistry(provider).currentRoot() as Promise<bigint>,
-      ]);
+      const enrollment = await enroll(nextIdentity.commitment);
+      const path = await getMerklePath(nextIdentity.commitment);
+      const registry = getRegistry(provider);
 
-      // Yeni taahhut, yetkili kurator `push-root` calistirmadan zincirde kanitlanamaz.
-      // Bu kontrol olmadan kullanici yalnizca `UnknownRoot` revert'i gorurdu.
-      if (BigInt(path.root) !== chainRoot) {
+      // Yeni taahhut, kok zincire yazilmadan kanitlanamaz; yazilmadan devam
+      // edilirse kullanici yalnizca anlamsiz bir `UnknownRoot` revert'i gorur.
+      //
+      // Kurator kokU kendisi yaziyorsa islem birkac blok surer, bu yuzden
+      // hemen vazgecmek yerine kisa bir sure bekleyip zinciri yeniden okuyoruz.
+      // Yazma yetkisi yoksa (`rootPending`) beklemenin anlami yok - o durum
+      // kullanicinin degil operatorun cozecegi bir eksiklik.
+      const treeRoot = BigInt(path.root);
+      let chainRoot = (await registry.currentRoot()) as bigint;
+
+      if (treeRoot !== chainRoot && enrollment.rootPending !== true) {
+        setNotice({
+          kind: "info",
+          text: t("Kurator kokunu zincire yaziyor, onaylanmasi bekleniyor..."),
+        });
+        for (let attempt = 0; attempt < ROOT_WAIT_ATTEMPTS && treeRoot !== chainRoot; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, ROOT_WAIT_INTERVAL_MS));
+          chainRoot = (await registry.currentRoot()) as bigint;
+        }
+      }
+
+      if (treeRoot !== chainRoot) {
         setNotice({
           kind: "warn",
-          text: `Taahhut kuratora eklendi; ancak kurator kokunun zincire yazilmasini henuz tamamlamadi (kurator: ${shortRoot(path.root)}, zincir: ${shortRoot(chainRoot)}). Kök guncellendikten sonra yeniden deneyin.`,
+          text:
+            enrollment.rootPending === true
+              ? t(
+                  "Taahhudunuz kurator agacina eklendi (sira #{index}), ancak kurator servisi kokU zincire yazma yetkisine sahip degil. Bu, sizin tamamlayabileceginiz bir adim degil: operatorun kok yazma yetkisini kurator cuzdanina devretmesi gerekiyor. Devir tamamlandiktan sonra bu sayfadan tekrar deneyin; taahhudunuz korunuyor, bastan olusturmaniz gerekmez.",
+                  { index: enrollment.index },
+                )
+              : t(
+                  "Taahhut kuratora eklendi ancak kok zincirde henuz guncellenmedi (kurator: {tree}, zincir: {chain}). Birkac dakika sonra yeniden deneyin.",
+                  { tree: shortRoot(path.root), chain: shortRoot(chainRoot) },
+                ),
         });
         return;
       }

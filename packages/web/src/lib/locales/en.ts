@@ -638,4 +638,11 @@ export const EN: Record<string, string> = {
   "Test ağındayız": "This is a testnet",
   "Sözleşmeler Sepolia üzerinde çalışıyor. Tören tek katılımcılı bir geliştirme kurulumudur; ana ağ için çok taraflı bir tören gerekir.":
     "The contracts run on Sepolia. The trusted setup is a single-contributor development ceremony; mainnet requires a multi-party one.",
+
+  "Kurator kokunu zincire yaziyor, onaylanmasi bekleniyor...":
+    "The curator is writing the root on chain, waiting for confirmation...",
+  "Taahhudunuz kurator agacina eklendi (sira #{index}), ancak kurator servisi kokU zincire yazma yetkisine sahip degil. Bu, sizin tamamlayabileceginiz bir adim degil: operatorun kok yazma yetkisini kurator cuzdanina devretmesi gerekiyor. Devir tamamlandiktan sonra bu sayfadan tekrar deneyin; taahhudunuz korunuyor, bastan olusturmaniz gerekmez.":
+    "Your commitment was added to the curator tree (position #{index}), but the curator service is not authorised to write the root on chain. This is not a step you can complete: the operator has to transfer root-writing authority to the curator wallet. Once that is done, try again from this page - your commitment is kept, you do not need to create it again.",
+  "Taahhut kuratora eklendi ancak kok zincirde henuz guncellenmedi (kurator: {tree}, zincir: {chain}). Birkac dakika sonra yeniden deneyin.":
+    "The commitment was added to the curator, but the on-chain root is not updated yet (curator: {tree}, chain: {chain}). Try again in a few minutes.",
 };
