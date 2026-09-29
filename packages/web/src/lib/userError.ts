@@ -18,6 +18,25 @@ export function userError(error: unknown, fallback: string): string {
   if (message.includes("network") || message.includes("rpc") || message.includes("missing revert data") || message.includes("failed to fetch")) {
     return "Ağ bağlantısı doğrulanamadı. Sepolia ağını ve RPC bağlantınızı kontrol edip yeniden deneyin.";
   }
+  // Sozlesmenin kendi hata adlari, genel "revert" kalibindan ONCE gelmeli;
+  // aksi halde hepsi "zincirdeki kosullari yenileyip tekrar deneyin" oluyor ve
+  // tekrar denemek bu hatalarin HICBIRINI cozmuyor.
+  if (message.includes("nullifieralreadyspent")) {
+    return (
+      "Bu ZK kimligi zaten bir cuzdanla kaydedilmis. Her cuzdanin kendi kimligi " +
+      "olmak zorunda: MetaMask'te bu hesabi secili birakip sayfayi yenileyin, " +
+      "yeni bir kimlik uretilecektir."
+    );
+  }
+  if (message.includes("alreadyregistered")) {
+    return "Bu cuzdan zaten arastirmaci olarak kayitli. Sorgu ekranindan devam edebilirsiniz.";
+  }
+  if (message.includes("unknownroot") || message.includes("rootexpired")) {
+    return (
+      "Kanit, zincirdeki guncel akredite agac koku ile uyusmuyor. Kurator " +
+      "kokU yazdiktan sonra yeniden deneyin."
+    );
+  }
   if (message.includes("wrong chain") || message.includes("chain")) {
     return "Bu işlem Sepolia ağında yapılabilir. Cüzdan ağını değiştirip yeniden deneyin.";
   }

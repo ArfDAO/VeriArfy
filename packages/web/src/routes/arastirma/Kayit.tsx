@@ -15,7 +15,24 @@ import {
 } from "../../lib/zk";
 import { useT } from "../../lib/i18n";
 
-const IDENTITY_KEY = "veriarfy.researcher.identity";
+/**
+ * ZK kimligi CUZDAN BASINA saklanir.
+ *
+ * Eskiden tek bir sabit anahtar vardi ve kimlik tarayici basina tutuluyordu.
+ * Sonucu: bir cuzdanla kaydolduktan sonra MetaMask'te hesap degistirip tekrar
+ * denemek AYNI nullifier'i ikinci kez harcamaya calisiyor, zincir
+ * `NullifierAlreadySpent` ile reddediyordu. Yani "birden fazla hesapla giris"
+ * tarayicinin kendisi yuzunden imkansizdi ve hata mesaji bunu soylemiyordu.
+ *
+ * Nullifier tek kullanimlik oldugu icin her cuzdanin kendi kimligi olmak
+ * zorunda; anahtar adresle isimlendiriliyor.
+ */
+const IDENTITY_PREFIX = "veriarfy.researcher.identity";
+const LEGACY_IDENTITY_KEY = IDENTITY_PREFIX;
+
+function identityKey(address: string): string {
+  return `${IDENTITY_PREFIX}.${address.toLowerCase()}`;
+}
 
 // Kok yazma islemi Sepolia'da tipik olarak 15-30 saniye surer; 12 x 5 sn = 60 sn
 // pencere, yogun blok zamanlarinda da yetiyor ve kullaniciyi bosa bekletmiyor.
@@ -24,8 +41,25 @@ const ROOT_WAIT_INTERVAL_MS = 5_000;
 
 type Action = "register" | "approve" | null;
 
-function storedIdentity(): Identity | null {
-  const raw = window.localStorage.getItem(IDENTITY_KEY);
+function storedIdentity(address: string | null | undefined): Identity | null {
+  if (!address) return null;
+
+  let raw = window.localStorage.getItem(identityKey(address));
+
+  // Tek anahtarli surumden gecis: eski kimlik, o sirada bagli olan cuzdana
+  // aitti. Ilk acilista onu bu adresin altina taşıyoruz, yoksa daha once
+  // kaydolmus kullanici kendi kimligini kaybeder ve bir daha ayni nullifier'i
+  // kullanamadigi icin kaydini kurtaramaz. Tasima yalnizca bu adresin kendi
+  // kaydi henuz yoksa yapilir.
+  if (!raw) {
+    const legacy = window.localStorage.getItem(LEGACY_IDENTITY_KEY);
+    if (legacy) {
+      window.localStorage.setItem(identityKey(address), legacy);
+      window.localStorage.removeItem(LEGACY_IDENTITY_KEY);
+      raw = legacy;
+    }
+  }
+
   if (!raw) return null;
 
   try {
@@ -67,7 +101,13 @@ export function Kayit() {
   const t = useT();
   const { address, chainId, provider, signer, refresh: refreshSession } = useSession();
   const [readiness, setReadiness] = useState<ResearcherReadiness | null>(null);
-  const [identity, setIdentity] = useState<Identity | null>(storedIdentity);
+  const [identity, setIdentity] = useState<Identity | null>(null);
+
+  // Cuzdan degisince kimlik de degismeli; aksi halde yeni hesap eski hesabin
+  // harcanmis nullifier'iyla kaydolmaya calisir.
+  useEffect(() => {
+    setIdentity(storedIdentity(address));
+  }, [address]);
   const [action, setAction] = useState<Action>(null);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<{ kind: "warn" | "ok" | "info"; text: string } | null>(null);
@@ -104,7 +144,7 @@ export function Kayit() {
       let nextIdentity = identity;
       if (!nextIdentity) {
         nextIdentity = createIdentity();
-        window.localStorage.setItem(IDENTITY_KEY, serializeIdentity(nextIdentity));
+        window.localStorage.setItem(identityKey(address), serializeIdentity(nextIdentity));
         setIdentity(nextIdentity);
       }
 
