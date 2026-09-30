@@ -198,6 +198,21 @@ async function considerRequest(requestId) {
     }
 
     await queue(wallet, async () => {
+      // GONDERMEDEN HEMEN ONCE YENIDEN KONTROL.
+      //
+      // Karar, islem kuyruga girmeden ONCE okunan duruma dayaniyor. Kuyrukta
+      // beklerken baska bir islem talebi sonuclandirmis olabilir; o durumda
+      // islem zincirde revert eder ve gazi bosa gider. Bu bir kez yasandi:
+      // dugumun nonce'u, basarili islemlerden bir fazlaydi.
+      const [alreadyApproved, alreadyFinal] = await Promise.all([
+        readProtocol.hasApproved(requestId, wallet.address),
+        readProtocol.isDisclosureFinalized(requestId),
+      ]);
+      if (alreadyApproved || alreadyFinal) {
+        console.log(`talep ${requestId} / ${wallet.address}: kuyrukta beklerken sonuclanmis - gonderilmedi`);
+        return;
+      }
+
       const contract = new ethers.Contract(deployment.contracts.VeriarfyProtocol, PROTOCOL_ABI, wallet);
       const tx = await contract.approveDisclosure(requestId);
       console.log(`talep ${requestId} / ${wallet.address}: onay gonderildi ${tx.hash} (${verdict.reason})`);
@@ -219,7 +234,17 @@ async function considerRequest(requestId) {
  * olay akisinda kaybolur, tarama ise yeniden baslayinca onlari da bulur.
  * Sayac kucuk oldugu icin maliyeti onemsiz.
  */
+let scanning = false;
+
 async function scan() {
+  // TARAMALAR UST USTE BINMEZ.
+  //
+  // Servis uyurken gelen ilk istek onu uyandiriyor ve acilis taramasi yavas
+  // RPC ile yarim dakikayi asabiliyor. `setInterval` bu arada yeni bir tarama
+  // baslatiyordu; ikisi de ayni talebi "onaysiz" gorup ikisi de onay
+  // gonderiyordu - ikincisi revert edip gaz yakiyordu.
+  if (scanning) return;
+  scanning = true;
   try {
     const total = Number(await readProtocol.nextRequestId());
     for (let id = 0; id < total; id++) {
@@ -234,6 +259,8 @@ async function scan() {
   } catch (error) {
     state.lastError = error.shortMessage ?? error.message;
     console.error("tarama basarisiz:", state.lastError);
+  } finally {
+    scanning = false;
   }
 }
 

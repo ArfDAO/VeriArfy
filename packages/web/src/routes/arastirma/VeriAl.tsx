@@ -17,6 +17,7 @@ import {
 import { useSession } from "../../lib/session";
 import { GENOMIC_PANEL, METRIC_PANEL } from "../../lib/studyPanel";
 import { useT } from "../../lib/i18n";
+import { wakeNodeOperator } from "../../lib/nodeOperator";
 
 interface FieldCoverage {
   count: number;
@@ -163,6 +164,8 @@ export function VeriAl() {
     setNotice({ kind: "info", text: "Ucret emanete aliniyor ve secilen alanlar icin acilim talebi aciliyor..." });
     try {
       const outcome = await openQuery(signer, QUERY_TYPE.STATISTICS, { snpIds, metricIds });
+      // Talep zincirde acildi; onaylayacak servis uyuyor olabilir.
+      wakeNodeOperator();
       setNotice({
         kind: "ok",
         text: `Sorgu #${outcome.queryId} acildi. ${formatToken(outcome.fee, purchaseState.readiness.decimals, purchaseState.readiness.symbol)} ucret emanette; sonraki asamalar sorgular ekraninda izlenecek.`,

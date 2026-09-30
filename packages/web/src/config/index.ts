@@ -71,6 +71,16 @@ export function explorerAddress(address: string): string {
 /** Kurator servisi — Merkle yolunu saglar (VITE_CURATOR_URL ile degistirilebilir). */
 export const CURATOR_URL = import.meta.env.VITE_CURATOR_URL ?? "http://localhost:8787";
 
+/**
+ * Yetkili dugum servisi — acilim taleplerini onaylar.
+ *
+ * Arayuz bu servisi YALNIZCA UYANDIRMAK icin cagirir; onay zincir uzerinden
+ * gelir, bu adres uzerinden degil. Varsayilan barindirilan servistir cunku
+ * dugum servisi yerelde calismasa bile uyandirma cagrisi zararsizdir.
+ */
+export const NODE_OPERATOR_URL =
+  import.meta.env.VITE_NODE_OPERATOR_URL ?? "https://veriarfy-node-operator.onrender.com";
+
 /** Devre ciktilarinin sunuldugu yol. */
 export const CIRCUIT_WASM = IDENTITY_CIRCUIT_WASM;
 export const CIRCUIT_ZKEY = IDENTITY_CIRCUIT_ZKEY;
