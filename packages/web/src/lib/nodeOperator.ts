@@ -37,3 +37,34 @@ export function wakeNodeOperator(): void {
     /* uyandirma en iyi cabadir; basarisizligi kullaniciyi ilgilendirmez */
   });
 }
+
+export interface NodeVerdict {
+  rejected: { reason: string; at: string } | null;
+}
+
+/**
+ * Dugum servisinin bir talep icin verdigi karari okur.
+ *
+ * Reddedilen bir talep zincirde "onay bekliyor" olarak kalir; zincir redde
+ * dair bir kayit tutmaz. Sebep yalnizca dugumde bilinir. Bu cagri olmadan
+ * arastirmaci neyi bekledigini hicbir zaman ogrenemezdi.
+ *
+ * Okunamazsa null doner: bu, "reddedilmedi" DEMEK DEGILDIR, "bilinmiyor"dur.
+ */
+export async function fetchNodeVerdict(requestId: number): Promise<NodeVerdict | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const res = await fetch(`${NODE_OPERATOR_URL}/requests/${requestId}`, {
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const body = await res.json();
+    return { rejected: body.rejected ?? null };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}

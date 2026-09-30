@@ -686,4 +686,11 @@ export const EN: Record<string, string> = {
     "The curator service is waking up; the first request can take up to half a minute...",
   "Yetkili dugum servisi uyandiriliyor. Servis bir sure islem gormediyse uyanmasi yaklasik bir dakika surer; onay genelde 1-2 dakika icinde gelir ve bu ekran kendiliginden guncellenir.":
     "Waking the authorised node service. If it has been idle, waking takes about a minute; approval usually arrives within 1-2 minutes and this screen updates on its own.",
+  "Ucret iade edildi.": "The fee was refunded.",
+  "Iade ediliyor...": "Refunding...",
+  "Ucreti iade al": "Refund the fee",
+  "Yetkili dugum bu sorguyu onaylamadi: {reason}.": "The authorised node did not approve this query: {reason}.",
+  "Bu bir mahremiyet korumasidir: ayni alanlar icin onceki bir sorguyla aradaki fark, esikten az sayida kisinin verisini aciga cikarirdi. Havuza yeterince yeni katilimci eklendiginde ayni alanlari yeniden sorgulayabilirsiniz.":
+    "This is a privacy safeguard: the difference with an earlier query on the same fields would have exposed the data of fewer people than the threshold. Once enough new participants join the pool you can query the same fields again.",
+  "Ucret {blocks} blok sonra (yaklasik {hours} saat) iade alinabilir.": "The fee can be refunded in {blocks} blocks (about {hours} hours).",
 };

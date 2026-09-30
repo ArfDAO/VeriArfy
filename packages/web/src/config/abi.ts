@@ -189,6 +189,10 @@ export const PAYMENTS_ABI = [
   "function openQuery(uint8 queryType) returns (uint256)",
   "function openQueryFields(uint8 queryType, uint32[] snpIds, uint32[] metricIds) returns (uint256)",
   "function settleQuery(uint256 queryId)",
+  // Onay gelmezse (ornegin dugum fark saldirisi riski yuzunden reddederse)
+  // arastirmacinin parasini geri alabilmesi icin. Arayuzde bu yol yoktu:
+  // reddedilen bir sorgunun ucreti emanette sikisip kaliyordu.
+  "function refundQuery(uint256 queryId)",
   // Nadirlik anlik goruntusu — payin nasil hesaplandigini panelde gostermek icin.
   "function weightOf(uint256 queryId, address account) view returns (uint256)",
   // Kullanima gore odeme: pay = kac alana veri verdin.

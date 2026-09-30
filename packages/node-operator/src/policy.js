@@ -53,3 +53,49 @@ export function evaluateRequest({
 
   return { approve: true, reason: `kohort ${snapshotCount} >= esik ${minParticipants}` };
 }
+
+/**
+ * FARK SALDIRISI KONTROLU.
+ *
+ * Havuzdaki sayaclar yalnizca ARTAR: yeni katilim eklenir, havuzdan cikis
+ * toplamlardan hicbir sey cikarmaz. Her acilim talebi o anki tabloyu dondurur.
+ * Dolayisiyla ayni alan icin iki talebin dondurdugu tablolarin FARKI, aradaki
+ * donemde katilan kisilerin toplamidir.
+ *
+ * Bu fark k kisiden AZSA k-anonimlik delinir. En kotu hal: iki sorgu
+ * arasinda tek bir kisi katilir ve farkin kendisi o kisinin genotipidir.
+ * Her sorgu tek basina "en az 10 kisi" kuralini gecer; sizinti ikisinin
+ * birlikte okunmasindan dogar. Sozlesme bunu yakalamiyor cunku her talebi
+ * tek basina degerlendiriyor.
+ *
+ * Kontrol TUM arastirmacilarin talepleriyle yapilir, yalnizca ayni kisinin
+ * degil: kurator herkesi kaydettigi icin tek bir kisi birden fazla
+ * arastirmaci kimligi acabilir ve kimlikler birbirine baglanamaz.
+ *
+ * Fark 0 ise kohort AYNIDIR (sayac artmadiysa kimse eklenmedi) - sizinti yok.
+ *
+ * @param {{ fields: {key: string, count: number}[] }} request
+ * @param {{ requestId: number, fields: {key: string, count: number}[] }[]} others
+ * @param {number} k  k-anonimlik esigi (minParticipants)
+ * @returns {{ approve: boolean, reason: string }}
+ */
+export function evaluateDifferencing(request, others, k) {
+  const mine = new Map(request.fields.map((f) => [f.key, f.count]));
+
+  for (const other of others) {
+    for (const field of other.fields) {
+      if (!mine.has(field.key)) continue;
+      const diff = Math.abs(mine.get(field.key) - field.count);
+      if (diff > 0 && diff < k) {
+        return {
+          approve: false,
+          reason:
+            `talep ${other.requestId} ile ${field.key} alaninda ${diff} kisilik fark var ` +
+            `(esik ${k}); iki sonucun farki bu ${diff} kisinin verisini aciga cikarir`,
+        };
+      }
+    }
+  }
+
+  return { approve: true, reason: "fark saldirisi riski yok" };
+}

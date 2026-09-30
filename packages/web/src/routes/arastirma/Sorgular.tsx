@@ -10,11 +10,13 @@ import {
   getPaymentToken,
   QUERY_TYPE,
   readDisclosure,
+  refundAvailableAt,
+  refundQuery,
   type DisclosureState,
 } from "../../lib/protocol";
 import { useSession } from "../../lib/session";
 import { useT } from "../../lib/i18n";
-import { wakeNodeOperator } from "../../lib/nodeOperator";
+import { fetchNodeVerdict, wakeNodeOperator, type NodeVerdict } from "../../lib/nodeOperator";
 
 interface QueryPointer {
   queryId: number;
@@ -27,6 +29,9 @@ interface QueryState extends QueryPointer {
   settled: boolean;
   refunded: boolean;
   open: boolean;
+  openedAtBlock: number;
+  /** Iadenin mumkun oldugu ilk blok (sozlesmedeki REFUND_DELAY'e gore). */
+  refundAt: number;
   disclosure: DisclosureState;
 }
 
@@ -138,7 +143,8 @@ export function Sorgular() {
   const { address, chainId, provider, signer } = useSession();
   const [query, setQuery] = useState<QueryState | null>(null);
   const [loading, setLoading] = useState(false);
-  const [action, setAction] = useState<"execute" | null>(null);
+  const [action, setAction] = useState<"execute" | "refund" | null>(null);
+  const [verdict, setVerdict] = useState<NodeVerdict | null>(null);
   const [notice, setNotice] = useState<{ kind: "warn" | "ok" | "info"; text: string } | null>(null);
   const wrongNetwork = chainId !== null && chainId !== SEPOLIA_CHAIN_ID;
 
@@ -169,6 +175,8 @@ export function Sorgular() {
       }
 
       savePointer(address, pointer);
+      const openedAtBlock = Number(payment.openedAtBlock);
+      const refundAt = await refundAvailableAt(provider, openedAtBlock);
       setQuery({
         ...pointer,
         fee: payment.fee as bigint,
@@ -176,6 +184,8 @@ export function Sorgular() {
         settled: payment.settled as boolean,
         refunded: payment.refunded as boolean,
         open: !!open,
+        openedAtBlock,
+        refundAt,
         disclosure,
       });
     } catch (error) {
@@ -203,12 +213,42 @@ export function Sorgular() {
   // en fazla bir kez uyandirilir (bekleme `wakeNodeOperator` icinde).
   // Sayfanin kendi 12 saniyelik yenilemesi, onay geldiginde bunu gosterir.
   const awaitingApproval = !!query?.open && !query.disclosure.finalized && !query.disclosure.revoked;
+  const pendingRequestId = awaitingApproval ? query!.requestId : null;
   useEffect(() => {
-    if (!awaitingApproval) return;
-    wakeNodeOperator();
-    const timer = window.setInterval(wakeNodeOperator, 30_000);
-    return () => window.clearInterval(timer);
-  }, [awaitingApproval]);
+    if (pendingRequestId === null) {
+      setVerdict(null);
+      return;
+    }
+    let cancelled = false;
+    const tick = () => {
+      wakeNodeOperator();
+      // Dugumun karari: reddettiyse sebebi zincirde yazmaz, yalnizca dugumde bilinir.
+      void fetchNodeVerdict(pendingRequestId).then((next) => {
+        if (!cancelled && next) setVerdict(next);
+      });
+    };
+    tick();
+    const timer = window.setInterval(tick, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [pendingRequestId]);
+
+  const refund = useCallback(async () => {
+    if (!signer || !query) return;
+    setAction("refund");
+    setNotice(null);
+    try {
+      await refundQuery(signer, query.queryId);
+      setNotice({ kind: "ok", text: t("Ucret iade edildi.") });
+      await refresh();
+    } catch (error) {
+      setNotice({ kind: "warn", text: userError(error, "Iade yapilamadi.") });
+    } finally {
+      setAction(null);
+    }
+  }, [query, refresh, signer, t]);
 
   const execute = useCallback(async () => {
     if (!signer || !query?.disclosure.canExecute) return;
@@ -242,7 +282,14 @@ export function Sorgular() {
 
       {wrongNetwork && <div className="notice notice--warn">{t("Sorgu durumu yalnizca Sepolia aginda okunabilir.")}</div>}
       {notice && <div className={`notice notice--${notice.kind}`} role="status">{notice.text}</div>}
-      {awaitingApproval && <div className="notice notice--info" role="status">{t("Yetkili dugum servisi uyandiriliyor. Servis bir sure islem gormediyse uyanmasi yaklasik bir dakika surer; onay genelde 1-2 dakika icinde gelir ve bu ekran kendiliginden guncellenir.")}</div>}
+      {awaitingApproval && !verdict?.rejected && <div className="notice notice--info" role="status">{t("Yetkili dugum servisi uyandiriliyor. Servis bir sure islem gormediyse uyanmasi yaklasik bir dakika surer; onay genelde 1-2 dakika icinde gelir ve bu ekran kendiliginden guncellenir.")}</div>}
+      {awaitingApproval && verdict?.rejected && query && <div className="notice notice--warn" role="status">
+        <p>{t("Yetkili dugum bu sorguyu onaylamadi: {reason}.", { reason: verdict.rejected.reason })}</p>
+        <p>{t("Bu bir mahremiyet korumasidir: ayni alanlar icin onceki bir sorguyla aradaki fark, esikten az sayida kisinin verisini aciga cikarirdi. Havuza yeterince yeni katilimci eklendiginde ayni alanlari yeniden sorgulayabilirsiniz.")}</p>
+        {query.disclosure.currentBlock >= query.refundAt
+          ? <button className="pill pill--primary" disabled={action !== null || !signer} onClick={() => void refund()}>{action === "refund" ? t("Iade ediliyor...") : t("Ucreti iade al")}</button>
+          : <p>{t("Ucret {blocks} blok sonra (yaklasik {hours} saat) iade alinabilir.", { blocks: query.refundAt - query.disclosure.currentBlock, hours: Math.ceil(((query.refundAt - query.disclosure.currentBlock) * 12) / 3600) })}</p>}
+      </div>}
 
       {!loading && !query && (
         <div className="card card--bone">

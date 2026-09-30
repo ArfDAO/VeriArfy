@@ -1202,6 +1202,33 @@ export async function executeDisclosure(
 }
 
 /** Ucreti bolustuurur: %80 katilimcilara, %20 hazineye. */
+/**
+ * Onaylanmamis bir sorgunun ucretini arastirmaciya iade eder.
+ *
+ * Sozlesme iadeyi yalnizca yetki verilmemisse ve `REFUND_DELAY` dolmussa
+ * kabul eder; veriyi almis bir arastirmaci parasini geri alamaz.
+ */
+export async function refundQuery(signer: Signer, queryId: number): Promise<TxOutcome> {
+  const payments = getPayments(signer);
+  const tx = await payments.refundQuery(queryId);
+  const receipt = await tx.wait();
+  return {
+    hash: receipt.hash,
+    blockNumber: receipt.blockNumber,
+    gasUsed: receipt.gasUsed.toString(),
+    handles: [],
+  };
+}
+
+/** Iadenin mumkun oldugu ilk blok. */
+export async function refundAvailableAt(
+  runner: BrowserProvider | Signer,
+  openedAtBlock: number,
+): Promise<number> {
+  const delay = Number(await getPayments(runner).REFUND_DELAY());
+  return openedAtBlock + delay;
+}
+
 export async function settleQuery(signer: Signer, queryId: number): Promise<TxOutcome> {
   const payments = getPayments(signer);
   const tx = await payments.settleQuery(queryId);
