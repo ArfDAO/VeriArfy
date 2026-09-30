@@ -14,6 +14,7 @@ import {
 } from "../../lib/protocol";
 import { useSession } from "../../lib/session";
 import { useT } from "../../lib/i18n";
+import { wakeNodeOperator } from "../../lib/nodeOperator";
 
 interface QueryPointer {
   queryId: number;
@@ -195,6 +196,20 @@ export function Sorgular() {
     return () => window.clearInterval(timer);
   }, [provider, query?.open, refresh]);
 
+  // ONAY BEKLENIRKEN DUGUM SERVISINI UYANDIR.
+  //
+  // Servis uyurken zinciri taramiyor; talep ancak ona bir istek ulasinca
+  // onaylaniyor. Bu ekran acikken ve talep onay beklerken servis her dakika
+  // en fazla bir kez uyandirilir (bekleme `wakeNodeOperator` icinde).
+  // Sayfanin kendi 12 saniyelik yenilemesi, onay geldiginde bunu gosterir.
+  const awaitingApproval = !!query?.open && !query.disclosure.finalized && !query.disclosure.revoked;
+  useEffect(() => {
+    if (!awaitingApproval) return;
+    wakeNodeOperator();
+    const timer = window.setInterval(wakeNodeOperator, 30_000);
+    return () => window.clearInterval(timer);
+  }, [awaitingApproval]);
+
   const execute = useCallback(async () => {
     if (!signer || !query?.disclosure.canExecute) return;
     setAction("execute");
@@ -227,6 +242,7 @@ export function Sorgular() {
 
       {wrongNetwork && <div className="notice notice--warn">{t("Sorgu durumu yalnizca Sepolia aginda okunabilir.")}</div>}
       {notice && <div className={`notice notice--${notice.kind}`} role="status">{notice.text}</div>}
+      {awaitingApproval && <div className="notice notice--info" role="status">{t("Yetkili dugum servisi uyandiriliyor. Servis bir sure islem gormediyse uyanmasi yaklasik bir dakika surer; onay genelde 1-2 dakika icinde gelir ve bu ekran kendiliginden guncellenir.")}</div>}
 
       {!loading && !query && (
         <div className="card card--bone">

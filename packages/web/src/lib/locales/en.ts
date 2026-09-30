@@ -684,4 +684,6 @@ export const EN: Record<string, string> = {
     "The fee was escrowed when the query was opened and the disclosure was granted; the shares have not been distributed yet. You can start the distribution yourself - there is no need to wait for the researcher.",
   "Kurator servisi uyaniyor, bu ilk istekte yarim dakikayi bulabilir...":
     "The curator service is waking up; the first request can take up to half a minute...",
+  "Yetkili dugum servisi uyandiriliyor. Servis bir sure islem gormediyse uyanmasi yaklasik bir dakika surer; onay genelde 1-2 dakika icinde gelir ve bu ekran kendiliginden guncellenir.":
+    "Waking the authorised node service. If it has been idle, waking takes about a minute; approval usually arrives within 1-2 minutes and this screen updates on its own.",
 };
