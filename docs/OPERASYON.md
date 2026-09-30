@@ -73,6 +73,20 @@ bunu gizlemez, açılışta uyarır ve sağlık ucunda `independentNodes: false`
 döner. Üretimde her düğüm ayrı kurumda, ayrı anahtarla, ayrı politikayla
 çalışmalıdır.
 
+**İtiraz süresi: 5 blok (~1 dakika).** Eşiğe ulaşılan talep ile yetkinin
+verilmesi (`FHE.allow`) arasındaki penceredir. `FHE.allow` geri alınamadığı
+için hatalı bir onayı itirazla durdurmanın tek anı budur
+([MK-0008](mimari/0008-guvenilmez-dugum.md)).
+
+Dağıtımda 20 blok (~4 dakika) kurulmuştu; testnette izleyen ve itiraz eden
+kimse olmadığı için bu süre bir güvence sağlamıyor, yalnızca bekletiyordu.
+5 blok, pencereyi ekranda görünür ve itiraz edilebilir tutuyor. **Sıfır
+yapılmamalı** — mekanizma ortadan kalkar. Üretimde tersine uzun olmalı ki bir
+kurum inceleyebilsin; üst sınır, itiraz + oylama süresinin (3600) teminat
+çekme gecikmesini (7200) aşmamasıdır, aksi halde kötü onay veren düğüm itiraz
+sonuçlanmadan teminatını çekebilir. Ayar ve bu sınırlar:
+`packages/contracts/scripts/set-challenge-period.ts`.
+
 **Teminat eşiği büyür — izlenmesi gerekir.** `minStake()` havuzun toplam
 değeriyle birlikte yükselir (progresif teminat, rapor 2.7.1). Sabit bir
 teminat bir süre sonra eşiğin altında kalır ve düğüm sessizce
