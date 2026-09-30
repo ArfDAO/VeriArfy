@@ -67,32 +67,30 @@ async function call(path: string, init?: RequestInit) {
     clearTimeout(timer);
   }
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Kurator hatasi (${res.status}): ${body || res.statusText}`);
+    // Sunucu ULASILABILIR ve bir hata dondurdu - bu, ulasilamamaktan farkli.
+    // Dogrulama uclari kullaniciya yonelik, anlamli mesajlar donduruyor ("kod
+    // hatali", "bu e-posta zaten kullanilmis"); bunlar oldugu gibi gosterilir.
+    const text = await res.text().catch(() => "");
+    let message = text || res.statusText;
+    try {
+      message = JSON.parse(text).error ?? message;
+    } catch {
+      /* JSON degil; metin oldugu gibi kalir */
+    }
+    throw new CuratorResponseError(message, res.status);
   }
   return res.json();
 }
 
-export interface EnrollResult {
-  index: number;
-  root: string;
-  /**
-   * Kurator taahhudu ekledi ama kokU zincire YAZAMADI.
-   *
-   * Kurator servisinde `CURATOR_PRIVATE_KEY` tanimliysa kok yazimi otomatiktir
-   * ve bu alan `false` doner. `true` dondugunde eksik olan kullanicinin yaptigi
-   * bir sey degil, operator tarafindaki yetki; arayuz bunu boyle anlatmali.
-   * Eski kurator surumleri alani hic dondurmez, bu yuzden `undefined` olabilir.
-   */
-  rootPending?: boolean;
-}
-
-/** Taahhudu akredite agaca eklet. */
-export async function enroll(commitment: bigint): Promise<EnrollResult> {
-  return call("/enroll", {
-    method: "POST",
-    body: JSON.stringify({ commitment: commitment.toString() }),
-  });
+/** Kurator yanit verdi ama istegi reddetti. Mesaj kullaniciya gosterilebilir. */
+export class CuratorResponseError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "CuratorResponseError";
+  }
 }
 
 /** Kanit icin Merkle yolunu al. */
@@ -124,4 +122,66 @@ export async function getStatus(): Promise<CuratorStatus> {
     chainRoot: body.chainRoot == null ? null : String(body.chainRoot),
     autoPush: Boolean(body.autoPush),
   };
+}
+
+/* ---------------------------------------------------------------------------
+ * Arastirmaci dogrulamasi
+ *
+ * Akredite listeye artik dogrudan eklenilemiyor; kurum e-postasi ve ORCID ya da
+ * YOK Akademik / AVESIS profiliyle dogrulama gerekiyor. Her adimin sonucu
+ * sunucunun imzaladigi bir jeton; sunucu durum tutmuyor.
+ * ------------------------------------------------------------------------- */
+
+export interface VerificationStatus {
+  email: boolean;
+  orcid: boolean;
+  profile: boolean;
+}
+
+export async function verificationStatus(): Promise<VerificationStatus> {
+  return call("/verify/status");
+}
+
+export async function startEmailVerification(
+  email: string,
+): Promise<{ challenge: string; domain: string; expiresIn: number }> {
+  return call("/verify/email/start", { method: "POST", body: JSON.stringify({ email }) });
+}
+
+export async function confirmEmailVerification(
+  challenge: string,
+  code: string,
+): Promise<{ emailSession: string; email: string; domain: string }> {
+  return call("/verify/email/confirm", { method: "POST", body: JSON.stringify({ challenge, code }) });
+}
+
+/** ORCID giris adresini dondurur; tarayici oraya yonlendirilir. */
+export async function startOrcidVerification(emailSession: string, commitment: bigint): Promise<string> {
+  const { url } = await call("/verify/orcid/start", {
+    method: "POST",
+    body: JSON.stringify({ emailSession, commitment: commitment.toString() }),
+  });
+  return url;
+}
+
+export async function submitProfileForReview(
+  emailSession: string,
+  commitment: bigint,
+  profileUrl: string,
+): Promise<void> {
+  await call("/verify/profile/submit", {
+    method: "POST",
+    body: JSON.stringify({ emailSession, commitment: commitment.toString(), profileUrl }),
+  });
+}
+
+/** Taahhut akredite listede mi? */
+export async function isAccredited(commitment: bigint): Promise<boolean> {
+  try {
+    await call(`/path/${commitment.toString()}`);
+    return true;
+  } catch (error) {
+    if (error instanceof CuratorResponseError && error.status === 404) return false;
+    throw error;
+  }
 }

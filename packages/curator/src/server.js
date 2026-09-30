@@ -1,150 +1,74 @@
 /**
  * Kurator servisi.
  *
- * Akredite katilimci taahhutlerinin Merkle agacini tutar ve kanit uretmek icin
- * gereken yolu verir. GIZLI ANAHTAR GORMEZ — yalnizca acik taahhudu bilir,
- * yani bir katilimcinin kim oldugunu ya da ne yanitladigini ogrenemez.
+ * Akredite arastirmaci taahhutlerinin Merkle agacini tutar ve kanit uretmek icin
+ * gereken yolu verir. GIZLI ANAHTAR GORMEZ - yalnizca acik taahhudu bilir.
  *
- * Agacin koku zincire yazilmali; aksi halde kayit kaniti dogrulanmaz.
- * `CURATOR_PRIVATE_KEY` tanimliysa bu servis kokU KENDISI yazar, yani
- * kullanicinin hicbir komut calistirmasi gerekmez. Anahtar yoksa yedek yol:
- *   npm run push-root --workspace packages/curator
+ * # Listeye kim girer
+ *
+ * Eskiden `/enroll` herkese acikti: taahhudunu gonderen herkes akredite
+ * arastirmaci oluyordu. Artik listeye yalnizca DOGRULANMIS kisiler girer
+ * (bkz. verification/routes.js):
+ *   - kurum e-postasi (.edu.tr) koduyla kutuya erisim, ve
+ *   - ORCID ile giris (kurum ROR alan adiyla eslesir) ya da
+ *     YOK Akademik / AVESIS profili (operator incelemesi).
+ *
+ * # Liste nerede tutulur
+ *
+ * ZINCIRDE (AccreditationLog). Sunucunun diski barindirildigi ortamda kalici
+ * degil: her uykuda siliniyordu, liste depodaki ilk haline donuyor ve kok
+ * zincire eski haliyle yeniden yaziliyordu. Agac artik her acilista zincirden
+ * kurulur; sunucu kaybedebilecegi hicbir durum tutmaz.
  */
 import { createServer } from "node:http";
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import dotenv from "dotenv";
-import { ethers } from "ethers";
 
 import { IdentityTree } from "@veriarfy/circuits";
+import { connect } from "./chain.js";
 import { handleUpload } from "./ipfs.js";
+import { createVerificationRoutes, verificationStatus } from "./verification/routes.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = join(__dirname, "..", "data");
-const STORE = join(DATA_DIR, "tree.json");
-
-const PORT = Number(process.env.CURATOR_PORT ?? 8787);
 
 // Yerelde depo kokundeki `.env` okunur; Render'da degiskenler ortamdan gelir.
 dotenv.config({ path: join(__dirname, "..", "..", "..", ".env") });
 
-/** Yalnizca taahhut listesi kalicidir; agac her acilista yeniden kurulur. */
-function loadCommitments() {
-  if (!existsSync(STORE)) return [];
-  try {
-    return JSON.parse(readFileSync(STORE, "utf8")).commitments ?? [];
-  } catch {
-    return [];
-  }
-}
+const PORT = Number(process.env.CURATOR_PORT ?? 8787);
 
-function saveCommitments(list) {
-  mkdirSync(DATA_DIR, { recursive: true });
-  writeFileSync(STORE, `${JSON.stringify({ commitments: list }, null, 2)}\n`);
-}
-
-const commitments = loadCommitments();
+const chain = connect();
 const tree = new IdentityTree();
-for (const c of commitments) tree.insert(BigInt(c));
+let size = 0;
 
-console.log(`Kurator: ${commitments.length} taahhut yuklendi.`);
-console.log(`Kok: ${tree.root}`);
-
-/* ---------------------------------------------------------------------------
- * Otomatik kok yazimi
+/**
+ * Agaci zincirdeki listeden kurar.
  *
- * Kayit kaniti yalnizca zincirdeki kok agacla ayni oldugunda dogrulanir. Bu
- * eskiden elle `push-root` calistirmayi gerektiriyordu: kullanici siteye
- * kaydolur, kanit uretir ve "kok henuz yazilmadi" duvarina carpardi. Siteyi
- * kullanmak icin terminal komutu beklemek kabul edilebilir bir akis degil,
- * bu yuzden kok yazimi servise tasindi.
- *
- * `CURATOR_PRIVATE_KEY` tanimli DEGILSE servis eskisi gibi calisir; sadece
- * kok yazimi atlanir ve /enroll yanitinda `rootPending: true` doner, boylece
- * arayuz durumu durust bir sekilde gosterebilir.
- * ------------------------------------------------------------------------- */
-
-const REGISTRY_ABI = [
-  "function updateRoot(uint256 newRoot)",
-  "function currentRoot() view returns (uint256)",
-  "function owner() view returns (address)",
-];
-
-function buildRegistry() {
-  const key = process.env.CURATOR_PRIVATE_KEY;
-  if (!key) {
-    console.log("CURATOR_PRIVATE_KEY yok - kok otomatik yazilmayacak.");
-    return null;
-  }
-
-  const deploymentPath = join(
-    __dirname, "..", "..", "contracts", "deployments", "sepolia.json",
-  );
-  if (!existsSync(deploymentPath)) {
-    console.log("Deploy dosyasi yok - kok otomatik yazilmayacak.");
-    return null;
-  }
-
-  try {
-    const address = JSON.parse(readFileSync(deploymentPath, "utf8"))
-      .contracts.VeriArfyRegistry;
-    const rpc =
-      process.env.SEPOLIA_RPC_URL ?? "https://ethereum-sepolia-rpc.publicnode.com";
-    const wallet = new ethers.Wallet(key, new ethers.JsonRpcProvider(rpc));
-    console.log(`Kok yazici cuzdan: ${wallet.address} -> registry ${address}`);
-    return new ethers.Contract(address, REGISTRY_ABI, wallet);
-  } catch (err) {
-    console.error("Registry baglanamadi:", err.message);
-    return null;
-  }
+ * Kok YALNIZCA liste sozlesmesi yapilandirilmissa yazilir. Aksi halde bos bir
+ * agacin koku zincirdeki gecerli koku ezerdi - sozlesme henuz dagitilmamisken
+ * servisin acilmasi bile kayitli olmayan herkesi kayit disi birakirdi.
+ */
+async function loadTree() {
+  const commitments = await chain.loadCommitments();
+  for (const c of commitments) tree.insert(c);
+  size = commitments.length;
+  console.log(`Kurator: zincirden ${size} dogrulanmis taahhut yuklendi. Kok: ${tree.root}`);
+  if (chain.log) await chain.pushRoot(tree.root);
 }
 
-const registry = buildRegistry();
-
-// Iki kayit ayni anda gelirse iki islem ayni nonce'u alir ve biri duser.
-// Bu yuzden yazimlar tek bir zincire diziliyor.
-let pushChain = Promise.resolve(true);
-
-function queueRootPush(root) {
-  if (!registry) return Promise.resolve(false);
-
-  pushChain = pushChain
-    .catch(() => false)
-    .then(async () => {
-      const current = await registry.currentRoot();
-      if (current === root) return true;
-
-      const owner = await registry.owner();
-      const self = await registry.runner.getAddress();
-      if (owner.toLowerCase() !== self.toLowerCase()) {
-        console.error(`Kok yazilamadi: cuzdan sahip degil (sahip ${owner}).`);
-        return false;
-      }
-
-      const tx = await registry.updateRoot(root);
-      console.log(`Kok yazimi gonderildi: ${tx.hash}`);
-      await tx.wait();
-      console.log(`Kok zincire yazildi: ${root}`);
-      return true;
-    })
-    .catch((err) => {
-      console.error("Kok yazimi basarisiz:", err.message);
-      return false;
-    });
-
-  return pushChain;
+async function onAccredited(commitment) {
+  if (tree.indexOf(commitment) === -1) {
+    tree.insert(commitment);
+    size += 1;
+  }
+  const pushed = await chain.pushRoot(tree.root);
+  if (!pushed) throw new Error("taahhut listeye eklendi ama kok zincire yazilamadi; birazdan yeniden deneyin");
 }
 
-// Servis yeniden basladiginda agac ile zincir arasinda fark kalmis olabilir
-// (onceki surum anahtarsiz calismis olabilir); acilista bir kez denkleriz.
-if (registry && commitments.length > 0) {
-  queueRootPush(tree.root);
-}
+const handleVerification = createVerificationRoutes({ chain, onAccredited });
 
 function json(res, status, body, extraHeaders = {}) {
-  const payload = JSON.stringify(body);
   res.writeHead(status, {
     "content-type": "application/json",
     "access-control-allow-origin": "*",
@@ -155,12 +79,17 @@ function json(res, status, body, extraHeaders = {}) {
     "access-control-expose-headers": "retry-after",
     ...extraHeaders,
   });
-  res.end(payload);
+  res.end(JSON.stringify(body));
 }
 
 async function readBody(req) {
   const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
+  let total = 0;
+  for await (const chunk of req) {
+    total += chunk.length;
+    if (total > 64 * 1024) throw Object.assign(new Error("govde cok buyuk"), { status: 413 });
+    chunks.push(chunk);
+  }
   return JSON.parse(Buffer.concat(chunks).toString() || "{}");
 }
 
@@ -170,56 +99,45 @@ const server = createServer(async (req, res) => {
 
     const url = new URL(req.url, `http://localhost:${PORT}`);
 
+    if (await handleVerification(req, res, url, { json, readBody })) return;
+
     // GET /root
     if (req.method === "GET" && url.pathname === "/root") {
       let chainRoot = null;
-      if (registry) {
-        try {
-          chainRoot = (await registry.currentRoot()).toString();
-        } catch {
-          chainRoot = null;
-        }
+      try {
+        chainRoot = chain.registry ? (await chain.registry.currentRoot()).toString() : null;
+      } catch {
+        chainRoot = null;
       }
       return json(res, 200, {
         root: tree.root.toString(),
-        size: commitments.length,
+        size,
         chainRoot,
-        autoPush: registry !== null,
+        autoPush: chain.canWrite,
+        verification: verificationStatus(chain),
       });
     }
 
-    // POST /enroll { commitment }
-    if (req.method === "POST" && url.pathname === "/enroll") {
-      const body = await readBody(req);
-      if (!body.commitment) return json(res, 400, { error: "commitment gerekli" });
-
-      const commitment = BigInt(body.commitment);
-      let index = tree.indexOf(commitment);
-
-      if (index === -1) {
-        index = tree.insert(commitment);
-        commitments.push(commitment.toString());
-        saveCommitments(commitments);
-        console.log(`+ taahhut #${index} eklendi. Yeni kok: ${tree.root}`);
-      }
-
-      // Kok zincire yazilmadan uretilen kanit dogrulanmaz, bu yuzden yanit
-      // yazimi bekler. Basarisiz olursa hata degil `rootPending` doner:
-      // taahhut gercekten eklendi, eksik olan yalnizca zincir yazimi.
-      const pushed = await queueRootPush(tree.root);
-
-      return json(res, 200, {
-        index,
-        root: tree.root.toString(),
-        rootPending: !pushed,
+    // POST /enroll - KAPATILDI.
+    //
+    // Dogrulamasiz ekleme yolu artik yok. Acik birakilsaydi dogrulama akisi
+    // bir susten ibaret olurdu: herkes bu uctan dogrudan listeye girebilirdi.
+    if (url.pathname === "/enroll") {
+      return json(res, 410, {
+        error: "Dogrulamasiz kayit kapatildi. Kurum e-postasi ve ORCID / YOK Akademik ile dogrulama gerekiyor.",
       });
     }
 
     // GET /path/:commitment
     if (req.method === "GET" && url.pathname.startsWith("/path/")) {
-      const commitment = BigInt(url.pathname.slice("/path/".length));
+      let commitment;
+      try {
+        commitment = BigInt(url.pathname.slice("/path/".length));
+      } catch {
+        return json(res, 400, { error: "gecersiz taahhut" });
+      }
       const index = tree.indexOf(commitment);
-      if (index === -1) return json(res, 404, { error: "taahhut agacta yok" });
+      if (index === -1) return json(res, 404, { error: "taahhut listede yok" });
 
       const proof = tree.proof(index);
       return json(res, 200, {
@@ -230,7 +148,7 @@ const server = createServer(async (req, res) => {
       });
     }
 
-    // POST /ipfs/upload — sifreli blobu Pinata'ya vekaleten yukler.
+    // POST /ipfs/upload - sifreli blobu Pinata'ya vekaleten yukler.
     // JWT burada kalir; istemciye hicbir zaman inmez.
     if (req.method === "POST" && url.pathname === "/ipfs/upload") {
       return handleUpload(req, res, json);
@@ -239,10 +157,12 @@ const server = createServer(async (req, res) => {
     return json(res, 404, { error: "bulunamadi" });
   } catch (err) {
     console.error(err);
-    return json(res, 500, { error: err.message });
+    return json(res, err.status ?? 500, { error: err.message });
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`Kurator http://localhost:${PORT} uzerinde dinliyor`);
-});
+loadTree()
+  .catch((err) => console.error("Liste zincirden yuklenemedi:", err.message))
+  .finally(() => {
+    server.listen(PORT, () => console.log(`Kurator http://localhost:${PORT} uzerinde dinliyor`));
+  });

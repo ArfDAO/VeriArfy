@@ -1,105 +1,44 @@
 /**
- * Kuratorun agac kokunu zincire yazar.
+ * Akredite listenin kokunu elle zincire yazar (yedek operator araci).
  *
- * Kullanim:
- *   npm run curator:push-root
+ * Kurator servisi koku normalde kendisi yazar; bu arac yalnizca servis
+ * calismiyorken gerekir.
  *
- * Anahtar depo kokundeki `.env` dosyasindan okunur; komut satirinda
- * yazmaya gerek yok (yazilirsa kabuk gecmisine duser).
+ * Liste ZINCIRDEN okunur (AccreditationLog), diskteki bir dosyadan degil.
+ * Eskiden `data/tree.json` okunuyordu; liste zincire tasindiktan sonra o dosya
+ * bayat kaldi ve bu arac calistirilsaydi eski listenin kokunu yazip dogrulanmis
+ * butun arastirmacilari gecerli kokun disina iterdi.
  *
- * Kok guncellendikten sonra eski kok VeriArfyRegistry.ROOT_VALIDITY (1 saat)
- * boyunca gecerli kalir; boylece kanit ureten katilimcilar yarida kalmaz.
+ * Kullanim:  npm run curator:push-root
+ * Anahtar depo kokundeki `.env` dosyasindan okunur (CURATOR_PRIVATE_KEY).
  */
-import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import dotenv from "dotenv";
-import { ethers } from "ethers";
 
 import { IdentityTree } from "@veriarfy/circuits";
+import { connect } from "./chain.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-
-// Depo kokundeki `.env`. Betik onceden `process.env`'i dogrudan okuyordu ve
-// `.env`'i hic yuklemiyordu; yani dosyaya anahtar yazmak ISE YARAMIYORDU ve
-// tek yol komut satirinda vermekti — o da kabuk gecmisine duser.
 dotenv.config({ path: join(__dirname, "..", "..", "..", ".env") });
-const STORE = join(__dirname, "..", "data", "tree.json");
-const DEPLOYMENT = join(
-  __dirname,
-  "..",
-  "..",
-  "contracts",
-  "deployments",
-  "sepolia.json",
-);
-
-const REGISTRY_ABI = [
-  "function updateRoot(uint256 newRoot)",
-  "function currentRoot() view returns (uint256)",
-  "function owner() view returns (address)",
-];
 
 async function main() {
-  if (!existsSync(STORE)) {
-    throw new Error("Kurator agaci bos — once katilimci kaydi alin.");
-  }
-  if (!existsSync(DEPLOYMENT)) {
-    throw new Error("Deploy dosyasi yok — once kontratlari deploy edin.");
-  }
+  const chain = connect();
+  if (!chain.canWrite) throw new Error("CURATOR_PRIVATE_KEY tanimli degil.");
+  if (!chain.log) throw new Error("AccreditationLog adresi yok; liste okunamaz, kok yazilmadi.");
 
-  const { commitments } = JSON.parse(readFileSync(STORE, "utf8"));
   const tree = new IdentityTree();
-  for (const c of commitments) tree.insert(BigInt(c));
+  const commitments = await chain.loadCommitments();
+  for (const c of commitments) tree.insert(c);
 
-  const deployment = JSON.parse(readFileSync(DEPLOYMENT, "utf8"));
-  const registryAddress = deployment.contracts.VeriArfyRegistry;
+  console.log(`Zincirdeki dogrulanmis taahhut: ${commitments.length}`);
+  console.log(`Zincirdeki kok : ${await chain.registry.currentRoot()}`);
+  console.log(`Listenin koku  : ${tree.root}`);
 
-  const rpc = process.env.SEPOLIA_RPC_URL ?? "https://ethereum-sepolia-rpc.publicnode.com";
-  // KURATOR = REGISTRY SAHIBI.
-  //
-  // Betik yalnizca `CURATOR_PRIVATE_KEY` ariyordu, oysa depodaki `.env`
-  // `DEPLOYER_PRIVATE_KEY` tanimliyor ve registry'yi deploy eden o cuzdan
-  // sahiplendi. Isim uyusmazligi yuzunden komut "CURATOR_PRIVATE_KEY
-  // gerekli" deyip duruyordu — anahtar aslinda mevcuttu.
-  //
-  // Ayri bir kurator cuzdani kullanilacaksa `CURATOR_PRIVATE_KEY` hala
-  // onceliklidir; asagidaki sahiplik kontrolu yanlis cuzdani zaten yakalar.
-  const key = process.env.CURATOR_PRIVATE_KEY ?? process.env.DEPLOYER_PRIVATE_KEY;
-  if (!key) {
-    throw new Error(
-      "Anahtar yok. Depo kokundeki .env icinde CURATOR_PRIVATE_KEY ya da " +
-        "DEPLOYER_PRIVATE_KEY tanimli olmali.",
-    );
-  }
-  const keySource = process.env.CURATOR_PRIVATE_KEY ? "CURATOR_PRIVATE_KEY" : "DEPLOYER_PRIVATE_KEY";
-
-  const provider = new ethers.JsonRpcProvider(rpc);
-  const wallet = new ethers.Wallet(key, provider);
-  const registry = new ethers.Contract(registryAddress, REGISTRY_ABI, wallet);
-
-  console.log(`Anahtar kaynagi: ${keySource} (${wallet.address})`);
-
-  const owner = await registry.owner();
-  if (owner.toLowerCase() !== wallet.address.toLowerCase()) {
-    throw new Error(`Bu cuzdan kurator degil. Kontrat sahibi: ${owner}`);
-  }
-
-  const current = await registry.currentRoot();
-  if (current === tree.root) {
-    console.log("Kok zaten guncel:", tree.root.toString());
-    return;
-  }
-
-  console.log(`Taahhut sayisi: ${commitments.length}`);
-  console.log(`Eski kok: ${current}`);
-  console.log(`Yeni kok: ${tree.root}`);
-
-  const tx = await registry.updateRoot(tree.root);
-  console.log(`Gonderildi: ${tx.hash}`);
-  await tx.wait();
-  console.log("Kok guncellendi.");
+  const ok = await chain.pushRoot(tree.root);
+  if (!ok) throw new Error("Kok yazilamadi.");
+  console.log("Kok guncel.");
 }
 
 main().catch((err) => {

@@ -16,7 +16,8 @@
     "VeriarfyStorage": "0x03504F85c474aafF7718A85fcCa15A13A6BB64ed",
     "PaymentToken": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
     "VeriArfyRegistry": "0xcd1FeaCe584d95f20A3695586aD59411C4Cda267",
-    "AnxietyStudy": "0xb7BBD086713C229c41729621F185Efb239F68C03"
+    "AnxietyStudy": "0xb7BBD086713C229c41729621F185Efb239F68C03",
+    "AccreditationLog": "0x0b65fD2B56A894040Bb1313Bbc60c6dc4704e3D9"
   },
   "paymentTokenIsTestToken": false,
   "liquidityShareBps": 8000,

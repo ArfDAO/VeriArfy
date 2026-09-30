@@ -564,3 +564,18 @@
 .research-results__picker .chips { margin-top: var(--spacing-12); }
 
 .research-results__settle-note { margin-top: var(--spacing-8); color: var(--text-secondary); font-size: .72rem; line-height: 1.5; }
+
+/* Arastirmaci dogrulamasi. Adim gostergesi sirali bir surec oldugu icin
+   numarali; tamamlanan ve guncel adim bicimle de ayirt edilir, yalniz renkle degil. */
+.verification { display: grid; gap: var(--spacing-16); }
+.verification__steps { display: flex; flex-wrap: wrap; gap: var(--spacing-8); margin: 0; padding: 0; list-style: none; counter-reset: step; }
+.verification__steps li { counter-increment: step; border: 1px solid var(--border-subtle); border-radius: var(--radius-control); padding: .3rem .6rem; color: var(--text-secondary); font-family: var(--font-mono); font-size: .66rem; }
+.verification__steps li::before { content: counter(step) ". "; }
+.verification__steps li.is-current { border-color: var(--accent-primary); color: var(--text-primary); font-weight: 600; }
+.verification__steps li.is-done { border-color: var(--status-success); color: var(--status-success); }
+.verification__steps li.is-done::before { content: "✓ "; }
+.verification__methods { display: grid; gap: var(--spacing-16); }
+.verification__method { display: grid; gap: var(--spacing-8); border-top: 1px solid var(--border-subtle); padding-top: var(--spacing-12); }
+.verification__method h3 { margin: 0; font-size: .85rem; }
+.verification__method p { margin: 0; color: var(--text-secondary); font-size: .74rem; line-height: 1.5; }
+.verification .field button { justify-self: start; }
