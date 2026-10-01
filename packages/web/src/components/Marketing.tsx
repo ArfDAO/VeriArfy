@@ -157,38 +157,3 @@ export function TechRow() {
     </div>
   );
 }
-
-/**
- * Sinirlar.
- *
- * Tanitim sayfasinda bu bolumun bulunmasi bilincli: sistemin
- * kanitlamadigi seyi once biz soylemezsek, ilk soran kisi soyler.
- */
-export function LimitsRow() {
-  const t = useT();
-  const limits = [
-    {
-      head: t("Verinin gerçekliği kanıtlanmaz"),
-      body: t("ZK kanıtı, kapsamanın taahhütle tutarlı olduğunu gösterir. Verinin gerçek bir ölçümden geldiğini göstermez — bunu ancak imzalayan akredite bir kurum söyleyebilir."),
-    },
-    {
-      head: t("Havuzdan çıkmak geçmişi silmez"),
-      body: t("Ayrılmak gelecekteki sorgulardan pay almayı durdurur. Homomorfik toplamlara zaten karışmış veri geri çekilemez."),
-    },
-    {
-      head: t("Test ağındayız"),
-      body: t("Sözleşmeler Sepolia üzerinde çalışıyor. Tören tek katılımcılı bir geliştirme kurulumudur; ana ağ için çok taraflı bir tören gerekir."),
-    },
-  ];
-
-  return (
-    <div className="explain-grid">
-      {limits.map((l) => (
-        <article className="explain-card explain-card--limit" key={l.head}>
-          <h3>{l.head}</h3>
-          <p>{l.body}</p>
-        </article>
-      ))}
-    </div>
-  );
-}
