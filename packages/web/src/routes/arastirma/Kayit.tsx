@@ -466,7 +466,7 @@ export function Kayit() {
                   {action === "register" ? t("Isleniyor...") : t("ZK kimlik kaydini baslat")}
                 </button>
                 <p className="researcher-setup__action-note">{t("Kanit cihazinizda uretilir; cüzdanda yalniz zincir kaydi imzalanir.")}</p>
-                {openEnrollment && <p className="researcher-setup__action-note">{t("Test aginda kayit simdilik dogrulamasiz acik; asagida dogrulama akisinin onizlemesini gorebilirsiniz.")}</p>}
+                {openEnrollment && <p className="researcher-setup__action-note">{t("Test aginda kayit simdilik dogrulamasiz acik; asagida dogrulama akisinin onizlemesini deneyebilirsiniz.")}</p>}
               </div>
             </>
           ) : !balanceReady ? (

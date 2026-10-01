@@ -578,7 +578,7 @@
 .verification__method { display: grid; gap: var(--spacing-8); border-top: 1px solid var(--border-subtle); padding-top: var(--spacing-12); }
 .verification__method h3 { margin: 0; font-size: .85rem; }
 .verification__method p { margin: 0; color: var(--text-secondary); font-size: .74rem; line-height: 1.5; }
-.verification .field button { justify-self: start; }
+.verification .field button, .verification__method > .pill { justify-self: start; }
 .verification--preview { gap: var(--spacing-12); }
 /* Tiklanabilir alan kutucugun TAMAMI olmali. Once dugme yalnizca yazinin
    uzerindeydi; kutucugun kenarina ya da numarasina tiklayan kullanici hicbir
@@ -587,4 +587,6 @@
 .verification--preview .verification__steps li::before { content: none; }
 .verification__step-button { all: unset; display: block; padding: .3rem .6rem; cursor: pointer; }
 .verification__step-button:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; border-radius: 2px; }
-.verification--preview input:disabled, .verification--preview button:disabled { cursor: not-allowed; opacity: .6; }
+.verification--preview .pill:disabled { cursor: not-allowed; opacity: .6; }
+.verification__step-button:disabled { cursor: default; }
+.verification__preview-code { font-family: var(--font-mono); letter-spacing: .18em; }
