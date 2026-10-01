@@ -579,14 +579,8 @@
 .verification__method h3 { margin: 0; font-size: .85rem; }
 .verification__method p { margin: 0; color: var(--text-secondary); font-size: .74rem; line-height: 1.5; }
 .verification .field button, .verification__method > .pill { justify-self: start; }
-.verification--preview { gap: var(--spacing-12); }
-/* Tiklanabilir alan kutucugun TAMAMI olmali. Once dugme yalnizca yazinin
-   uzerindeydi; kutucugun kenarina ya da numarasina tiklayan kullanici hicbir
-   sey olmadigini goruyordu. Numara bu yuzden dugmenin icinde. */
-.verification--preview .verification__steps li { padding: 0; }
-.verification--preview .verification__steps li::before { content: none; }
-.verification__step-button { all: unset; display: block; padding: .3rem .6rem; cursor: pointer; }
-.verification__step-button:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; border-radius: 2px; }
-.verification--preview .pill:disabled { cursor: not-allowed; opacity: .6; }
-.verification__step-button:disabled { cursor: default; }
-.verification__preview-code { font-family: var(--font-mono); letter-spacing: .18em; }
+.verification__spinner { display: inline-block; width: .8em; height: .8em; margin-right: .5em; vertical-align: -.1em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: verification-spin .8s linear infinite; }
+@keyframes verification-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .verification__spinner { animation-duration: 2.4s; } }
+.verification .pill:disabled { cursor: not-allowed; }
+.researcher-setup__action-title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--spacing-8); }

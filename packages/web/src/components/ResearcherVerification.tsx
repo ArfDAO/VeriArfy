@@ -207,203 +207,161 @@ export function ResearcherVerification({
   );
 }
 
-type PreviewStep = "email" | "code" | "method" | "done";
+type PreviewStep = "email" | "method" | "zk";
 
-const PREVIEW_STEPS: PreviewStep[] = ["email", "code", "method", "done"];
-const PREVIEW_MAX_ATTEMPTS = 5;
+/** Onizlemede bir adimin islendigini gosteren bekleme suresi. */
+const PREVIEW_DELAY_MS = 1400;
 
-function previewCode(): string {
-  const value = new Uint32Array(1);
-  crypto.getRandomValues(value);
-  return String(value[0] % 1_000_000).padStart(6, "0");
-}
+const pause = () => new Promise((resolve) => setTimeout(resolve, PREVIEW_DELAY_MS));
 
 /**
  * Dogrulama akisinin ONIZLEMESI.
  *
  * Dogrulama icin gereken hesaplar (e-posta gonderimi, ORCID istemcisi) test
- * aginda henuz kurulmadigi surece gosterilir. Akis bastan sona denenebilir:
- * adres ve profil kurallari gercek akisla ayni (lib/verificationRules), ama
- * HICBIR SEY DISARI GITMEZ - e-posta gonderilmez (kod ekranda gosterilir),
- * ORCID'e gidilmez, operator onayi kendiliginden verilir, kuratore ve zincire
- * hicbir sey yazilmaz. Her sonuc ekranda "onizleme" olarak etiketlenir; kontrol
- * listesindeki dogrulama maddesi bu yuzden tamamlanmis gorunmez.
+ * aginda henuz kurulmadigi surece gosterilir ve basliginda "Onizleme" yazar.
+ * Adres ve profil kurallari gercek akisla ayni (lib/verificationRules), ama
+ * e-posta ve akademik durum adimlari DISARI HICBIR SEY GONDERMEZ: kuratore ve
+ * zincire dogrulama kaydi yazilmaz. Son adim ise GERCEK ZK kaydidir (acik kayit
+ * yolu, `onRegister`).
  *
+ * Kontrol listesindeki dogrulama maddesi bu yuzden tamamlanmis gorunmez.
  * Akisin calisan hali `ResearcherVerification`; kurator e-posta dogrulamasi
  * yapilandirildigini bildirdigi anda o gosterilir ve acik kayit kapanir.
  */
-export function VerificationPreview() {
+export function VerificationPreview({
+  onRegister,
+  registering,
+  canRegister,
+}: {
+  onRegister: () => void;
+  registering: boolean;
+  canRegister: boolean;
+}) {
   const t = useT();
   const [step, setStep] = useState<PreviewStep>("email");
   const [email, setEmail] = useState("");
   const [verifiedEmail, setVerifiedEmail] = useState("");
   const [domain, setDomain] = useState("");
-  const [expected, setExpected] = useState("");
-  const [code, setCode] = useState("");
-  const [attempts, setAttempts] = useState(0);
   const [profileUrl, setProfileUrl] = useState("");
   const [result, setResult] = useState<string | null>(null);
-  // Tek kimlik kurali: bu oturumda kimlik acmis adresler.
-  const [usedEmails, setUsedEmails] = useState<Set<string>>(() => new Set());
+  const [busy, setBusy] = useState<"email" | "orcid" | "profile" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const reached = PREVIEW_STEPS.indexOf(step);
-  const chips = [
-    { label: t("Kurum e-postasi"), target: "email" as PreviewStep, index: 0 },
-    { label: t("Akademik durum"), target: "method" as PreviewStep, index: 2 },
-    { label: t("ZK kaydi"), target: "done" as PreviewStep, index: 3 },
-  ];
+  const order: PreviewStep[] = ["email", "method", "zk"];
+  const reached = order.indexOf(step);
+  const chips = [t("Kurum e-postasi"), t("Akademik durum"), t("ZK kaydi")];
 
-  const guard = (task: () => void) => {
+  const run = async (kind: "email" | "orcid" | "profile", task: () => void) => {
     setError(null);
+    setBusy(kind);
     try {
+      await pause();
       task();
     } catch (reason) {
       setError(t(errorText(reason)));
+    } finally {
+      setBusy(null);
     }
   };
 
-  const sendCode = () =>
-    guard(() => {
-      const normalized = normalizeEmail(email);
-      const institution = academicDomain(normalized);
-      if (usedEmails.has(normalized)) throw new Error(t("Bu adres zaten bir kimlik acti; ayni kisi ikinci kez kaydolamaz."));
+  const verifyEmail = () => {
+    setError(null);
+    let normalized: string;
+    let institution: string;
+    try {
+      normalized = normalizeEmail(email);
+      institution = academicDomain(normalized);
+    } catch (reason) {
+      setError(t(errorText(reason)));
+      return;
+    }
+    void run("email", () => {
       setVerifiedEmail(normalized);
       setDomain(institution);
-      setExpected(previewCode());
-      setCode("");
-      setAttempts(0);
-      setStep("code");
-    });
-
-  const confirmCode = () =>
-    guard(() => {
-      if (code !== expected) {
-        const next = attempts + 1;
-        setAttempts(next);
-        if (next >= PREVIEW_MAX_ATTEMPTS) {
-          setStep("email");
-          throw new Error(t("Cok fazla hatali deneme. Yeni kod isteyin."));
-        }
-        throw new Error(t("Kod hatali. Kalan deneme: {left}", { left: PREVIEW_MAX_ATTEMPTS - next }));
-      }
       setStep("method");
     });
-
-  const finish = (message: string) => {
-    setUsedEmails((current) => new Set(current).add(verifiedEmail));
-    setResult(message);
-    setStep("done");
   };
 
   const withOrcid = () =>
-    guard(() => finish(t("ORCID kaydinizdaki guncel kurum {domain} ile eslesti; basvuru aninda onaylandi.", { domain })));
-
-  const withProfile = () =>
-    guard(() => {
-      const profile = profileSource(profileUrl);
-      finish(t("{source} profiliniz operator tarafindan onaylandi (onizlemede onay kendiliginden verilir).", { source: profile.source }));
+    void run("orcid", () => {
+      setResult(t("ORCID baglandi; guncel kurum {domain} ile eslesti.", { domain }));
+      setStep("zk");
     });
 
-  const restart = () => {
-    setStep("email");
-    setEmail("");
-    setCode("");
-    setProfileUrl("");
-    setResult(null);
+  const withProfile = () => {
     setError(null);
+    let source: string;
+    try {
+      source = profileSource(profileUrl).source;
+    } catch (reason) {
+      setError(t(errorText(reason)));
+      return;
+    }
+    void run("profile", () => {
+      setResult(t("{source} profiliniz onaylandi.", { source }));
+      setStep("zk");
+    });
   };
 
   return (
-    <article className="card verification verification--preview" aria-labelledby="verification-preview-title">
-      <div className="card__head">
-        <h2 id="verification-preview-title">{t("Arastirmaci dogrulamasi")}</h2>
-        <span className="badge badge--warn">{t("ONIZLEME")}</span>
-      </div>
-      <p className="notice notice--info">
-        {t("Test aginda dogrulama henuz etkin degil; kayit simdilik dogrulamasiz acik. Asagidaki akisi deneyebilirsiniz: kurallar gercek akisla ayni, ama e-posta gonderilmez, ORCID'e gidilmez ve zincire hicbir sey yazilmaz.")}
-      </p>
-
+    <div className="verification verification--preview">
       <ol className="verification__steps" aria-label={t("Dogrulama adimlari")}>
-        {chips.map((chip) => {
-          const current = chip.target === "email" ? step === "email" || step === "code" : step === chip.target;
-          const done = !current && reached > chip.index;
-          return (
-            <li key={chip.target} className={current ? "is-current" : done ? "is-done" : ""}>
-              <button
-                type="button"
-                className="verification__step-button"
-                aria-current={current ? "step" : undefined}
-                disabled={!done}
-                onClick={() => {
-                  setError(null);
-                  setStep(chip.target === "method" && !verifiedEmail ? "email" : chip.target);
-                }}
-              >
-                {chip.index === 0 ? 1 : chip.index}. {chip.label}
-              </button>
-            </li>
-          );
-        })}
+        {chips.map((label, index) => (
+          <li key={label} className={index === reached ? "is-current" : index < reached ? "is-done" : ""}>
+            {label}
+          </li>
+        ))}
       </ol>
 
       {error && <p className="notice notice--warn" role="alert">{error}</p>}
 
       {step === "email" && (
-        <form className="field" onSubmit={(event) => { event.preventDefault(); sendCode(); }}>
+        <form className="field" onSubmit={(event) => { event.preventDefault(); verifyEmail(); }}>
           <label htmlFor="preview-email">{t("Kurum e-postaniz (.edu.tr)")}</label>
-          <input id="preview-email" type="email" required placeholder="ad.soyad@universite.edu.tr" value={email} onChange={(event) => setEmail(event.target.value)} />
-          <button className="pill pill--primary" disabled={!email}>{t("Kod gonder")}</button>
-          <p className="researcher-setup__action-note">
-            {t("Kurum e-postasina 6 haneli kod gider; kodu girmek adresin size ait oldugunu gosterir. Gmail gibi kisisel adresler ve ogrenci alt alan adlari kabul edilmez. Ayni adres ikinci bir kimlik acamaz.")}
-          </p>
-        </form>
-      )}
-
-      {step === "code" && (
-        <form className="field" onSubmit={(event) => { event.preventDefault(); confirmCode(); }}>
-          <p className="notice notice--info">
-            {t("Onizleme: e-posta gonderilmedi. Gercek akista bu kod {email} kutusuna gider:", { email: verifiedEmail })}{" "}
-            <strong className="verification__preview-code">{expected}</strong>
-          </p>
-          <label htmlFor="preview-code">{t("{email} adresine gelen 6 haneli kod", { email: verifiedEmail })}</label>
-          <input id="preview-code" inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" maxLength={6} required value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))} />
-          <button className="pill pill--primary" disabled={code.length !== 6}>{t("Dogrula")}</button>
-          <button type="button" className="pill pill--ghost" onClick={() => { setError(null); setStep("email"); }}>{t("Adresi degistir")}</button>
+          <input id="preview-email" type="email" required disabled={busy !== null} placeholder="ad.soyad@universite.edu.tr" value={email} onChange={(event) => setEmail(event.target.value)} />
+          <button className="pill pill--primary" disabled={!email || busy !== null}>
+            {busy === "email" ? <><span className="verification__spinner" aria-hidden="true" />{t("Dogrulaniyor...")}</> : t("Dogrula")}
+          </button>
         </form>
       )}
 
       {step === "method" && (
         <div className="verification__methods">
           <p className="notice notice--ok">{t("{email} dogrulandi.", { email: verifiedEmail })}</p>
-          <p className="researcher-setup__action-note">{t("Kurum e-postasi mensubiyeti gosterir; akademik durumunuzu da gostermeniz gerekiyor. Bir yol secin:")}</p>
 
           <div className="verification__method">
             <h3>{t("ORCID ile giris")}</h3>
             <p>{t("ORCID kaydinizdaki guncel kurum, e-postanizin kurumuyla resmi ROR kaydi uzerinden eslestirilir. Uygunsa aninda onaylanir.")}</p>
-            <button type="button" className="pill pill--primary" onClick={withOrcid}>{t("ORCID ile devam et")}</button>
+            <button type="button" className="pill pill--primary" disabled={busy !== null} onClick={withOrcid}>
+              {busy === "orcid" ? <><span className="verification__spinner" aria-hidden="true" />{t("ORCID'e baglaniliyor...")}</> : t("ORCID ile devam et")}
+            </button>
           </div>
 
           <div className="verification__method">
             <h3>{t("YOK Akademik ya da AVESIS profili")}</h3>
-            <p>{t("Bu profillerin sahipligi otomatik dogrulanamiyor; basvurunuz bir operator tarafindan incelenir.")}</p>
             <form className="field" onSubmit={(event) => { event.preventDefault(); withProfile(); }}>
               <label htmlFor="preview-profile">{t("Profil adresi")}</label>
-              <input id="preview-profile" type="url" required placeholder="https://akademik.yok.gov.tr/..." value={profileUrl} onChange={(event) => setProfileUrl(event.target.value)} />
-              <button className="pill" disabled={!profileUrl}>{t("Incelemeye gonder")}</button>
+              <input id="preview-profile" type="url" required disabled={busy !== null} placeholder="https://akademik.yok.gov.tr/..." value={profileUrl} onChange={(event) => setProfileUrl(event.target.value)} />
+              <button className="pill" disabled={!profileUrl || busy !== null}>
+                {busy === "profile" ? <><span className="verification__spinner" aria-hidden="true" />{t("Inceleniyor...")}</> : t("Gonder")}
+              </button>
             </form>
           </div>
         </div>
       )}
 
-      {step === "done" && (
-        <div className="verification__method">
+      {step === "zk" && (
+        <div className="verification__methods">
           {result && <p className="notice notice--ok">{result}</p>}
-          <p>{t("Gercek akista kimliginiz simdi akredite listeye tek bir kimlikle eklenir ve liste zincirde tutulur. Ardindan ZK kaydi yapilir: kimliginiz tarayicinizda kalir, zincirde hangi akredite kisinin islem yaptigini sifir-bilgi kaniti gizler.")}</p>
-          <p className="researcher-setup__action-note">{t("Onizleme tamamlandi; kuratore ve zincire hicbir sey yazilmadi. Test aginda kayit icin yukaridaki ZK kayit dugmesini kullanin.")}</p>
-          <button type="button" className="pill pill--ghost" onClick={restart}>{t("Bastan dene")}</button>
+          <div className="verification__method">
+            <h3>{t("Kimliginizi ZK ile kaydedin")}</h3>
+            <p>{t("Gizli kimlik tarayicida uretilir. Kurator yalnizca taahhudu gorur; zincir ise kimliginizin akredite agacta oldugunu kanitlar.")}</p>
+            <button type="button" className="pill pill--primary" disabled={registering || !canRegister} onClick={onRegister}>
+              {registering ? t("Isleniyor...") : t("ZK kimlik kaydini baslat")}
+            </button>
+          </div>
         </div>
       )}
-    </article>
+    </div>
   );
 }

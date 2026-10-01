@@ -113,13 +113,13 @@ kadar test ağında **açık kayıt sürer**: taahhüdünü gönderen listeye gi
   bellekteki ağacına eklenir.
 - E-posta doğrulaması yapılandırıldığı anda açık kayıt **kendiliğinden
   kapanır**; `OPEN_ENROLLMENT=false` ile daha önce de kapatılabilir.
-- Arayüz bu dönemde doğrulama akışını **"Önizleme"** etiketiyle gösterir ve
-  akış baştan sona denenebilir. Adres ve profil kuralları gerçek akışla aynıdır
-  (`packages/web/src/lib/verificationRules.ts`, kuratördeki kuralların
-  kopyası; değişiklik iki yerde birden yapılmalı). Ama **hiçbir şey dışarı
-  gitmez**: e-posta gönderilmez (kod ekranda gösterilir), ORCID'e gidilmez,
-  operatör onayı kendiliğinden verilir, kuratöre ve zincire hiçbir şey
-  yazılmaz. Her sonuç ekranda "önizleme" olarak belirtilir.
+- Arayüz bu dönemde kayıt ekranında doğrulama akışını **"Önizleme"**
+  etiketiyle gösterir. E-posta ve akademik durum adımlarındaki kurallar gerçek
+  akışla aynıdır (`packages/web/src/lib/verificationRules.ts`, kuratördeki
+  kuralların kopyası; değişiklik iki yerde birden yapılmalı), ama bu adımlar
+  **dışarı hiçbir şey göndermez**: e-posta atılmaz, ORCID'e gidilmez,
+  kuratöre ve zincire doğrulama kaydı yazılmaz. Son adım **gerçek ZK
+  kaydıdır** (açık kayıt yolu).
 - Kontrol listesinde doğrulama maddesi bu dönemde asla "tamam" görünmez —
   önizlemeyi bitiren de, açık kayıtla listeye giren de doğrulanmış değildir.
 

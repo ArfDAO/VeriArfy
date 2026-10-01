@@ -359,7 +359,7 @@ export function Kayit() {
     } finally {
       setAction(null);
     }
-  }, [address, identity, provider, readiness?.registered, refresh, refreshSession, signer, wrongNetwork]);
+  }, [address, identity, openEnrollment, provider, readiness?.registered, refresh, refreshSession, signer, t, wrongNetwork]);
 
   const approve = useCallback(async () => {
     if (!signer || !readiness || readiness.allowance >= readiness.fee || readiness.balance < readiness.fee) return;
@@ -415,7 +415,7 @@ export function Kayit() {
               // taahhut da listede gorunur; "listede olmak" burada "dogrulanmis
               // olmak" demek degildir ve ekran ikisini karistirmamali.
               detail={openEnrollment
-                ? t("Test aginda henuz etkin degil; kayit simdilik dogrulamasiz acik.")
+                ? t("Onizleme")
                 : accredited
                   ? t("Kurum e-postasi ve akademik profil dogrulandi.")
                   : t("Kurum e-postasi ve ORCID / YOK Akademik ile dogrulayin.")}
@@ -455,6 +455,22 @@ export function Kayit() {
                 ? <ResearcherVerification address={address} ensureCommitment={ensureCommitment} onAccredited={() => void checkAccredited(identity ?? storedIdentity(address))} />
                 : <p className="researcher-setup__action-note">{t("Once cuzdaninizi baglayin.")}</p>}
             </>
+          ) : !readiness?.registered && openEnrollment ? (
+            <>
+              <div className="researcher-setup__action-body">
+                <div className="researcher-setup__action-title">
+                  <h2>{t("Arastirmaci oldugunuzu dogrulayin")}</h2>
+                  <span className="badge badge--warn">{t("ONIZLEME")}</span>
+                </div>
+              </div>
+              {address
+                ? <VerificationPreview
+                    onRegister={() => void register()}
+                    registering={action === "register"}
+                    canRegister={action === null && !loading && !wrongNetwork && Boolean(provider && signer && readiness)}
+                  />
+                : <p className="researcher-setup__action-note">{t("Once cuzdaninizi baglayin.")}</p>}
+            </>
           ) : !readiness?.registered ? (
             <>
               <div className="researcher-setup__action-body">
@@ -466,7 +482,6 @@ export function Kayit() {
                   {action === "register" ? t("Isleniyor...") : t("ZK kimlik kaydini baslat")}
                 </button>
                 <p className="researcher-setup__action-note">{t("Kanit cihazinizda uretilir; cüzdanda yalniz zincir kaydi imzalanir.")}</p>
-                {openEnrollment && <p className="researcher-setup__action-note">{t("Test aginda kayit simdilik dogrulamasiz acik; asagida dogrulama akisinin onizlemesini deneyebilirsiniz.")}</p>}
               </div>
             </>
           ) : !balanceReady ? (
@@ -495,8 +510,6 @@ export function Kayit() {
           )}
         </aside>
       </div>
-
-      {openEnrollment && <VerificationPreview />}
 
       {readiness && readiness.participants === 0 && (
         <div className="notice notice--info">
