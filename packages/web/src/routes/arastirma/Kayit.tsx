@@ -418,8 +418,8 @@ export function Kayit() {
               // yapildiysa (kayit sonrasi akis ekrandan kalkar) tamam sayilir.
               detail={openEnrollment
                 ? previewDone || readiness?.registered
-                  ? t("Onizleme - tamamlandi.")
-                  : t("Onizleme")
+                  ? t("Tamamlandi.")
+                  : t("")
                 : accredited
                   ? t("Kurum e-postasi ve akademik profil dogrulandi.")
                   : t("Kurum e-postasi ve ORCID / YOK Akademik ile dogrulayin.")}
@@ -464,7 +464,6 @@ export function Kayit() {
               <div className="researcher-setup__action-body">
                 <div className="researcher-setup__action-title">
                   <h2>{t("Arastirmaci oldugunuzu dogrulayin")}</h2>
-                  <span className="badge badge--warn">{t("ONIZLEME")}</span>
                 </div>
               </div>
               {address
