@@ -34,6 +34,15 @@ dotenv.config({ path: join(__dirname, "..", "..", "..", ".env") });
 const PORT = Number(process.env.NODE_OPERATOR_PORT ?? 8788);
 const POLL_MS = Number(process.env.NODE_OPERATOR_POLL_MS ?? 20_000);
 const RPC = process.env.SEPOLIA_RPC_URL ?? "https://ethereum-sepolia-rpc.publicnode.com";
+// GECMIS DURUM ICIN AYRI RPC. Varsayilan RPC (publicnode) ~1,5 gunden eski
+// bloklarin durumunu budanmis olarak tutuyor ("state at block ... is pruned").
+// Fark saldirisi kontrolu her talebin ACILDIGI bloktaki sayilari okumak
+// zorunda; bu yuzden gecmis okumalar arsiv durumu sunan uclara gider. Sirayla
+// denenir; virgulle ayrilmis liste HISTORY_RPC_URLS ile degistirilebilir.
+const HISTORY_RPCS = (process.env.HISTORY_RPC_URLS ?? "https://sepolia.gateway.tenderly.co,https://1rpc.io/sepolia")
+  .split(",")
+  .map((url) => url.trim())
+  .filter(Boolean);
 
 const PROTOCOL_ABI = [
   "function approveDisclosure(uint256 requestId)",
@@ -96,6 +105,9 @@ if (keys.length === 0) {
 
 const wallets = keys.map((key) => new ethers.Wallet(key, provider));
 const readProtocol = new ethers.Contract(deployment.contracts.VeriarfyProtocol, PROTOCOL_ABI, provider);
+const historyProtocols = HISTORY_RPCS.map(
+  (url) => new ethers.Contract(deployment.contracts.VeriarfyProtocol, PROTOCOL_ABI, new ethers.JsonRpcProvider(url)),
+);
 const staking = new ethers.Contract(deployment.contracts.VeriarfyStaking, STAKING_ABI, provider);
 
 console.log(`Protokol : ${deployment.contracts.VeriarfyProtocol}`);
@@ -177,34 +189,78 @@ function queue(wallet, task) {
 
 const requestBlocks = new Map(); // requestId -> blok
 const fieldCounts = new Map(); // requestId -> [{key, count}]
-let logsScannedTo = Number(deployment.deployedAtBlock ?? 0) - 1;
-const LOG_CHUNK = 5_000;
+const DEPLOY_BLOCK = Number(deployment.deployedAtBlock ?? 0);
+const blockTimes = new Map(); // blok -> zaman damgasi
 
-/** DisclosureRequested olaylarindan talep -> blok eslemesini gunceller. */
-async function refreshRequestBlocks() {
-  const head = await provider.getBlockNumber();
-  while (logsScannedTo < head) {
-    const from = logsScannedTo + 1;
-    const to = Math.min(head, from + LOG_CHUNK - 1);
-    const logs = await readProtocol.queryFilter("DisclosureRequested", from, to);
-    for (const log of logs) requestBlocks.set(Number(log.args.requestId), log.blockNumber);
-    logsScannedTo = to;
+async function blockTime(number) {
+  if (!blockTimes.has(number)) {
+    const block = await provider.getBlock(number);
+    if (!block) throw new Error(`blok ${number} okunamadi`);
+    blockTimes.set(number, Number(block.timestamp));
   }
+  return blockTimes.get(number);
 }
 
-let biomarkers = null;
-async function getBiomarkers() {
-  if (biomarkers !== null) return biomarkers;
-  const address = await readProtocol.biomarkerModule();
-  biomarkers = address === ethers.ZeroAddress ? false : new ethers.Contract(address, BIOMARKER_ABI, provider);
-  return biomarkers;
+/**
+ * Talebin acildigi blogu, talepteki zaman damgasindan bulur.
+ *
+ * NEDEN OLAY KAYDI DEGIL: eskiden `DisclosureRequested` olaylari taraniyordu.
+ * Herkese acik RPC eski bloklarin olay kayitlarini HATA VERMEDEN BOS
+ * donduruyor: ilk uc talebin blogu hic bulunamadi, `countsAt` hata atti ve
+ * tarama her seferinde orada durdu - sonraki taleplerin hicbiri onay almadi.
+ *
+ * `requestedAt` talebin acildigi blogun zaman damgasidir; zaman damgalari
+ * bloklar boyunca artmadigi icin (ayni kalabilir, azalmaz) ikili arama ile
+ * damgasi >= requestedAt olan ILK blok bulunur. Arsiv dugumu gerektirmeyen
+ * yalnizca `getBlock` cagrilari kullanilir.
+ */
+async function requestBlock(requestId) {
+  if (requestBlocks.has(requestId)) return requestBlocks.get(requestId);
+  const info = await readProtocol.disclosureRequest(requestId);
+  const target = Number(info.requestedAt);
+
+  let low = DEPLOY_BLOCK;
+  let high = await provider.getBlockNumber();
+  if ((await blockTime(high)) < target) throw new Error(`talep ${requestId} icin acilis blogu bulunamadi`);
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    if ((await blockTime(mid)) < target) low = mid + 1;
+    else high = mid;
+  }
+  if ((await blockTime(low)) !== target) throw new Error(`talep ${requestId} icin acilis blogu bulunamadi`);
+  requestBlocks.set(requestId, low);
+  return low;
+}
+
+let biomarkerAddress = null;
+async function getBiomarkerAddress() {
+  if (biomarkerAddress === null) biomarkerAddress = await readProtocol.biomarkerModule();
+  return biomarkerAddress === ethers.ZeroAddress ? null : biomarkerAddress;
+}
+
+/**
+ * Gecmis bir bloktaki degeri okur; arsiv uclarini sirayla dener.
+ *
+ * Bir uc hata verirse (budanmis durum, hiz siniri, kesinti) siradakine
+ * gecilir. Hepsi basarisizsa hata yukari cikar: bilinmeyen bir sayiyla karar
+ * vermek yerine talep onaylanmadan bekler.
+ */
+async function historical(read) {
+  let lastError = null;
+  for (const protocol of historyProtocols) {
+    try {
+      return await read(protocol);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw new Error(`gecmis durum okunamadi: ${lastError?.shortMessage ?? lastError?.message ?? "arsiv RPC yok"}`);
 }
 
 async function countsAt(requestId) {
   if (fieldCounts.has(requestId)) return fieldCounts.get(requestId);
 
-  const block = requestBlocks.get(requestId);
-  if (block === undefined) throw new Error(`talep ${requestId} icin acilis blogu bulunamadi`);
+  const block = await requestBlock(requestId);
 
   const [snpIds, metricIds] = await Promise.all([
     readProtocol.disclosureSnpIds(requestId),
@@ -213,13 +269,15 @@ async function countsAt(requestId) {
 
   const fields = [];
   for (const id of snpIds) {
-    const count = await readProtocol.snpCoverageCount(id, { blockTag: block });
+    const count = await historical((protocol) => protocol.snpCoverageCount(id, { blockTag: block }));
     fields.push({ key: `snp:${id}`, count: Number(count) });
   }
-  const module = await getBiomarkers();
-  if (module) {
+  const moduleAddress = await getBiomarkerAddress();
+  if (moduleAddress) {
     for (const id of metricIds) {
-      const count = await module.metricCoverageCount(id, { blockTag: block });
+      const count = await historical((protocol) =>
+        new ethers.Contract(moduleAddress, BIOMARKER_ABI, protocol.runner).metricCoverageCount(id, { blockTag: block }),
+      );
       fields.push({ key: `metric:${id}`, count: Number(count) });
     }
   }
@@ -235,7 +293,6 @@ async function countsAt(requestId) {
  * giden yolu acar, yani "su an yetki verilmis olanlar" yetmez.
  */
 async function differencingVerdict(requestId, total, minParticipants) {
-  await refreshRequestBlocks();
   const mine = await countsAt(requestId);
 
   const others = [];
@@ -264,7 +321,13 @@ async function considerRequest(requestId) {
   }
   delete state.rejected[requestId];
 
-  for (const wallet of wallets) {
+  // SIRA HER TALEPTE KAYAR. Dugumler hep ayni sirayla denenseydi esik ilk
+  // birkac dugumde dolar ve butun gazi onlar yakardi; gazi biten dugum de
+  // sessizce devre disi kalirdi. Talep numarasina gore kaydirmak yuku esitler.
+  const start = wallets.length === 0 ? 0 : requestId % wallets.length;
+  const ordered = [...wallets.slice(start), ...wallets.slice(0, start)];
+
+  for (const wallet of ordered) {
     // Her dugum icin durum YENIDEN okunur: onceki dugumun onayi talebi
     // sonuclandirmis olabilir, o halde ikinci islem bosuna gaz yakar.
     const [info, finalized, revoked, executed, authorized, approved, staked] = await Promise.all([
