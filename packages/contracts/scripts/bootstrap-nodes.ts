@@ -30,7 +30,7 @@ import { ethers, network } from "hardhat";
  * calisiyor, hata vermiyor, ama hicbir talebi onaylayamiyordu. Pay birakmak
  * bu sessiz durusu geciktirir; tamamen engellemek icin izleme sart.
  */
-const STAKE_MULTIPLIER = 4n;
+const STAKE_MULTIPLIER = BigInt(process.env.STAKE_MULTIPLIER ?? "4");
 
 /** Havuz henuz degersizken bile anlamli bir taban. */
 const MIN_STAKE_FLOOR = ethers.parseEther("0.005");
