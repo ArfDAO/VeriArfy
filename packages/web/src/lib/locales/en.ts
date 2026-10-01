@@ -625,19 +625,6 @@ export const EN: Record<string, string> = {
   "Sonuca kim erişebilir?": "Who can reach the result?",
   "Açılım, bağımsız düğümlerin eşikli onayı ve ardından bir itiraz penceresi gerektirir. Ödeme tek başına hiçbir şeyi çözmez.":
     "Disclosure requires threshold approval from independent nodes, followed by a challenge window. Paying alone decrypts nothing.",
-  "DÜRÜST SINIRLAR": "HONEST LIMITS",
-  "Sistem neyi kanıtlamıyor": "What the system does not prove",
-  "Bir sistemin ne yapmadığını bilmek, ne yaptığını bilmek kadar önemlidir.":
-    "Knowing what a system does not do matters as much as knowing what it does.",
-  "Verinin gerçekliği kanıtlanmaz": "Authenticity is not proven",
-  "ZK kanıtı, kapsamanın taahhütle tutarlı olduğunu gösterir. Verinin gerçek bir ölçümden geldiğini göstermez — bunu ancak imzalayan akredite bir kurum söyleyebilir.":
-    "The ZK proof shows coverage is consistent with the commitment. It does not show the data came from a real measurement — only an accredited institution signing the panel can say that.",
-  "Havuzdan çıkmak geçmişi silmez": "Leaving does not erase the past",
-  "Ayrılmak gelecekteki sorgulardan pay almayı durdurur. Homomorfik toplamlara zaten karışmış veri geri çekilemez.":
-    "Leaving stops your share of future queries. Data already mixed into the homomorphic aggregates cannot be pulled back.",
-  "Test ağındayız": "This is a testnet",
-  "Sözleşmeler Sepolia üzerinde çalışıyor. Tören tek katılımcılı bir geliştirme kurulumudur; ana ağ için çok taraflı bir tören gerekir.":
-    "The contracts run on Sepolia. The trusted setup is a single-contributor development ceremony; mainnet requires a multi-party one.",
 
   "Kurator kokunu zincire yaziyor, onaylanmasi bekleniyor...":
     "The curator is writing the root on chain, waiting for confirmation...",

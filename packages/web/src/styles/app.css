@@ -487,7 +487,6 @@
 .explain-card h3 { font-size: 1rem; }
 .explain-card p { color: var(--text-secondary); margin: 0; }
 /* Sinir kartlari AYIRT EDILIR: uyari degil, durustluk isareti. */
-.explain-card--limit { border-left: 2px solid var(--text-secondary); }
 
 .pricing-explain {
   display: grid;

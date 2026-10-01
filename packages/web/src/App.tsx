@@ -5,7 +5,6 @@ import { Hero } from "./components/Hero";
 import {
   FeatureRow,
   Footer,
-  LimitsRow,
   PricingRow,
   ProblemRow,
   SectionHead,
@@ -92,18 +91,6 @@ function AnaSayfa() {
             sub={t("Her katman farklı bir soruyu çözüyor; hiçbiri tek başına yeterli değil.")}
           />
           <TechRow />
-        </div>
-
-        {/* --- Sınırlar --- */}
-        <div className="band">
-          <div className="section">
-            <SectionHead
-              eyebrow={t("DÜRÜST SINIRLAR")}
-              title={t("Sistem neyi kanıtlamıyor")}
-              sub={t("Bir sistemin ne yapmadığını bilmek, ne yaptığını bilmek kadar önemlidir.")}
-            />
-            <LimitsRow />
-          </div>
         </div>
 
         <Footer />
