@@ -93,6 +93,26 @@ export class CuratorResponseError extends Error {
   }
 }
 
+export interface EnrollResult {
+  index: number;
+  root: string;
+  /** Taahhut eklendi ama kok zincire yazilamadi. */
+  rootPending?: boolean;
+}
+
+/**
+ * Taahhudu DOGRULAMASIZ olarak listeye ekletir (acik kayit).
+ *
+ * Yalnizca test aginda, dogrulama yapilandirilana kadar calisir; sonrasinda
+ * kurator 410 doner. Bu kayitlar dogrulanmis listeye yazilmaz.
+ */
+export async function enroll(commitment: bigint): Promise<EnrollResult> {
+  return call("/enroll", {
+    method: "POST",
+    body: JSON.stringify({ commitment: commitment.toString() }),
+  });
+}
+
 /** Kanit icin Merkle yolunu al. */
 export async function getMerklePath(commitment: bigint): Promise<MerklePath> {
   return call(`/path/${commitment.toString()}`);
@@ -111,6 +131,10 @@ export interface CuratorStatus {
   chainRoot: string | null;
   /** Kurator kokU kendisi yazabiliyor mu (anahtar tanimli mi). */
   autoPush: boolean;
+  /** Dogrulamasiz (acik) kayit su an etkin mi. */
+  openEnrollment: boolean;
+  /** Hangi dogrulama yollari yapilandirilmis. */
+  verification: VerificationStatus;
 }
 
 /** Kurator + zincir kok durumunu birlikte al. */
@@ -121,6 +145,12 @@ export async function getStatus(): Promise<CuratorStatus> {
     size: Number(body.size ?? 0),
     chainRoot: body.chainRoot == null ? null : String(body.chainRoot),
     autoPush: Boolean(body.autoPush),
+    openEnrollment: Boolean(body.openEnrollment),
+    verification: {
+      email: Boolean(body.verification?.email),
+      orcid: Boolean(body.verification?.orcid),
+      profile: Boolean(body.verification?.profile),
+    },
   };
 }
 

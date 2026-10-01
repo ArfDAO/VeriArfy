@@ -103,6 +103,23 @@ onaylardı.
   mümkün. Örneklenen 10 üniversiteden 3'ünde anahtar bulundu (İTÜ 1024 bit,
   Erciyes ve Osmangazi 2048 bit); diğerleri için gerçek e-posta başlığı gerekir.
 
+## Açık kayıt dönemi (test ağı)
+
+Doğrulama için gereken hesaplar (e-posta gönderimi, ORCID istemcisi) kurulana
+kadar test ağında **açık kayıt sürer**: taahhüdünü gönderen listeye girer.
+
+- Bu kayıtlar **doğrulanmış listeye (`AccreditationLog`) yazılmaz.** Orada
+  yanlış bir kanıt etiketiyle durmaları yanıltıcı olurdu; yalnız kuratörün
+  bellekteki ağacına eklenir.
+- E-posta doğrulaması yapılandırıldığı anda açık kayıt **kendiliğinden
+  kapanır**; `OPEN_ENROLLMENT=false` ile daha önce de kapatılabilir.
+- Arayüz bu dönemde doğrulama akışını **"Önizleme"** etiketiyle gösterir:
+  adımlar gezilebilir ama tüm kontroller devre dışıdır ve ekran hiçbir yerde
+  gerçekleşmemiş bir doğrulamayı gerçekleşmiş gibi göstermez. Kontrol
+  listesinde doğrulama maddesi bu dönemde asla "tamam" görünmez — açık kayıtla
+  listeye giren biri de listede görünür, ama "listede olmak" burada
+  "doğrulanmış olmak" demek değildir.
+
 ## Geçiş
 
 Yeni kuratör açıldığında dağıtımdaki `AccreditationLog` boştur; kök boş

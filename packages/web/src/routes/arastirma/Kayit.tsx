@@ -3,8 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 
 import { CIRCUIT_WASM, CIRCUIT_ZKEY, SEPOLIA_CHAIN_ID } from "../../config";
 import { getRegistry } from "../../lib/contracts";
-import { CURATOR_SLOW_MS, CuratorResponseError, getMerklePath, isAccredited } from "../../lib/curator";
-import { ResearcherVerification } from "../../components/ResearcherVerification";
+import { CURATOR_SLOW_MS, CuratorResponseError, enroll, getMerklePath, getStatus, isAccredited } from "../../lib/curator";
+import { ResearcherVerification, VerificationPreview } from "../../components/ResearcherVerification";
 import { formatToken, getPaymentToken, getPayments, readResearcherReadiness, type ResearcherReadiness } from "../../lib/protocol";
 import { useSession } from "../../lib/session";
 import {
@@ -179,6 +179,26 @@ export function Kayit() {
    */
   const [accredited, setAccredited] = useState<boolean | null>(null);
 
+  /**
+   * Acik (dogrulamasiz) kayit su an etkin mi? Kurator bildirir.
+   *
+   * Dogrulama hesaplari kurulana kadar test aginda acik kayit surer; ekran o
+   * sure boyunca dogrulama akisini ONIZLEME olarak gosterir ve kaydi eski
+   * yoldan yapar. Kurator dogrulamanin yapilandirildigini bildirdigi anda
+   * gercek akis gosterilir.
+   */
+  const [openEnrollment, setOpenEnrollment] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getStatus()
+      .then((status) => !cancelled && setOpenEnrollment(status.openEnrollment))
+      .catch(() => !cancelled && setOpenEnrollment(false));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const checkAccredited = useCallback(async (target: Identity | null) => {
     if (!target) {
       setAccredited(false);
@@ -266,12 +286,15 @@ export function Kayit() {
       try {
         path = await getMerklePath(nextIdentity.commitment);
       } catch (error) {
-        if (error instanceof CuratorResponseError && error.status === 404) {
+        if (!(error instanceof CuratorResponseError && error.status === 404)) throw error;
+        if (!openEnrollment) {
           setAccredited(false);
           setNotice({ kind: "warn", text: t("Kimliginiz akredite listede degil; once arastirmaci dogrulamasini tamamlayin.") });
           return;
         }
-        throw error;
+        // Acik kayit doneminde taahhut dogrulamasiz eklenir (eski yol).
+        await enroll(nextIdentity.commitment);
+        path = await getMerklePath(nextIdentity.commitment);
       } finally {
         clearTimeout(slowTimer);
       }
@@ -388,8 +411,15 @@ export function Kayit() {
           <ol className="researcher-setup__list" aria-live="polite">
             <ChecklistItem
               label={t("Arastirmaci dogrulamasi")}
-              detail={readiness?.registered || accredited ? t("Kurum e-postasi ve akademik profil dogrulandi.") : t("Kurum e-postasi ve ORCID / YOK Akademik ile dogrulayin.")}
-              complete={readiness?.registered === true || accredited === true}
+              // ACIK KAYIT DONEMINDE ASLA "TAMAM" GORUNMEZ. Acik kayitla eklenen
+              // taahhut da listede gorunur; "listede olmak" burada "dogrulanmis
+              // olmak" demek degildir ve ekran ikisini karistirmamali.
+              detail={openEnrollment
+                ? t("Test aginda henuz etkin degil; kayit simdilik dogrulamasiz acik.")
+                : accredited
+                  ? t("Kurum e-postasi ve akademik profil dogrulandi.")
+                  : t("Kurum e-postasi ve ORCID / YOK Akademik ile dogrulayin.")}
+              complete={!openEnrollment && accredited === true}
             />
             <ChecklistItem
               label={t("ZK kimlik kaydi")}
@@ -415,7 +445,7 @@ export function Kayit() {
 
         <aside className="researcher-setup__action card card--bone">
           <span className="eyebrow">{t("SONRAKI ADIM")}</span>
-          {!readiness?.registered && accredited !== true ? (
+          {!readiness?.registered && !openEnrollment && accredited !== true ? (
             <>
               <div className="researcher-setup__action-body">
                 <h2>{t("Arastirmaci oldugunuzu dogrulayin")}</h2>
@@ -436,6 +466,7 @@ export function Kayit() {
                   {action === "register" ? t("Isleniyor...") : t("ZK kimlik kaydini baslat")}
                 </button>
                 <p className="researcher-setup__action-note">{t("Kanit cihazinizda uretilir; cüzdanda yalniz zincir kaydi imzalanir.")}</p>
+                {openEnrollment && <p className="researcher-setup__action-note">{t("Test aginda kayit simdilik dogrulamasiz acik; asagida dogrulama akisinin onizlemesini gorebilirsiniz.")}</p>}
               </div>
             </>
           ) : !balanceReady ? (
@@ -464,6 +495,8 @@ export function Kayit() {
           )}
         </aside>
       </div>
+
+      {openEnrollment && <VerificationPreview />}
 
       {readiness && readiness.participants === 0 && (
         <div className="notice notice--info">

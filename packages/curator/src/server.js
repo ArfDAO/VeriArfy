@@ -6,12 +6,15 @@
  *
  * # Listeye kim girer
  *
- * Eskiden `/enroll` herkese acikti: taahhudunu gonderen herkes akredite
- * arastirmaci oluyordu. Artik listeye yalnizca DOGRULANMIS kisiler girer
- * (bkz. verification/routes.js):
+ * Dogrulanmis arastirmacilar (bkz. verification/routes.js):
  *   - kurum e-postasi (.edu.tr) koduyla kutuya erisim, ve
  *   - ORCID ile giris (kurum ROR alan adiyla eslesir) ya da
  *     YOK Akademik / AVESIS profili (operator incelemesi).
+ *
+ * Dogrulama icin gereken hesaplar kurulana kadar test aginda ACIK KAYIT
+ * surer (`/enroll`): taahhudunu gonderen listeye girer. Bu kayitlar dogrulanmis
+ * listeye yazilmaz ve e-posta dogrulamasi yapilandirildigi anda acik kayit
+ * kendiliginden kapanir (bkz. `openEnrollmentActive`).
  *
  * # Liste nerede tutulur
  *
@@ -68,6 +71,23 @@ async function onAccredited(commitment) {
 
 const handleVerification = createVerificationRoutes({ chain, onAccredited });
 
+/**
+ * ACIK KAYIT - dogrulama yapilandirilana kadar.
+ *
+ * Test aginda dogrulama icin gereken hesaplar (e-posta gonderimi, ORCID
+ * istemcisi) henuz kurulmadi. O sure boyunca eski davranis surer: taahhudunu
+ * gonderen listeye girer. Bu kayitlar DOGRULANMIS degildir ve zincirdeki
+ * dogrulanmis listeye (AccreditationLog) YAZILMAZ - orada yanlis bir kanit
+ * etiketiyle durmalari yaniltici olurdu. Yalnizca bellekteki agaca eklenir.
+ *
+ * E-posta dogrulamasi yapilandirildigi anda acik kayit KENDILIGINDEN KAPANIR.
+ * `OPEN_ENROLLMENT=false` ile daha once de kapatilabilir.
+ */
+function openEnrollmentActive() {
+  if (process.env.OPEN_ENROLLMENT === "false") return false;
+  return !verificationStatus(chain).email;
+}
+
 function json(res, status, body, extraHeaders = {}) {
   res.writeHead(status, {
     "content-type": "application/json",
@@ -115,17 +135,40 @@ const server = createServer(async (req, res) => {
         chainRoot,
         autoPush: chain.canWrite,
         verification: verificationStatus(chain),
+        openEnrollment: openEnrollmentActive(),
       });
     }
 
-    // POST /enroll - KAPATILDI.
+    // POST /enroll { commitment } - dogrulamasiz (acik) kayit.
     //
-    // Dogrulamasiz ekleme yolu artik yok. Acik birakilsaydi dogrulama akisi
-    // bir susten ibaret olurdu: herkes bu uctan dogrudan listeye girebilirdi.
+    // Yalnizca acik kayit donemindeyken calisir. Dogrulama yapilandirildiktan
+    // sonra kapalidir: acik kalsaydi dogrulama akisi bir susten ibaret olurdu,
+    // herkes bu uctan dogrudan listeye girebilirdi.
     if (url.pathname === "/enroll") {
-      return json(res, 410, {
-        error: "Dogrulamasiz kayit kapatildi. Kurum e-postasi ve ORCID / YOK Akademik ile dogrulama gerekiyor.",
-      });
+      if (!openEnrollmentActive()) {
+        return json(res, 410, {
+          error: "Dogrulamasiz kayit kapali. Kurum e-postasi ve ORCID / YOK Akademik ile dogrulama gerekiyor.",
+        });
+      }
+      if (req.method !== "POST") return json(res, 405, { error: "POST gerekli" });
+      const body = await readBody(req);
+      let commitment;
+      try {
+        commitment = BigInt(body.commitment);
+      } catch {
+        return json(res, 400, { error: "gecersiz taahhut" });
+      }
+      if (commitment <= 0n) return json(res, 400, { error: "gecersiz taahhut" });
+
+      let index = tree.indexOf(commitment);
+      if (index === -1) {
+        index = tree.insert(commitment);
+        size += 1;
+        console.log(`+ acik kayit: taahhut #${index}. Yeni kok: ${tree.root}`);
+      }
+      // Kok zincire yazilmadan uretilen kanit dogrulanmaz; yanit yazimi bekler.
+      const pushed = await chain.pushRoot(tree.root);
+      return json(res, 200, { index, root: tree.root.toString(), rootPending: !pushed });
     }
 
     // GET /path/:commitment

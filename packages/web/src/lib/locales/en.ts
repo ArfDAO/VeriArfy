@@ -732,4 +732,10 @@ export const EN: Record<string, string> = {
   "Basvurunuz incelemede. Onaylandiginda kurum e-postaniza bildirim gelir; sonra bu ekrandan ZK kaydiniza devam edebilirsiniz.": "Your application is under review. You will be notified at your institutional e-mail once approved; then continue your ZK registration from this screen.",
   "Kontrol ediliyor...": "Checking...",
   "Durumu kontrol et": "Check status",
+  "ONIZLEME": "PREVIEW",
+  "Test aginda dogrulama henuz etkin degil; kayit simdilik dogrulamasiz acik. Asagida, dogrulama etkinlestiginde izlenecek akis gorunuyor.": "Verification is not active on the test network yet; registration is open without verification for now. Below is the flow that will be followed once verification is enabled.",
+  "Kurum e-postasina 6 haneli kod gider; kodu girmek adresin size ait oldugunu gosterir. Gmail gibi kisisel adresler ve ogrenci alt alan adlari kabul edilmez. Ayni adres ikinci bir kimlik acamaz.": "A 6-digit code is sent to the institutional e-mail; entering it shows the address is yours. Personal addresses such as Gmail and student subdomains are not accepted. The same address cannot open a second identity.",
+  "Onaylanan kimlik akredite listeye tek bir kimlikle eklenir ve liste zincirde tutulur. Kayit sirasinda kimliginiz tarayicinizda kalir; zincirde hangi akredite kisinin islem yaptigini sifir-bilgi kaniti gizler.": "The approved person is added to the accredited list with a single identity, and the list is kept on chain. Your identity stays in your browser during registration; a zero-knowledge proof hides which accredited person acts on chain.",
+  "Test aginda henuz etkin degil; kayit simdilik dogrulamasiz acik.": "Not active on the test network yet; registration is open without verification for now.",
+  "Test aginda kayit simdilik dogrulamasiz acik; asagida dogrulama akisinin onizlemesini gorebilirsiniz.": "On the test network registration is open without verification for now; you can see a preview of the verification flow below.",
 };

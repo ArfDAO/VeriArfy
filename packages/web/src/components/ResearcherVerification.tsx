@@ -205,3 +205,79 @@ export function ResearcherVerification({
     </div>
   );
 }
+
+/**
+ * Dogrulama akisinin ONIZLEMESI.
+ *
+ * Dogrulama icin gereken hesaplar (e-posta gonderimi, ORCID istemcisi) test
+ * aginda henuz kurulmadigi surece gosterilir. Akisin adimlari tiklanarak
+ * gezilebilir, ama tum kontroller DEVRE DISIDIR ve ekran hicbir yerde bir
+ * dogrulamanin gerceklestigini soylemez: katilimcilar verilerine kimin
+ * erisebildigini bu ekrana bakarak anlar, gerceklesmemis bir dogrulamayi
+ * gerceklesmis gibi gostermek onlari yaniltirdi.
+ *
+ * Akisin calisan hali `ResearcherVerification`; kurator e-posta dogrulamasi
+ * yapilandirildigini bildirdigi anda o gosterilir ve acik kayit kapanir.
+ */
+export function VerificationPreview() {
+  const t = useT();
+  const [active, setActive] = useState(0);
+  const steps = [t("Kurum e-postasi"), t("Akademik durum"), t("ZK kaydi")];
+
+  return (
+    <article className="card verification verification--preview" aria-labelledby="verification-preview-title">
+      <div className="card__head">
+        <h2 id="verification-preview-title">{t("Arastirmaci dogrulamasi")}</h2>
+        <span className="badge badge--warn">{t("ONIZLEME")}</span>
+      </div>
+      <p className="notice notice--info">
+        {t("Test aginda dogrulama henuz etkin degil; kayit simdilik dogrulamasiz acik. Asagida, dogrulama etkinlestiginde izlenecek akis gorunuyor.")}
+      </p>
+
+      <ol className="verification__steps" aria-label={t("Dogrulama adimlari")}>
+        {steps.map((label, index) => (
+          <li key={label} className={index === active ? "is-current" : ""}>
+            <button type="button" className="verification__step-button" aria-current={index === active ? "step" : undefined} onClick={() => setActive(index)}>
+              {index + 1}. {label}
+            </button>
+          </li>
+        ))}
+      </ol>
+
+      {active === 0 && (
+        <div className="field">
+          <label htmlFor="preview-email">{t("Kurum e-postaniz (.edu.tr)")}</label>
+          <input id="preview-email" type="email" disabled placeholder="ad.soyad@universite.edu.tr" />
+          <button type="button" className="pill" disabled>{t("Kod gonder")}</button>
+          <p className="researcher-setup__action-note">
+            {t("Kurum e-postasina 6 haneli kod gider; kodu girmek adresin size ait oldugunu gosterir. Gmail gibi kisisel adresler ve ogrenci alt alan adlari kabul edilmez. Ayni adres ikinci bir kimlik acamaz.")}
+          </p>
+        </div>
+      )}
+
+      {active === 1 && (
+        <div className="verification__methods">
+          <div className="verification__method">
+            <h3>{t("ORCID ile giris")}</h3>
+            <p>{t("ORCID kaydinizdaki guncel kurum, e-postanizin kurumuyla resmi ROR kaydi uzerinden eslestirilir. Uygunsa aninda onaylanir.")}</p>
+            <button type="button" className="pill" disabled>{t("ORCID ile devam et")}</button>
+          </div>
+          <div className="verification__method">
+            <h3>{t("YOK Akademik ya da AVESIS profili")}</h3>
+            <p>{t("Bu profillerin sahipligi otomatik dogrulanamiyor; basvurunuz bir operator tarafindan incelenir.")}</p>
+            <div className="field">
+              <label htmlFor="preview-profile">{t("Profil adresi")}</label>
+              <input id="preview-profile" type="url" disabled placeholder="https://akademik.yok.gov.tr/..." />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {active === 2 && (
+        <div className="verification__method">
+          <p>{t("Onaylanan kimlik akredite listeye tek bir kimlikle eklenir ve liste zincirde tutulur. Kayit sirasinda kimliginiz tarayicinizda kalir; zincirde hangi akredite kisinin islem yaptigini sifir-bilgi kaniti gizler.")}</p>
+        </div>
+      )}
+    </article>
+  );
+}

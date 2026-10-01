@@ -154,6 +154,25 @@ try {
   check("liste zincirden yeniden kuruldu", root.size === 2 && root.root === before, `size ${root.size}`);
   check("iki taahhut da yolda", (await fetch(`${C}/path/${C1}`)).status === 200 && (await fetch(`${C}/path/${C2}`)).status === 200);
   check("kok hala zincirle ayni", root.chainRoot === root.root);
+
+  console.log("\n[acik kayit donemi - dogrulama yapilandirilmamis]");
+  proc.kill(); await new Promise((r) => setTimeout(r, 800));
+  const savedEnv = { ...env };
+  delete env.RESEND_API_KEY; delete env.MAIL_FROM;
+  await startCurator();
+  const open = await (await fetch(C + "/root")).json();
+  check("dogrulama kapaliyken acik kayit etkin", open.openEnrollment === true && open.verification.email === false);
+  const C3 = 5555555555n;
+  const en = await post("/enroll", { commitment: C3.toString() });
+  check("acik kayit taahhudu agaca ekler ve koku yazar", en.status === 200 && en.body.rootPending === false);
+  check("acik kayit taahhudu yolda", (await fetch(`${C}/path/${C3}`)).status === 200);
+  check("dogrulanmislar da korunuyor", (await fetch(`${C}/path/${C1}`)).status === 200);
+  const logCount = Number(await new ethers.Contract(log, ["function commitmentCount() view returns (uint256)"], provider).commitmentCount());
+  check("acik kayit DOGRULANMIS listeye yazilmadi", logCount === 2, `liste ${logCount}`);
+  proc.kill(); await new Promise((r) => setTimeout(r, 800));
+  Object.assign(env, savedEnv);
+  await startCurator();
+  check("dogrulama yapilandirilinca acik kayit kendiliginden kapanir", (await post("/enroll", { commitment: "7" })).status === 410);
 } finally {
   proc?.kill(); stub.close();
   console.log(`\nSONUC: ${failures === 0 ? "HEPSI GECTI" : failures + " BASARISIZ"}`);
