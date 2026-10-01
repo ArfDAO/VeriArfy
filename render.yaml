@@ -52,6 +52,24 @@ services:
       # devredin (packages/contracts/scripts/transfer-registry-owner.ts).
       - key: CURATOR_PRIVATE_KEY
         sync: false
+      # Arastirmaci dogrulamasi. Degerler ve aciklamalar: .env.example
+      # CURATOR_IDENTITY_SECRET DEGISMEMELI (tekillik kurali buna bagli).
+      - key: CURATOR_IDENTITY_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: ORCID_CLIENT_ID
+        sync: false
+      - key: ORCID_CLIENT_SECRET
+        sync: false
+      - key: PUBLIC_CURATOR_URL
+        value: https://veriarfy-curator.onrender.com
+      - key: WEB_APP_URL
+        value: https://veri-arfy.vercel.app
+      - key: OPERATOR_EMAIL
+        sync: false
       - key: SEPOLIA_RPC_URL
         sync: false
 

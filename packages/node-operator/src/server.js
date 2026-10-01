@@ -26,7 +26,7 @@ import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import { ethers } from "ethers";
 
-import { evaluateRequest } from "./policy.js";
+import { evaluateDifferencing, evaluateRequest } from "./policy.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: join(__dirname, "..", "..", "..", ".env") });
@@ -45,7 +45,13 @@ const PROTOCOL_ABI = [
   "function hasApproved(uint256, address) view returns (bool)",
   "function minParticipants() view returns (uint32)",
   "function nextRequestId() view returns (uint256)",
+  "function disclosureSnpIds(uint256) view returns (uint32[])",
+  "function disclosureMetricIds(uint256) view returns (uint32[])",
+  "function snpCoverageCount(uint32) view returns (uint32)",
+  "function biomarkerModule() view returns (address)",
+  "event DisclosureRequested(uint256 indexed requestId, address indexed requester, uint32 snapshotCount)",
 ];
+const BIOMARKER_ABI = ["function metricCoverageCount(uint32) view returns (uint32)"];
 const STAKING_ABI = [
   "function canApprove(address) view returns (bool)",
   // Saglik raporu icin: teminatin esige gore NEREDE oldugunu gostermek,
@@ -103,7 +109,7 @@ if (wallets.length > 1) {
 }
 
 /** Son onay denemesinin sonucu - saglik ucu bunu gosterir. */
-const state = { lastScan: null, lastError: null, approved: [], skipped: 0, readiness: [] };
+const state = { lastScan: null, lastError: null, approved: [], skipped: 0, readiness: [], rejected: {} };
 
 /**
  * Dugumlerin onay VEREBILIR durumda olup olmadigini olcer.
@@ -160,8 +166,103 @@ function queue(wallet, task) {
   return next;
 }
 
+/* ---------------------------------------------------------------------------
+ * Talep anindaki alan sayimlari (fark saldirisi kontrolu icin)
+ *
+ * Her talep, acildigi bloktaki tabloyu dondurur. O bloktaki alan bazli kisi
+ * sayisi, dondurulan tablonun kac kisiyi icerdigidir. Sayaclar yalnizca
+ * arttigi icin bu deger o blokta okunarak TAM olarak bulunur ve bir daha
+ * degismez - bu yuzden onbellege alinir.
+ * ------------------------------------------------------------------------- */
+
+const requestBlocks = new Map(); // requestId -> blok
+const fieldCounts = new Map(); // requestId -> [{key, count}]
+let logsScannedTo = Number(deployment.deployedAtBlock ?? 0) - 1;
+const LOG_CHUNK = 5_000;
+
+/** DisclosureRequested olaylarindan talep -> blok eslemesini gunceller. */
+async function refreshRequestBlocks() {
+  const head = await provider.getBlockNumber();
+  while (logsScannedTo < head) {
+    const from = logsScannedTo + 1;
+    const to = Math.min(head, from + LOG_CHUNK - 1);
+    const logs = await readProtocol.queryFilter("DisclosureRequested", from, to);
+    for (const log of logs) requestBlocks.set(Number(log.args.requestId), log.blockNumber);
+    logsScannedTo = to;
+  }
+}
+
+let biomarkers = null;
+async function getBiomarkers() {
+  if (biomarkers !== null) return biomarkers;
+  const address = await readProtocol.biomarkerModule();
+  biomarkers = address === ethers.ZeroAddress ? false : new ethers.Contract(address, BIOMARKER_ABI, provider);
+  return biomarkers;
+}
+
+async function countsAt(requestId) {
+  if (fieldCounts.has(requestId)) return fieldCounts.get(requestId);
+
+  const block = requestBlocks.get(requestId);
+  if (block === undefined) throw new Error(`talep ${requestId} icin acilis blogu bulunamadi`);
+
+  const [snpIds, metricIds] = await Promise.all([
+    readProtocol.disclosureSnpIds(requestId),
+    readProtocol.disclosureMetricIds(requestId),
+  ]);
+
+  const fields = [];
+  for (const id of snpIds) {
+    const count = await readProtocol.snpCoverageCount(id, { blockTag: block });
+    fields.push({ key: `snp:${id}`, count: Number(count) });
+  }
+  const module = await getBiomarkers();
+  if (module) {
+    for (const id of metricIds) {
+      const count = await module.metricCoverageCount(id, { blockTag: block });
+      fields.push({ key: `metric:${id}`, count: Number(count) });
+    }
+  }
+
+  fieldCounts.set(requestId, fields);
+  return fields;
+}
+
+/**
+ * Talebi, iptal edilmemis diger TUM taleplerle karsilastirir.
+ *
+ * Henuz yurutulmemis talepler de dahildir: onay geri alinamaz bir yurutmeye
+ * giden yolu acar, yani "su an yetki verilmis olanlar" yetmez.
+ */
+async function differencingVerdict(requestId, total, minParticipants) {
+  await refreshRequestBlocks();
+  const mine = await countsAt(requestId);
+
+  const others = [];
+  for (let id = 0; id < total; id++) {
+    if (id === requestId) continue;
+    if (await readProtocol.isDisclosureRevoked(id)) continue;
+    others.push({ requestId: id, fields: await countsAt(id) });
+  }
+
+  return evaluateDifferencing({ fields: mine }, others, minParticipants);
+}
+
 async function considerRequest(requestId) {
   const minParticipants = Number(await readProtocol.minParticipants());
+
+  // Fark saldirisi kontrolu dugum basina degil TALEP basina yapilir: sonuc
+  // hangi dugumun onaylayacagina bagli degil.
+  const total = Number(await readProtocol.nextRequestId());
+  const differencing = await differencingVerdict(requestId, total, minParticipants);
+  if (!differencing.approve) {
+    if (!state.rejected[requestId]) {
+      console.log(`talep ${requestId}: REDDEDILDI - ${differencing.reason}`);
+    }
+    state.rejected[requestId] = { reason: differencing.reason, at: new Date().toISOString() };
+    return;
+  }
+  delete state.rejected[requestId];
 
   for (const wallet of wallets) {
     // Her dugum icin durum YENIDEN okunur: onceki dugumun onayi talebi
@@ -271,6 +372,19 @@ setInterval(() => void scan(), POLL_MS);
 // disaridan gorebilmek gerekiyor.
 createServer((req, res) => {
   res.writeHead(200, { "content-type": "application/json", "access-control-allow-origin": "*" });
+
+  // GET /requests/:id - arayuz bekleyen bir talebin NEDEN onaylanmadigini
+  // gosterebilsin. Aksi halde reddedilen talep "onay bekliyor" gorunumunde
+  // sonsuza kadar kalir ve arastirmaci ne olduguna dair hicbir sey bilemez.
+  const match = /^\/requests\/(\d+)$/.exec(req.url ?? "");
+  if (match) {
+    const id = Number(match[1]);
+    const rejected = state.rejected[id] ?? null;
+    const approved = state.approved.find((a) => a.requestId === id) ?? null;
+    res.end(JSON.stringify({ requestId: id, rejected, approved, lastScan: state.lastScan }));
+    return;
+  }
+
   res.end(
     JSON.stringify({
       protocol: deployment.contracts.VeriarfyProtocol,

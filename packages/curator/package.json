@@ -7,7 +7,9 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "push-root": "node src/push-root.js"
+    "push-root": "node src/push-root.js",
+    "test": "node --test src/verification/verification.test.js",
+    "test:e2e": "node test/flow.e2e.mjs"
   },
   "dependencies": {
     "@veriarfy/circuits": "*",

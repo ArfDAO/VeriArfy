@@ -3,7 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 
 import { CIRCUIT_WASM, CIRCUIT_ZKEY, SEPOLIA_CHAIN_ID } from "../../config";
 import { getRegistry } from "../../lib/contracts";
-import { CURATOR_SLOW_MS, enroll, getMerklePath } from "../../lib/curator";
+import { CURATOR_SLOW_MS, CuratorResponseError, enroll, getMerklePath, getStatus, isAccredited } from "../../lib/curator";
+import { ResearcherVerification, VerificationPreview } from "../../components/ResearcherVerification";
 import { formatToken, getPaymentToken, getPayments, readResearcherReadiness, type ResearcherReadiness } from "../../lib/protocol";
 import { useSession } from "../../lib/session";
 import {
@@ -171,6 +172,76 @@ export function Kayit() {
 
   const wrongNetwork = chainId !== null && chainId !== SEPOLIA_CHAIN_ID;
 
+  /**
+   * Kimlik akredite listede mi? null = henuz bilinmiyor.
+   *
+   * Listeye artik dogrudan eklenilemiyor; ZK kaydinin on kosulu dogrulamadir.
+   */
+  const [accredited, setAccredited] = useState<boolean | null>(null);
+
+  /**
+   * Acik (dogrulamasiz) kayit su an etkin mi? Kurator bildirir.
+   *
+   * Dogrulama hesaplari kurulana kadar test aginda acik kayit surer; ekran o
+   * sure boyunca dogrulama akisini ONIZLEME olarak gosterir ve kaydi eski
+   * yoldan yapar. Kurator dogrulamanin yapilandirildigini bildirdigi anda
+   * gercek akis gosterilir.
+   */
+  const [openEnrollment, setOpenEnrollment] = useState(false);
+  /** Onizleme akisinin e-posta ve akademik durum adimlari bu oturumda bitti mi? */
+  const [previewDone, setPreviewDone] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getStatus()
+      .then((status) => !cancelled && setOpenEnrollment(status.openEnrollment))
+      .catch(() => !cancelled && setOpenEnrollment(false));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const checkAccredited = useCallback(async (target: Identity | null) => {
+    if (!target) {
+      setAccredited(false);
+      return;
+    }
+    try {
+      setAccredited(await isAccredited(target.commitment));
+    } catch {
+      setAccredited(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    void checkAccredited(identity);
+  }, [checkAccredited, identity]);
+
+  // ORCID dogrulamasinin sonucu bu sayfaya adres PARCASIYLA (#) doner: parca
+  // sunucuya gonderilmedigi icin sonuc hicbir sunucu gunlugune dusmez. Okunur,
+  // gosterilir ve adresten silinir ki sayfa yenilenince tekrar gosterilmesin.
+  useEffect(() => {
+    const hash = window.location.hash.slice(1);
+    if (!hash.includes("dogrulama=")) return;
+    const params = new URLSearchParams(hash);
+    if (params.get("dogrulama") === "tamam") {
+      setNotice({ kind: "ok", text: t("Arastirmaci dogrulamaniz tamamlandi. Simdi ZK kaydinizi yapabilirsiniz.") });
+    } else {
+      setNotice({ kind: "warn", text: params.get("sebep") ?? t("Dogrulama tamamlanamadi.") });
+    }
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  }, [t]);
+
+  /** Kimlik yoksa uretir ve bu cuzdan icin saklar; dogrulama taahhudu ister. */
+  const ensureCommitment = useCallback((): bigint => {
+    if (identity) return identity.commitment;
+    if (!address) throw new Error(t("Once cuzdaninizi baglayin."));
+    const next = createIdentity();
+    window.localStorage.setItem(identityKey(address), serializeIdentity(next));
+    setIdentity(next);
+    return next.commitment;
+  }, [address, identity, t]);
+
   const refresh = useCallback(async () => {
     if (!provider || !address || chainId !== SEPOLIA_CHAIN_ID) return;
     setLoading(true);
@@ -206,38 +277,39 @@ export function Kayit() {
       }
 
       // Barindirilan kurator hareketsizlikte uyutuluyor ve ilk istek uyanmayi
-      // bekliyor (~35 sn). Bu sure boyunca ekranda yalnizca "Isleniyor..."
-      // yaziyordu; kullanicinin bunu donmus saymamasi icin sebebini soyluyoruz.
-      // Mesaj yalnizca cagri GERCEKTEN uzarsa cikar, hizli yanitta hic gorunmez.
+      // bekliyor (~35 sn). Mesaj yalnizca cagri GERCEKTEN uzarsa cikar.
       const slowTimer = setTimeout(() => {
         setNotice({ kind: "info", text: t("Kurator servisi uyaniyor, bu ilk istekte yarim dakikayi bulabilir...") });
       }, CURATOR_SLOW_MS);
 
       // Kurator yalnizca acik taahhudu gorur; trapdoor/nullifier tarayicidan cikmaz.
-      let enrollment;
+      // Taahhut listede degilse kisi henuz dogrulanmamistir.
+      let path;
       try {
-        enrollment = await enroll(nextIdentity.commitment);
+        path = await getMerklePath(nextIdentity.commitment);
+      } catch (error) {
+        if (!(error instanceof CuratorResponseError && error.status === 404)) throw error;
+        if (!openEnrollment) {
+          setAccredited(false);
+          setNotice({ kind: "warn", text: t("Kimliginiz akredite listede degil; once arastirmaci dogrulamasini tamamlayin.") });
+          return;
+        }
+        // Acik kayit doneminde taahhut dogrulamasiz eklenir (eski yol).
+        await enroll(nextIdentity.commitment);
+        path = await getMerklePath(nextIdentity.commitment);
       } finally {
         clearTimeout(slowTimer);
       }
-      const path = await getMerklePath(nextIdentity.commitment);
       const registry = getRegistry(provider);
 
-      // Yeni taahhut, kok zincire yazilmadan kanitlanamaz; yazilmadan devam
-      // edilirse kullanici yalnizca anlamsiz bir `UnknownRoot` revert'i gorur.
-      //
-      // Kurator kokU kendisi yaziyorsa islem birkac blok surer, bu yuzden
-      // hemen vazgecmek yerine kisa bir sure bekleyip zinciri yeniden okuyoruz.
-      // Yazma yetkisi yoksa (`rootPending`) beklemenin anlami yok - o durum
-      // kullanicinin degil operatorun cozecegi bir eksiklik.
+      // Liste zincirden kuruluyor ve kok onaydan hemen sonra yaziliyor; yine de
+      // islem birkac blok surebilir. Hemen vazgecmek yerine kisa bir sure
+      // bekleyip zinciri yeniden okuyoruz.
       const treeRoot = BigInt(path.root);
       let chainRoot = (await registry.currentRoot()) as bigint;
 
-      if (treeRoot !== chainRoot && enrollment.rootPending !== true) {
-        setNotice({
-          kind: "info",
-          text: t("Kurator kokunu zincire yaziyor, onaylanmasi bekleniyor..."),
-        });
+      if (treeRoot !== chainRoot) {
+        setNotice({ kind: "info", text: t("Kurator kokunu zincire yaziyor, onaylanmasi bekleniyor...") });
         for (let attempt = 0; attempt < ROOT_WAIT_ATTEMPTS && treeRoot !== chainRoot; attempt += 1) {
           await new Promise((resolve) => setTimeout(resolve, ROOT_WAIT_INTERVAL_MS));
           chainRoot = (await registry.currentRoot()) as bigint;
@@ -247,16 +319,10 @@ export function Kayit() {
       if (treeRoot !== chainRoot) {
         setNotice({
           kind: "warn",
-          text:
-            enrollment.rootPending === true
-              ? t(
-                  "Taahhudunuz kurator agacina eklendi (sira #{index}), ancak kurator servisi kokU zincire yazma yetkisine sahip degil. Bu, sizin tamamlayabileceginiz bir adim degil: operatorun kok yazma yetkisini kurator cuzdanina devretmesi gerekiyor. Devir tamamlandiktan sonra bu sayfadan tekrar deneyin; taahhudunuz korunuyor, bastan olusturmaniz gerekmez.",
-                  { index: enrollment.index },
-                )
-              : t(
-                  "Taahhut kuratora eklendi ancak kok zincirde henuz guncellenmedi (kurator: {tree}, zincir: {chain}). Birkac dakika sonra yeniden deneyin.",
-                  { tree: shortRoot(path.root), chain: shortRoot(chainRoot) },
-                ),
+          text: t(
+            "Taahhut kuratora eklendi ancak kok zincirde henuz guncellenmedi (kurator: {tree}, zincir: {chain}). Birkac dakika sonra yeniden deneyin.",
+            { tree: shortRoot(path.root), chain: shortRoot(chainRoot) },
+          ),
         });
         return;
       }
@@ -295,7 +361,7 @@ export function Kayit() {
     } finally {
       setAction(null);
     }
-  }, [address, identity, provider, readiness?.registered, refresh, refreshSession, signer, wrongNetwork]);
+  }, [address, identity, openEnrollment, provider, readiness?.registered, refresh, refreshSession, signer, t, wrongNetwork]);
 
   const approve = useCallback(async () => {
     if (!signer || !readiness || readiness.allowance >= readiness.fee || readiness.balance < readiness.fee) return;
@@ -346,6 +412,20 @@ export function Kayit() {
           <span className="eyebrow">{t("KONTROL LISTESI")}</span>
           <ol className="researcher-setup__list" aria-live="polite">
             <ChecklistItem
+              label={t("Arastirmaci dogrulamasi")}
+              // Acik kayit doneminde madde onizleme akisina baglidir ve "Onizleme"
+              // ibaresini her durumda tasir. Onizlemeden sonra ZK kaydi da
+              // yapildiysa (kayit sonrasi akis ekrandan kalkar) tamam sayilir.
+              detail={openEnrollment
+                ? previewDone || readiness?.registered
+                  ? t("Tamamlandi.")
+                  : t("")
+                : accredited
+                  ? t("Kurum e-postasi ve akademik profil dogrulandi.")
+                  : t("Kurum e-postasi ve ORCID / YOK Akademik ile dogrulayin.")}
+              complete={openEnrollment ? previewDone || readiness?.registered === true : accredited === true}
+            />
+            <ChecklistItem
               label={t("ZK kimlik kaydi")}
               detail={readiness?.registered ? t("Arastirmaci defterinde kayitli.") : t("Kanitla arastirmaci defterine kaydolun.")}
               complete={readiness?.registered === true}
@@ -369,7 +449,33 @@ export function Kayit() {
 
         <aside className="researcher-setup__action card card--bone">
           <span className="eyebrow">{t("SONRAKI ADIM")}</span>
-          {!readiness?.registered ? (
+          {!readiness?.registered && !openEnrollment && accredited !== true ? (
+            <>
+              <div className="researcher-setup__action-body">
+                <h2>{t("Arastirmaci oldugunuzu dogrulayin")}</h2>
+                <p>{t("Akredite listeye kurum e-postasi ve akademik profil ile girilir. Zincirde hangi akredite kisinin islem yaptigi ZK kaydi ile gizli kalir.")}</p>
+              </div>
+              {address
+                ? <ResearcherVerification address={address} ensureCommitment={ensureCommitment} onAccredited={() => void checkAccredited(identity ?? storedIdentity(address))} />
+                : <p className="researcher-setup__action-note">{t("Once cuzdaninizi baglayin.")}</p>}
+            </>
+          ) : !readiness?.registered && openEnrollment ? (
+            <>
+              <div className="researcher-setup__action-body">
+                <div className="researcher-setup__action-title">
+                  <h2>{t("Arastirmaci oldugunuzu dogrulayin")}</h2>
+                </div>
+              </div>
+              {address
+                ? <VerificationPreview
+                    onComplete={() => setPreviewDone(true)}
+                    onRegister={() => void register()}
+                    registering={action === "register"}
+                    canRegister={action === null && !loading && !wrongNetwork && Boolean(provider && signer && readiness)}
+                  />
+                : <p className="researcher-setup__action-note">{t("Once cuzdaninizi baglayin.")}</p>}
+            </>
+          ) : !readiness?.registered ? (
             <>
               <div className="researcher-setup__action-body">
                 <h2>{t("Kimliginizi ZK ile kaydedin")}</h2>

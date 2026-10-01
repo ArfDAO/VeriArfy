@@ -13,7 +13,10 @@ export function userError(error: unknown, fallback: string): string {
   // Kurator kalibi ag kalibindan ONCE gelmeli: "ulasilamadi" metni asagidaki
   // genel ag kalibina da uyuyor ve kullaniciyi Sepolia'yi kontrol etmeye
   // gonderiyordu. Oysa Sepolia calisiyor; eksik olan yerel servis.
-  if (message.includes("kurator")) {
+  // YALNIZCA ulasilamama durumu. Onceden icinde "kurator" gecen HER hata bu
+  // mesaja donuyordu; kuratorun anlamli bir redde verdigi cevap ("kod hatali",
+  // "bu e-posta zaten kullanilmis") yanlislikla "servise ulasilamadi" oluyordu.
+  if (message.includes("kurator servisine ulasilamadi")) {
     return "Kurator servisine ulasilamadi. Yerel servisi baslatin (npm run curator) ve yeniden deneyin.";
   }
   if (message.includes("network") || message.includes("rpc") || message.includes("missing revert data") || message.includes("failed to fetch")) {
