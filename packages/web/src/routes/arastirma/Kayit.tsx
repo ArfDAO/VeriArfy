@@ -188,6 +188,8 @@ export function Kayit() {
    * gercek akis gosterilir.
    */
   const [openEnrollment, setOpenEnrollment] = useState(false);
+  /** Onizleme akisinin e-posta ve akademik durum adimlari bu oturumda bitti mi? */
+  const [previewDone, setPreviewDone] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -411,15 +413,17 @@ export function Kayit() {
           <ol className="researcher-setup__list" aria-live="polite">
             <ChecklistItem
               label={t("Arastirmaci dogrulamasi")}
-              // ACIK KAYIT DONEMINDE ASLA "TAMAM" GORUNMEZ. Acik kayitla eklenen
-              // taahhut da listede gorunur; "listede olmak" burada "dogrulanmis
-              // olmak" demek degildir ve ekran ikisini karistirmamali.
+              // Acik kayit doneminde madde onizleme akisina baglidir ve "Onizleme"
+              // ibaresini her durumda tasir. Onizlemeden sonra ZK kaydi da
+              // yapildiysa (kayit sonrasi akis ekrandan kalkar) tamam sayilir.
               detail={openEnrollment
-                ? t("Onizleme")
+                ? previewDone || readiness?.registered
+                  ? t("Onizleme - tamamlandi.")
+                  : t("Onizleme")
                 : accredited
                   ? t("Kurum e-postasi ve akademik profil dogrulandi.")
                   : t("Kurum e-postasi ve ORCID / YOK Akademik ile dogrulayin.")}
-              complete={!openEnrollment && accredited === true}
+              complete={openEnrollment ? previewDone || readiness?.registered === true : accredited === true}
             />
             <ChecklistItem
               label={t("ZK kimlik kaydi")}
@@ -465,6 +469,7 @@ export function Kayit() {
               </div>
               {address
                 ? <VerificationPreview
+                    onComplete={() => setPreviewDone(true)}
                     onRegister={() => void register()}
                     registering={action === "register"}
                     canRegister={action === null && !loading && !wrongNetwork && Boolean(provider && signer && readiness)}

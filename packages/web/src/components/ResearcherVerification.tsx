@@ -224,15 +224,19 @@ const pause = () => new Promise((resolve) => setTimeout(resolve, PREVIEW_DELAY_M
  * zincire dogrulama kaydi yazilmaz. Son adim ise GERCEK ZK kaydidir (acik kayit
  * yolu, `onRegister`).
  *
- * Kontrol listesindeki dogrulama maddesi bu yuzden tamamlanmis gorunmez.
+ * Kontrol listesi bu adimlar bitince maddeyi "Onizleme - tamamlandi" diye
+ * gosterir; "Onizleme" ibaresi orada da kalir.
  * Akisin calisan hali `ResearcherVerification`; kurator e-posta dogrulamasi
  * yapilandirildigini bildirdigi anda o gosterilir ve acik kayit kapanir.
  */
 export function VerificationPreview({
+  onComplete,
   onRegister,
   registering,
   canRegister,
 }: {
+  /** E-posta ve akademik durum adimlari bitti; ZK adimina gecildi. */
+  onComplete: () => void;
   onRegister: () => void;
   registering: boolean;
   canRegister: boolean;
@@ -286,6 +290,7 @@ export function VerificationPreview({
     void run("orcid", () => {
       setResult(t("ORCID baglandi; guncel kurum {domain} ile eslesti.", { domain }));
       setStep("zk");
+      onComplete();
     });
 
   const withProfile = () => {
@@ -300,6 +305,7 @@ export function VerificationPreview({
     void run("profile", () => {
       setResult(t("{source} profiliniz onaylandi.", { source }));
       setStep("zk");
+      onComplete();
     });
   };
 

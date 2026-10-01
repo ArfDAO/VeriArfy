@@ -739,6 +739,7 @@ export const EN: Record<string, string> = {
   "gecersiz profil adresi": "invalid profile URL",
   "yalnizca YOK Akademik ya da AVESIS profilleri kabul edilir": "only YÖK Akademik or AVESİS profiles are accepted",
   "Onizleme": "Preview",
+  "Onizleme - tamamlandi.": "Preview - completed.",
   "ORCID'e baglaniliyor...": "Connecting to ORCID...",
   "ORCID baglandi; guncel kurum {domain} ile eslesti.": "ORCID connected; current employer matched {domain}.",
   "{source} profiliniz onaylandi.": "Your {source} profile was approved.",

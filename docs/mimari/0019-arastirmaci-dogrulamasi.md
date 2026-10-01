@@ -120,8 +120,9 @@ kadar test ağında **açık kayıt sürer**: taahhüdünü gönderen listeye gi
   **dışarı hiçbir şey göndermez**: e-posta atılmaz, ORCID'e gidilmez,
   kuratöre ve zincire doğrulama kaydı yazılmaz. Son adım **gerçek ZK
   kaydıdır** (açık kayıt yolu).
-- Kontrol listesinde doğrulama maddesi bu dönemde asla "tamam" görünmez —
-  önizlemeyi bitiren de, açık kayıtla listeye giren de doğrulanmış değildir.
+- Kontrol listesinde doğrulama maddesi bu dönemde "Önizleme" ibaresini taşır;
+  önizleme adımları bitince (ya da ZK kaydı yapılmışsa) "Önizleme —
+  tamamlandı" olarak tamam görünür.
 
 ## Geçiş
 
