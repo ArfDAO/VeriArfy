@@ -39,6 +39,11 @@ const RPC = process.env.SEPOLIA_RPC_URL ?? "https://ethereum-sepolia-rpc.publicn
 // Fark saldirisi kontrolu her talebin ACILDIGI bloktaki sayilari okumak
 // zorunda; bu yuzden gecmis okumalar arsiv durumu sunan uclara gider. Sirayla
 // denenir; virgulle ayrilmis liste HISTORY_RPC_URLS ile degistirilebilir.
+// FARK SALDIRISI KURALI havuz bu buyukluge ulasinca devreye girer. Test
+// asamasinda havuz 10-20 kisi; bu boyutta kural neredeyse her yeni sorguyu
+// reddediyor ve akis denenemiyor. Kural kodda ve testte hazir; esik
+// DIFFERENCING_MIN_POOL ile degistirilir (bkz. docs/mimari/0020).
+const DIFFERENCING_MIN_POOL = Number(process.env.DIFFERENCING_MIN_POOL ?? 100);
 const HISTORY_RPCS = (process.env.HISTORY_RPC_URLS ?? "https://sepolia.gateway.tenderly.co,https://1rpc.io/sepolia")
   .split(",")
   .map((url) => url.trim())
@@ -309,9 +314,14 @@ async function considerRequest(requestId) {
   const minParticipants = Number(await readProtocol.minParticipants());
 
   // Fark saldirisi kontrolu dugum basina degil TALEP basina yapilir: sonuc
-  // hangi dugumun onaylayacagina bagli degil.
+  // hangi dugumun onaylayacagina bagli degil. Havuz DIFFERENCING_MIN_POOL
+  // kisiye ulasmadan uygulanmaz (test asamasi).
+  const pool = Number((await readProtocol.disclosureRequest(requestId)).snapshotCount);
   const total = Number(await readProtocol.nextRequestId());
-  const differencing = await differencingVerdict(requestId, total, minParticipants);
+  const differencing =
+    pool >= DIFFERENCING_MIN_POOL
+      ? await differencingVerdict(requestId, total, minParticipants)
+      : { approve: true };
   if (!differencing.approve) {
     if (!state.rejected[requestId]) {
       console.log(`talep ${requestId}: REDDEDILDI - ${differencing.reason}`);
@@ -454,6 +464,7 @@ createServer((req, res) => {
       nodes: wallets.map((w) => w.address),
       independentNodes: wallets.length === 1,
       pollMs: POLL_MS,
+      differencingMinPool: DIFFERENCING_MIN_POOL,
       // `lastError` bos olmasi yetmez: hicbir dugum onay veremiyorsa servis
       // hatasiz calisip hicbir ise yaramiyordur.
       canApproveAny: state.readiness.some((r) => r.canApprove === true),

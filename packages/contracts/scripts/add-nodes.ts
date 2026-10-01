@@ -15,8 +15,12 @@
  * Yeni anahtarlar `node-wallets.local.json` dosyasina eklenir (gitignore'da,
  * izin 600). Hosted dugum servisine `NODE_PRIVATE_KEYS` olarak verilmeli.
  *
+ * DURUM: HAZIR, ETKIN DEGIL. Kurum entegrasyonu gelene kadar calistirilmaz
+ * (bkz. docs/mimari/0020). Yanlislikla calismasin diye `ACTIVATE_NODES=1`
+ * olmadan islem gondermez; yalnizca maliyeti yazar.
+ *
  * Kullanim:
- *   NODE_WALLETS=../../node-wallets.local.json TARGET_NODES=10 STAKE_MULTIPLIER=2 \
+ *   ACTIVATE_NODES=1 NODE_WALLETS=../../node-wallets.local.json TARGET_NODES=10 STAKE_MULTIPLIER=2 \
  *   npx hardhat run scripts/add-nodes.ts --network sepolia
  *   (DRY_RUN=1 yalnizca maliyeti yazar)
  */
@@ -31,7 +35,7 @@ const STAKE_MULTIPLIER = BigInt(process.env.STAKE_MULTIPLIER ?? "2");
 const GAS_BUFFER = ethers.parseEther(process.env.NODE_GAS_BUFFER ?? "0.003");
 /** Fonlama + teminat + yetki islemlerinin deployer'a gaz maliyeti icin pay. */
 const DEPLOYER_RESERVE = ethers.parseEther("0.003");
-const DRY_RUN = process.env.DRY_RUN === "1";
+const DRY_RUN = process.env.DRY_RUN === "1" || process.env.ACTIVATE_NODES !== "1";
 
 type NodeWallet = { address: string; privateKey: string };
 
@@ -88,7 +92,10 @@ async function main() {
   }
   console.log(`Gereken ${ethers.formatEther(total + DEPLOYER_RESERVE)} ETH, deployer'da ${ethers.formatEther(available)} ETH`);
 
-  if (DRY_RUN) return;
+  if (DRY_RUN) {
+    if (process.env.ACTIVATE_NODES !== "1") console.log("ACTIVATE_NODES=1 verilmedi; hicbir islem gonderilmedi.");
+    return;
+  }
   if (available < total + DEPLOYER_RESERVE) {
     throw new Error(
       `Bakiye yetersiz: ${ethers.formatEther(total + DEPLOYER_RESERVE - available)} ETH eksik. Hicbir islem gonderilmedi.`,

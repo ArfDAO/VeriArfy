@@ -283,6 +283,13 @@ export function Sorgular() {
       {wrongNetwork && <div className="notice notice--warn">{t("Sorgu durumu yalnizca Sepolia aginda okunabilir.")}</div>}
       {notice && <div className={`notice notice--${notice.kind}`} role="status">{notice.text}</div>}
       {awaitingApproval && !verdict?.rejected && <div className="notice notice--info" role="status">{t("Yetkili dugum servisi uyandiriliyor. Servis bir sure islem gormediyse uyanmasi yaklasik bir dakika surer; onay genelde 1-2 dakika icinde gelir ve bu ekran kendiliginden guncellenir.")}</div>}
+      {/* Onay hic gelmezse (servis kapali, dugumlerin teminati yetersiz) da
+          ucret takili kalmasin: iade suresi dolduysa dugum karari beklenmeden
+          iade yolu acilir. */}
+      {awaitingApproval && !verdict?.rejected && query && query.disclosure.currentBlock >= query.refundAt && <div className="notice notice--warn" role="status">
+        <p>{t("Bu sorgu iade suresi doldugu halde onaylanmadi; ucretinizi geri alabilirsiniz.")}</p>
+        <button className="pill pill--primary" disabled={action !== null || !signer} onClick={() => void refund()}>{action === "refund" ? t("Iade ediliyor...") : t("Ucreti iade al")}</button>
+      </div>}
       {awaitingApproval && verdict?.rejected && query && <div className="notice notice--warn" role="status">
         <p>{t("Yetkili dugum bu sorguyu onaylamadi: {reason}.", { reason: verdict.rejected.reason })}</p>
         <p>{t("Bu bir mahremiyet korumasidir: ayni alanlar icin onceki bir sorguyla aradaki fark, esikten az sayida kisinin verisini aciga cikarirdi. Havuza yeterince yeni katilimci eklendiginde ayni alanlari yeniden sorgulayabilirsiniz.")}</p>
