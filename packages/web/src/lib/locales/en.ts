@@ -745,4 +745,5 @@ export const EN: Record<string, string> = {
   "{source} profiliniz onaylandi.": "Your {source} profile was approved.",
   "Inceleniyor...": "Reviewing...",
   "Gonder": "Submit",
+  "Bu sorgu iade suresi doldugu halde onaylanmadi; ucretinizi geri alabilirsiniz.": "This query was not approved before the refund window opened; you can take your fee back.",
 };
